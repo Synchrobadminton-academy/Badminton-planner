@@ -1,0 +1,23 @@
+# Next.js
+.next/
+out/
+build/
+
+# Node
+node_modules/
+
+# SQLite database (local dev only)
+data/
+
+# Env
+.env
+.env.local
+.env.*.local
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+npm-debug.log*
