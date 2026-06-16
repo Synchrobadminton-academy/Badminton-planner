@@ -5,54 +5,73 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>🏸 Coach Manpower Planner</title>
 <style>
+:root{
+  --bg:#f8fafc;--surf:#fff;--surf2:#f1f5f9;
+  --bdr:#e2e8f0;--tx:#1e293b;--txm:#64748b;--txf:#94a3b8;
+  --hov:#f1f5f9;--blue:#2563eb;--bluebg:#eff6ff;
+  --green:#16a34a;--greenbg:#f0fdf4;--red:#dc2626;--redbg:#fef2f2;
+}
+[data-dark]{
+  --bg:#0f172a;--surf:#1e293b;--surf2:#273548;
+  --bdr:#334155;--tx:#f1f5f9;--txm:#94a3b8;--txf:#475569;
+  --hov:#334155;--blue:#60a5fa;--bluebg:#1e3058;
+  --green:#4ade80;--greenbg:#14532d;--red:#f87171;--redbg:#450a0a;
+}
 *{box-sizing:border-box;margin:0;padding:0}
-body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:#f8fafc;color:#1e293b;font-size:14px;line-height:1.5}
-nav{background:#fff;border-bottom:1px solid #e2e8f0;padding:0 16px;display:flex;align-items:center;height:52px;gap:12px;position:sticky;top:0;z-index:100;box-shadow:0 1px 3px rgba(0,0,0,.05)}
-.brand{font-weight:700;color:#1d4ed8;white-space:nowrap;font-size:15px}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:var(--bg);color:var(--tx);font-size:14px;line-height:1.5;transition:background .15s,color .15s}
+nav{background:var(--surf);border-bottom:1px solid var(--bdr);padding:0 16px;display:flex;align-items:center;height:52px;gap:10px;position:sticky;top:0;z-index:100;box-shadow:0 1px 3px rgba(0,0,0,.08)}
+.brand{font-weight:700;color:var(--blue);white-space:nowrap;font-size:15px}
 .nav-links{display:flex;gap:3px}
-.nav-link{padding:6px 12px;border-radius:6px;font-size:13px;font-weight:500;color:#475569;cursor:pointer;border:none;background:none}
-.nav-link:hover{background:#f1f5f9}
-.nav-link.active{background:#2563eb;color:#fff}
+.nav-link{padding:6px 12px;border-radius:6px;font-size:13px;font-weight:500;color:var(--txm);cursor:pointer;border:none;background:none}
+.nav-link:hover{background:var(--hov);color:var(--tx)}
+.nav-link.active{background:var(--blue);color:#fff}
+.ml-auto{margin-left:auto}
+.theme-btn{padding:6px 10px;border-radius:6px;border:1px solid var(--bdr);background:var(--surf);cursor:pointer;font-size:16px;line-height:1}
 main{max-width:1200px;margin:0 auto;padding:20px 16px}
 .view{display:none}
 .view.active{display:block}
-.card{background:#fff;border:1px solid #e2e8f0;border-radius:12px;overflow:hidden;margin-bottom:16px;box-shadow:0 1px 3px rgba(0,0,0,.04)}
+.card{background:var(--surf);border:1px solid var(--bdr);border-radius:12px;overflow:hidden;margin-bottom:16px;box-shadow:0 1px 3px rgba(0,0,0,.04)}
 .card-body{padding:20px}
-.card-header{padding:14px 20px;border-bottom:1px solid #f1f5f9;font-weight:600;font-size:14px;color:#334155}
-.btn{display:inline-flex;align-items:center;padding:8px 16px;border-radius:6px;font-size:13px;font-weight:500;border:1px solid transparent;cursor:pointer}
-.btn-primary{background:#2563eb;color:#fff;border-color:#2563eb}
-.btn-primary:hover{background:#1d4ed8}
-.btn-outline{background:#fff;color:#475569;border-color:#e2e8f0}
-.btn-outline:hover{background:#f8fafc}
+.card-hdr{padding:14px 20px;border-bottom:1px solid var(--bdr);font-weight:600;font-size:14px}
+.btn{display:inline-flex;align-items:center;padding:8px 16px;border-radius:6px;font-size:13px;font-weight:500;border:1px solid transparent;cursor:pointer;transition:opacity .1s}
+.btn-p{background:var(--blue);color:#fff}
+.btn-p:hover{opacity:.88}
+.btn-o{background:var(--surf);color:var(--txm);border-color:var(--bdr)}
+.btn-o:hover{background:var(--hov)}
 .btn-sm{padding:4px 10px;font-size:12px}
-.form-group{margin-bottom:12px}
-.form-group label{display:block;font-size:12px;font-weight:500;color:#64748b;margin-bottom:4px}
-input[type=text],input[type=number],input[type=time],select.fc{width:100%;border:1px solid #e2e8f0;border-radius:6px;padding:7px 10px;font-size:14px;outline:none;font-family:inherit}
-input:focus,select.fc:focus{border-color:#93c5fd;box-shadow:0 0 0 3px rgba(147,197,253,.3)}
+.fg{margin-bottom:12px}
+.fg label{display:block;font-size:12px;font-weight:500;color:var(--txm);margin-bottom:4px}
+input[type=text],input[type=number],input[type=time],select.fc{width:100%;border:1px solid var(--bdr);border-radius:6px;padding:7px 10px;font-size:14px;outline:none;font-family:inherit;background:var(--surf);color:var(--tx)}
+input:focus,select.fc:focus{border-color:var(--blue);box-shadow:0 0 0 3px rgba(37,99,235,.15)}
 .form-row{display:grid;grid-template-columns:1fr 1fr;gap:12px}
-/* Schedule */
+/* Sub-toggle */
+.sub-tog{display:inline-flex;border:1px solid var(--bdr);border-radius:8px;overflow:hidden;margin-bottom:14px}
+.sub-tog button{padding:5px 16px;border:none;font-size:13px;font-weight:500;cursor:pointer;background:var(--surf);color:var(--txm);transition:all .1s}
+.sub-tog button.active{background:var(--blue);color:#fff}
 .week-nav{display:flex;align-items:center;gap:8px;margin-bottom:10px;flex-wrap:wrap}
-.week-label{font-weight:600;color:#334155}
+.wk-label{font-weight:600;color:var(--tx);font-size:14px}
 .legend{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:8px;align-items:center}
 .lchip{display:inline-flex;align-items:center;font-size:11px;padding:2px 8px;border-radius:99px;border:1px solid}
-.sched-wrap{overflow-x:auto;border:1px solid #e2e8f0;border-radius:10px;background:#fff}
+/* Weekly grid */
+.sched-wrap{overflow-x:auto;border:1px solid var(--bdr);border-radius:10px;background:var(--surf)}
 table.sched{border-collapse:collapse;min-width:680px;width:100%;font-size:12px}
-table.sched th{background:#f8fafc;padding:6px 4px;text-align:center;font-weight:500;color:#64748b;border:1px solid #e2e8f0;white-space:nowrap;min-width:90px}
+table.sched th{background:var(--surf2);padding:6px 4px;text-align:center;font-weight:500;color:var(--txm);border:1px solid var(--bdr);white-space:nowrap;min-width:90px}
 table.sched th.tcorner{position:sticky;left:0;z-index:20;min-width:52px}
-table.sched th.today-h{background:#eff6ff;color:#1d4ed8}
-table.sched td.ttime{width:52px;text-align:right;padding:0 6px;color:#94a3b8;background:#f8fafc;border:1px solid #e2e8f0;white-space:nowrap;position:sticky;left:0;z-index:10}
-table.sched td.tslot{height:28px;position:relative;border:1px solid #e2e8f0;padding:0;vertical-align:top;cursor:default}
+table.sched th.today-h{background:var(--bluebg);color:var(--blue)}
+table.sched td.ttime{width:52px;text-align:right;padding:0 6px;color:var(--txf);background:var(--surf2);border:1px solid var(--bdr);white-space:nowrap;position:sticky;left:0;z-index:10}
+table.sched td.tslot{height:28px;position:relative;border:1px solid var(--bdr);padding:0;vertical-align:top}
 table.sched td.tslot.half{border-top-style:dashed}
-table.sched td.tslot.empty:hover{background:#eff6ff;cursor:pointer}
+table.sched td.tslot.empty:hover{background:var(--bluebg);cursor:pointer}
 .sblock{position:absolute;left:1px;right:1px;top:0;border-radius:4px;border:1px solid;padding:2px 3px;overflow:hidden;z-index:5;font-size:11px;line-height:1.3;pointer-events:none}
 .sblock>*{pointer-events:auto}
 .sn{font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.sv{opacity:.7;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.sv{opacity:.75;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .sa{display:flex;gap:2px;margin-top:1px}
 .sa button{background:none;border:none;cursor:pointer;padding:0;font-size:11px;line-height:1;opacity:.8}
 .sa button:hover{opacity:1}
 .sblock.cancelled{opacity:.35;text-decoration:line-through}
-.sblock.completed{opacity:.7}
+.sblock.completed{opacity:.72}
+/* Coach colors */
 .cc0{background:#dbeafe;border-color:#93c5fd;color:#1e40af}
 .cc1{background:#dcfce7;border-color:#86efac;color:#166534}
 .cc2{background:#f3e8ff;border-color:#c4b5fd;color:#6b21a8}
@@ -60,38 +79,59 @@ table.sched td.tslot.empty:hover{background:#eff6ff;cursor:pointer}
 .cc4{background:#fce7f3;border-color:#f9a8d4;color:#9d174d}
 .cc5{background:#ccfbf1;border-color:#5eead4;color:#134e4a}
 .cc6{background:#fef9c3;border-color:#fde047;color:#713f12}
+[data-dark] .cc0{background:#1e3a8a;border-color:#1d4ed8;color:#bfdbfe}
+[data-dark] .cc1{background:#14532d;border-color:#15803d;color:#bbf7d0}
+[data-dark] .cc2{background:#4a1d96;border-color:#7c3aed;color:#e9d5ff}
+[data-dark] .cc3{background:#7c2d12;border-color:#c2410c;color:#fed7aa}
+[data-dark] .cc4{background:#831843;border-color:#be185d;color:#fce7f3}
+[data-dark] .cc5{background:#134e4a;border-color:#0d9488;color:#ccfbf1}
+[data-dark] .cc6{background:#713f12;border-color:#a16207;color:#fef9c3}
+/* Monthly calendar */
+.cal-wrap{border:1px solid var(--bdr);border-radius:10px;overflow:hidden;background:var(--surf)}
+.cal-dow-row{display:grid;grid-template-columns:repeat(7,1fr);border-bottom:2px solid var(--bdr)}
+.cal-dow{text-align:center;padding:6px 4px;font-size:12px;font-weight:600;color:var(--txm);background:var(--surf2)}
+.cal-grid{display:grid;grid-template-columns:repeat(7,1fr)}
+.cal-cell{min-height:84px;border-right:1px solid var(--bdr);border-bottom:1px solid var(--bdr);padding:4px;cursor:pointer;transition:background .1s}
+.cal-cell:hover{background:var(--hov)}
+.cal-cell.other{opacity:.3;cursor:default}
+.cal-cell.today .cal-num{background:var(--blue);color:#fff;border-radius:50%}
+.cal-num{font-size:12px;font-weight:600;width:22px;height:22px;display:flex;align-items:center;justify-content:center;margin-bottom:2px}
+.cal-chip{font-size:10px;padding:1px 4px;border-radius:3px;border:1px solid;margin-bottom:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;line-height:1.4}
+.cal-more{font-size:10px;color:var(--txf)}
 /* Tables */
 .dtable{width:100%;border-collapse:collapse;font-size:13px}
-.dtable th{text-align:left;padding:10px 16px;background:#f8fafc;border-bottom:1px solid #e2e8f0;font-weight:500;color:#64748b;font-size:12px}
-.dtable td{padding:10px 16px;border-bottom:1px solid #f1f5f9;vertical-align:middle}
+.dtable th{text-align:left;padding:10px 16px;background:var(--surf2);border-bottom:1px solid var(--bdr);font-weight:500;color:var(--txm);font-size:12px}
+.dtable td{padding:10px 16px;border-bottom:1px solid var(--bdr);vertical-align:middle}
 .dtable tr:last-child td{border-bottom:none}
-.dtable tbody tr:hover td{background:#fafafa}
+.dtable tbody tr:hover td{background:var(--hov)}
+.dtable tfoot td{background:var(--surf2);font-weight:600}
 /* Badges */
-.badge{display:inline-flex;padding:2px 8px;border-radius:99px;font-size:11px;font-weight:500;border:1px solid}
-.bg{background:#f0fdf4;color:#16a34a;border-color:#bbf7d0}
-.bgr{background:#f1f5f9;color:#64748b;border-color:#e2e8f0}
-.bb{background:#eff6ff;color:#2563eb;border-color:#bfdbfe}
-.br{background:#fef2f2;color:#dc2626;border-color:#fecaca}
+.badge{display:inline-flex;padding:2px 8px;border-radius:99px;font-size:11px;font-weight:500;border:1px solid;cursor:pointer}
+.b-g{background:var(--greenbg);color:var(--green);border-color:var(--green)}
+.b-gr{background:var(--surf2);color:var(--txm);border-color:var(--bdr)}
+.b-b{background:var(--bluebg);color:var(--blue);border-color:var(--blue)}
+.b-r{background:var(--redbg);color:var(--red);border-color:var(--red)}
 /* Stats */
-.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:20px}
-.stat{background:#fff;border:1px solid #e2e8f0;border-radius:10px;padding:16px}
-.stat-val{font-size:22px;font-weight:700}
-.stat-lbl{font-size:11px;color:#94a3b8;margin-top:2px}
+.stats{display:grid;grid-template-columns:repeat(2,1fr);gap:12px;margin-bottom:20px}
+.stat{background:var(--surf);border:1px solid var(--bdr);border-radius:10px;padding:16px}
+.stat-val{font-size:24px;font-weight:700}
+.stat-lbl{font-size:11px;color:var(--txf);margin-top:2px}
 /* Modal */
-.overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:200;align-items:center;justify-content:center;padding:16px}
+.overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:200;align-items:center;justify-content:center;padding:16px}
 .overlay.open{display:flex}
-.modal{background:#fff;border-radius:12px;padding:24px;width:100%;max-width:380px;box-shadow:0 20px 60px rgba(0,0,0,.2)}
+.modal{background:var(--surf);border-radius:12px;padding:24px;width:100%;max-width:400px;box-shadow:0 20px 60px rgba(0,0,0,.3);max-height:90vh;overflow-y:auto}
 .modal h2{font-size:15px;font-weight:600;margin-bottom:16px}
-.mactions{display:flex;gap:8px;margin-top:16px}
-/* Misc */
-.page-hdr{display:flex;justify-content:space-between;align-items:center;margin-bottom:20px}
-.page-title{font-size:18px;font-weight:700;color:#0f172a}
-.empty{text-align:center;padding:32px;color:#94a3b8;font-size:13px}
+.mact{display:flex;gap:8px;margin-top:16px}
+.page-hdr{display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;flex-wrap:wrap;gap:8px}
+.page-title{font-size:18px;font-weight:700}
+.empty{text-align:center;padding:32px;color:var(--txf);font-size:13px}
 .chk-row{display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer}
-.expand-row{background:#f8fafc}
-.expand-inner{padding:12px 20px}
-.status-sel{border:1px solid;border-radius:6px;padding:2px 6px;font-size:11px;cursor:pointer;font-family:inherit}
-@media(max-width:600px){.form-row{grid-template-columns:1fr}.stats{grid-template-columns:1fr 1fr}}
+.exp-row td{background:var(--surf2)}
+.exp-inner{padding:12px 20px}
+.ssel{border:1px solid var(--bdr);border-radius:6px;padding:2px 6px;font-size:11px;cursor:pointer;font-family:inherit;background:var(--surf);color:var(--tx)}
+.day-item{border:1px solid var(--bdr);border-radius:8px;padding:10px 12px;margin-bottom:8px;background:var(--surf2)}
+.two-col{display:grid;grid-template-columns:1fr 1fr;gap:20px;align-items:start}
+@media(max-width:640px){.two-col{grid-template-columns:1fr}.stats{grid-template-columns:1fr}.form-row{grid-template-columns:1fr}}
 </style>
 </head>
 <body>
@@ -103,49 +143,73 @@ table.sched td.tslot.empty:hover{background:#eff6ff;cursor:pointer}
     <button class="nav-link" id="nav-coaches" onclick="showView('coaches')">Coaches</button>
     <button class="nav-link" id="nav-tracker" onclick="showView('tracker')">Tracker</button>
   </div>
+  <button class="theme-btn ml-auto" id="theme-btn" onclick="toggleTheme()" title="Toggle dark/light">🌙</button>
 </nav>
 
 <main>
 
-<!-- SCHEDULE VIEW -->
+<!-- SCHEDULE -->
 <div class="view active" id="view-schedule">
-  <div class="week-nav">
-    <button class="btn btn-outline btn-sm" onclick="shiftWeek(-1)">← Prev</button>
-    <span class="week-label" id="week-label"></span>
-    <button class="btn btn-outline btn-sm" onclick="shiftWeek(1)">Next →</button>
-    <button class="btn btn-outline btn-sm" onclick="goToday()" style="color:#2563eb">Today</button>
+  <div class="sub-tog">
+    <button id="tog-week" class="active" onclick="switchSched('week')">Week</button>
+    <button id="tog-month" onclick="switchSched('month')">Month</button>
   </div>
-  <div id="coach-legend" class="legend"></div>
-  <div class="sched-wrap"><div id="schedule-table"></div></div>
+
+  <div id="sv-week">
+    <div class="week-nav">
+      <button class="btn btn-o btn-sm" onclick="shiftWeek(-1)">← Prev</button>
+      <span class="wk-label" id="week-label"></span>
+      <button class="btn btn-o btn-sm" onclick="shiftWeek(1)">Next →</button>
+      <button class="btn btn-o btn-sm" onclick="baseDate=new Date();renderWeek()" style="color:var(--blue)">Today</button>
+    </div>
+    <div id="legend-w" class="legend"></div>
+    <div class="sched-wrap"><div id="sched-tbl"></div></div>
+  </div>
+
+  <div id="sv-month" style="display:none">
+    <div class="week-nav">
+      <button class="btn btn-o btn-sm" onclick="shiftMonth(-1)">← Prev</button>
+      <span class="wk-label" id="month-label"></span>
+      <button class="btn btn-o btn-sm" onclick="shiftMonth(1)">Next →</button>
+      <button class="btn btn-o btn-sm" onclick="calDate=new Date();renderMonth()" style="color:var(--blue)">Today</button>
+    </div>
+    <div id="legend-m" class="legend"></div>
+    <div class="cal-wrap">
+      <div class="cal-dow-row" id="cal-dows"></div>
+      <div class="cal-grid" id="cal-grid"></div>
+    </div>
+  </div>
 </div>
 
-<!-- COACHES VIEW -->
+<!-- COACHES -->
 <div class="view" id="view-coaches">
   <div class="page-hdr"><h1 class="page-title">Coaches</h1></div>
-  <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;align-items:start">
+  <div class="two-col">
     <div>
       <div class="card">
-        <div class="card-header" id="coach-form-title">Add Coach</div>
+        <div class="card-hdr" id="coach-form-hdr">Add Coach</div>
         <div class="card-body">
           <form id="coach-form" onsubmit="handleCoachSubmit(event)">
-            <div class="form-group"><label>Name *</label><input type="text" id="coach-name" placeholder="Coach name" required></div>
-            <div class="form-group"><label>Contact</label><input type="text" id="coach-contact" placeholder="Phone or email"></div>
-            <div class="form-group"><label>Hourly Rate (RM)</label><input type="number" id="coach-rate" min="0" step="0.50" placeholder="0.00"></div>
-            <div class="form-group"><label class="chk-row"><input type="checkbox" id="coach-active" checked> Active</label></div>
+            <div class="fg"><label>Name *</label><input type="text" id="cn" placeholder="Coach name" required></div>
+            <div class="fg"><label>Contact</label><input type="text" id="cc" placeholder="Phone or email"></div>
+            <div class="fg"><label class="chk-row"><input type="checkbox" id="ca" checked> Active</label></div>
             <div style="display:flex;gap:8px">
-              <button type="submit" class="btn btn-primary">Save</button>
-              <button type="button" class="btn btn-outline" id="coach-cancel-btn" onclick="cancelCoachEdit()" style="display:none">Cancel</button>
+              <button type="submit" class="btn btn-p">Save</button>
+              <button type="button" class="btn btn-o" id="coach-cancel" onclick="cancelCoachEdit()" style="display:none">Cancel</button>
             </div>
           </form>
         </div>
       </div>
       <div class="card">
-        <div class="card-header">Venues / Courts</div>
+        <div class="card-hdr">Venues</div>
         <div class="card-body" style="padding-top:12px">
           <div id="venues-list" style="margin-bottom:12px"></div>
-          <form id="venue-form" onsubmit="handleVenueSubmit(event)" style="display:flex;gap:8px">
-            <input type="text" id="venue-name" placeholder="New venue name" style="flex:1">
-            <button type="submit" class="btn btn-outline btn-sm">Add</button>
+          <form id="venue-form" onsubmit="handleVenueAdd(event)">
+            <div class="form-row" style="margin-bottom:8px">
+              <div class="fg" style="margin:0"><label>Name</label><input type="text" id="vn" placeholder="e.g. Sports Hall A" required></div>
+              <div class="fg" style="margin:0"><label>Courts</label><input type="number" id="vc" min="1" max="20" value="1"></div>
+            </div>
+            <button type="submit" class="btn btn-o btn-sm">Add Venue</button>
           </form>
         </div>
       </div>
@@ -154,21 +218,20 @@ table.sched td.tslot.empty:hover{background:#eff6ff;cursor:pointer}
   </div>
 </div>
 
-<!-- TRACKER VIEW -->
+<!-- TRACKER -->
 <div class="view" id="view-tracker">
   <div class="page-hdr">
     <h1 class="page-title">Monthly Tracker</h1>
     <div style="display:flex;align-items:center;gap:8px">
-      <label style="font-size:13px;color:#64748b">Month:</label>
+      <label style="font-size:13px;color:var(--txm)">Month:</label>
       <select id="tracker-month" class="fc" style="width:auto" onchange="trackerMonth=this.value;expandedCoach=null;renderTracker()"></select>
     </div>
   </div>
   <div class="stats">
-    <div class="stat"><div class="stat-val" style="color:#2563eb" id="ts-coaches">0</div><div class="stat-lbl">Active coaches</div></div>
-    <div class="stat"><div class="stat-val" id="ts-hours">0</div><div class="stat-lbl">Total hours</div></div>
-    <div class="stat"><div class="stat-val" style="color:#16a34a" id="ts-pay">RM 0</div><div class="stat-lbl">Total payroll</div></div>
+    <div class="stat"><div class="stat-val" style="color:var(--blue)" id="ts-c">0</div><div class="stat-lbl">Active coaches this month</div></div>
+    <div class="stat"><div class="stat-val" id="ts-h">0h</div><div class="stat-lbl">Total coaching hours</div></div>
   </div>
-  <div id="tracker-table"></div>
+  <div id="tracker-tbl"></div>
 </div>
 
 </main>
@@ -176,372 +239,451 @@ table.sched td.tslot.empty:hover{background:#eff6ff;cursor:pointer}
 <!-- ADD SESSION MODAL -->
 <div class="overlay" id="add-modal" onclick="if(event.target===this)this.classList.remove('open')">
   <div class="modal">
-    <h2 id="modal-title">Add Session</h2>
+    <h2 id="modal-ttl">Add Session</h2>
     <form onsubmit="handleAddSession(event)">
-      <div class="form-group"><label>Coach</label><select id="modal-coach" class="fc" required></select></div>
-      <div class="form-group"><label>Venue</label><select id="modal-venue" class="fc" required></select></div>
+      <div class="fg"><label>Coach</label><select id="m-coach" class="fc" required></select></div>
+      <div class="fg"><label>Venue</label><select id="m-venue" class="fc" required onchange="refreshCourts()"></select></div>
+      <div class="fg" id="court-row" style="display:none"><label>Court</label><select id="m-court" class="fc"></select></div>
       <div class="form-row" style="margin-bottom:12px">
-        <div class="form-group" style="margin:0"><label>Start</label><input type="time" id="modal-start" step="1800" required></div>
-        <div class="form-group" style="margin:0"><label>End</label><input type="time" id="modal-end" step="1800" required></div>
+        <div class="fg" style="margin:0"><label>Start</label><input type="time" id="m-start" step="1800" required></div>
+        <div class="fg" style="margin:0"><label>End</label><input type="time" id="m-end" step="1800" required></div>
       </div>
-      <div class="form-group"><label class="chk-row"><input type="checkbox" id="modal-recurring"> <span id="modal-rec-lbl">Recurring weekly</span></label></div>
-      <div class="mactions">
-        <button type="submit" class="btn btn-primary" style="flex:1">Add Session</button>
-        <button type="button" class="btn btn-outline" onclick="document.getElementById('add-modal').classList.remove('open')">Cancel</button>
+      <div class="fg"><label class="chk-row"><input type="checkbox" id="m-rec"> <span id="m-rec-lbl">Recurring weekly</span></label></div>
+      <div class="mact">
+        <button type="submit" class="btn btn-p" style="flex:1">Add Session</button>
+        <button type="button" class="btn btn-o" onclick="document.getElementById('add-modal').classList.remove('open')">Cancel</button>
       </div>
     </form>
   </div>
 </div>
 
-<script>
-// ── DATA ──────────────────────────────────────────────────────
-const S = {
-  get(k) { try { return JSON.parse(localStorage.getItem(k) || '[]') } catch { return [] } },
-  set(k, v) { localStorage.setItem(k, JSON.stringify(v)) },
-  nextId(a) { return a.length ? Math.max(...a.map(i => i.id)) + 1 : 1 }
-};
+<!-- DAY DETAIL MODAL -->
+<div class="overlay" id="day-modal" onclick="if(event.target===this)this.classList.remove('open')">
+  <div class="modal">
+    <h2 id="day-ttl"></h2>
+    <div id="day-body"></div>
+    <div class="mact">
+      <button class="btn btn-p" style="flex:1" onclick="openAddFromDay()">+ Add Session</button>
+      <button class="btn btn-o" onclick="document.getElementById('day-modal').classList.remove('open')">Close</button>
+    </div>
+  </div>
+</div>
 
-(function init() {
-  if (localStorage.getItem('cmp_v1')) return;
-  S.set('coaches', []);
-  S.set('venues', [{ id:1,name:'Court 1' }, { id:2,name:'Court 2' }, { id:3,name:'Court 3' }]);
-  S.set('sessions', []);
-  S.set('instances', []);
-  localStorage.setItem('cmp_v1', '1');
+<script>
+// ── THEME ─────────────────────────────────────────────────────
+(function(){
+  if(localStorage.getItem('cmp_theme')==='dark'){
+    document.documentElement.setAttribute('data-dark','');
+    document.getElementById('theme-btn').textContent='☀️';
+  }
+})();
+function toggleTheme(){
+  const dark=document.documentElement.hasAttribute('data-dark');
+  if(dark){document.documentElement.removeAttribute('data-dark');document.getElementById('theme-btn').textContent='🌙';localStorage.setItem('cmp_theme','light')}
+  else{document.documentElement.setAttribute('data-dark','');document.getElementById('theme-btn').textContent='☀️';localStorage.setItem('cmp_theme','dark')}
+}
+
+// ── STORAGE ───────────────────────────────────────────────────
+const S={
+  get(k){try{return JSON.parse(localStorage.getItem(k)||'[]')}catch{return[]}},
+  set(k,v){localStorage.setItem(k,JSON.stringify(v))},
+  nextId(a){return a.length?Math.max(...a.map(i=>i.id))+1:1}
+};
+(function init(){
+  if(localStorage.getItem('cmp_v2'))return;
+  S.set('coaches',[]);
+  S.set('venues',[{id:1,name:'Main Hall',num_courts:3}]);
+  S.set('sessions',[]);
+  S.set('instances',[]);
+  localStorage.setItem('cmp_v2','1');
 })();
 
-const getCoaches  = () => S.get('coaches');
-const getVenues   = () => S.get('venues');
-const getInstances = () => S.get('instances');
+const getCoaches=()=>S.get('coaches');
+const getVenues=()=>S.get('venues');
+const getInsts=()=>S.get('instances');
 
-function saveCoach(c) {
-  const list = getCoaches();
-  if (c.id) { const i = list.findIndex(x => x.id === c.id); if (i >= 0) list[i] = c; }
-  else { c = { ...c, id: S.nextId(list) }; list.push(c); }
-  S.set('coaches', list); return c;
+function saveCoach(c){
+  const l=getCoaches();
+  if(c.id){const i=l.findIndex(x=>x.id===c.id);if(i>=0)l[i]=c;}
+  else{c={...c,id:S.nextId(l)};l.push(c);}
+  S.set('coaches',l);return c;
 }
-function saveVenue(v) {
-  const list = getVenues();
-  if (v.id) { const i = list.findIndex(x => x.id === v.id); if (i >= 0) list[i] = v; }
-  else { v = { ...v, id: S.nextId(list) }; list.push(v); }
-  S.set('venues', list); return v;
+function saveVenue(v){
+  const l=getVenues();
+  v={...v,id:S.nextId(l)};l.push(v);
+  S.set('venues',l);return v;
 }
-function saveSession(s) {
-  const list = S.get('sessions');
-  s = { ...s, id: S.nextId(list) }; list.push(s);
-  S.set('sessions', list); return s;
+function deleteVenue(id){
+  S.set('venues',getVenues().filter(v=>v.id!==id));
+  const dead=S.get('sessions').filter(s=>s.venue_id===id).map(s=>s.id);
+  S.set('sessions',S.get('sessions').filter(s=>s.venue_id!==id));
+  S.set('instances',getInsts().filter(i=>!dead.includes(i.session_id)));
 }
-function updateStatus(id, status) {
-  const list = getInstances();
-  const i = list.findIndex(x => x.id === id);
-  if (i >= 0) list[i].status = status;
-  S.set('instances', list);
+function saveSession(s){
+  const l=S.get('sessions');
+  s={...s,id:S.nextId(l)};l.push(s);S.set('sessions',l);return s;
 }
-function removeInstance(id) { S.set('instances', getInstances().filter(i => i.id !== id)); }
+function setStatus(id,st){
+  const l=getInsts(),i=l.findIndex(x=>x.id===id);
+  if(i>=0)l[i].status=st;S.set('instances',l);
+}
+function delInst(id){S.set('instances',getInsts().filter(i=>i.id!==id))}
 
-function computeHours(s, e) {
-  const [sh, sm] = s.split(':').map(Number), [eh, em] = e.split(':').map(Number);
-  return (eh * 60 + em - (sh * 60 + sm)) / 60;
-}
-function ds(d) { return d.toISOString().split('T')[0]; }
+function hrs(s,e){const[sh,sm]=s.split(':').map(Number),[eh,em]=e.split(':').map(Number);return(eh*60+em-(sh*60+sm))/60}
+function ds(d){return d.toISOString().split('T')[0]}
 
-function genRecurring(sid, cid, vid, dow, st, et, weeks) {
-  const list = getInstances();
-  const today = new Date(); today.setHours(0,0,0,0);
-  const diff = (dow - today.getDay() + 7) % 7;
-  const first = new Date(today); first.setDate(today.getDate() + diff);
-  const hrs = computeHours(st, et);
-  for (let w = 0; w < weeks; w++) {
-    const d = new Date(first); d.setDate(first.getDate() + w * 7);
-    const dateStr = ds(d);
-    if (!list.find(i => i.session_id === sid && i.date === dateStr)) {
-      list.push({ id: S.nextId(list), session_id: sid, coach_id: cid, venue_id: vid, date: dateStr, start_time: st, end_time: et, status: 'scheduled', hours: hrs });
-    }
+function genRec(sid,cid,vid,court,dow,st,et){
+  const l=getInsts(),today=new Date();today.setHours(0,0,0,0);
+  const diff=(dow-today.getDay()+7)%7;
+  const first=new Date(today);first.setDate(today.getDate()+diff);
+  const h=hrs(st,et);
+  for(let w=0;w<12;w++){
+    const d=new Date(first);d.setDate(first.getDate()+w*7);
+    const dt=ds(d);
+    if(!l.find(i=>i.session_id===sid&&i.date===dt))
+      l.push({id:S.nextId(l),session_id:sid,coach_id:cid,venue_id:vid,court,date:dt,start_time:st,end_time:et,status:'scheduled',hours:h});
   }
-  S.set('instances', list);
+  S.set('instances',l);
 }
-function addOneOff(sid, cid, vid, dt, st, et) {
-  const list = getInstances();
-  list.push({ id: S.nextId(list), session_id: sid, coach_id: cid, venue_id: vid, date: dt, start_time: st, end_time: et, status: 'scheduled', hours: computeHours(st, et) });
-  S.set('instances', list);
+function addOneOff(sid,cid,vid,court,dt,st,et){
+  const l=getInsts();
+  l.push({id:S.nextId(l),session_id:sid,coach_id:cid,venue_id:vid,court,date:dt,start_time:st,end_time:et,status:'scheduled',hours:hrs(st,et)});
+  S.set('instances',l);
 }
 
 // ── HELPERS ───────────────────────────────────────────────────
-const DAYS = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
-function esc(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
-function t2d(t) { const [h,m] = t.split(':').map(Number); return h + m/60; }
-function d2t(d) { return `${String(Math.floor(d)).padStart(2,'0')}:${d%1>=.5?'30':'00'}`; }
-
-// ── VIEW MANAGER ──────────────────────────────────────────────
-function showView(v) {
-  document.querySelectorAll('.view').forEach(el => el.classList.remove('active'));
-  document.querySelectorAll('.nav-link').forEach(el => el.classList.remove('active'));
-  document.getElementById('view-' + v).classList.add('active');
-  document.getElementById('nav-' + v).classList.add('active');
-  if (v === 'schedule') renderSchedule();
-  if (v === 'coaches')  renderCoaches();
-  if (v === 'tracker')  renderTracker();
+const DAYS=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+const MONTHS=['January','February','March','April','May','June','July','August','September','October','November','December'];
+function esc(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;')}
+function t2d(t){const[h,m]=t.split(':').map(Number);return h+m/60}
+function d2t(d){return`${String(Math.floor(d)).padStart(2,'0')}:${d%1>=.5?'30':'00'}`}
+function vLabel(vid,court){
+  const v=getVenues().find(x=>x.id===vid);
+  if(!v)return'?';
+  return v.num_courts>1?`${v.name} · Ct ${court||1}`:v.name;
 }
 
-// ── SCHEDULE ──────────────────────────────────────────────────
-let baseDate = new Date();
-
-function getWeekDates(b) {
-  const d = new Date(b), day = d.getDay();
-  const mon = new Date(d); mon.setDate(d.getDate() - ((day + 6) % 7)); mon.setHours(0,0,0,0);
-  return Array.from({ length: 7 }, (_, i) => { const dd = new Date(mon); dd.setDate(mon.getDate() + i); return dd; });
+// ── VIEWS ─────────────────────────────────────────────────────
+function showView(v){
+  document.querySelectorAll('.view').forEach(el=>el.classList.remove('active'));
+  document.querySelectorAll('.nav-link').forEach(el=>el.classList.remove('active'));
+  document.getElementById('view-'+v).classList.add('active');
+  document.getElementById('nav-'+v).classList.add('active');
+  if(v==='schedule')renderSched();
+  if(v==='coaches')renderCoaches();
+  if(v==='tracker')renderTracker();
 }
-function shiftWeek(n) { baseDate = new Date(baseDate); baseDate.setDate(baseDate.getDate() + n*7); renderSchedule(); }
-function goToday()    { baseDate = new Date(); renderSchedule(); }
 
-function renderSchedule() {
-  const wk = getWeekDates(baseDate);
-  const insts = getInstances();
-  const coaches = getCoaches();
-  const venues  = getVenues();
-  const cMap = Object.fromEntries(coaches.map(c => [c.id, c]));
-  const vMap = Object.fromEntries(venues.map(v  => [v.id, v]));
-  const cColors = {}; coaches.forEach((c,i) => cColors[c.id] = i % 7);
+// ── SCHED TOGGLE ──────────────────────────────────────────────
+let schedMode='week';
+function switchSched(m){
+  schedMode=m;
+  document.getElementById('tog-week').classList.toggle('active',m==='week');
+  document.getElementById('tog-month').classList.toggle('active',m==='month');
+  document.getElementById('sv-week').style.display=m==='week'?'block':'none';
+  document.getElementById('sv-month').style.display=m==='month'?'block':'none';
+  renderSched();
+}
+function renderSched(){schedMode==='week'?renderWeek():renderMonth()}
 
-  document.getElementById('week-label').textContent = `${ds(wk[0])} — ${ds(wk[6])}`;
-  document.getElementById('coach-legend').innerHTML =
-    coaches.map(c => `<span class="lchip cc${cColors[c.id]}">${esc(c.name)}</span>`).join('') +
-    '<span style="font-size:11px;color:#94a3b8;margin-left:4px">· Click empty cell to add session</span>';
+// ── LEGEND ────────────────────────────────────────────────────
+function buildLegend(elId){
+  const coaches=getCoaches();
+  const cc={};coaches.forEach((c,i)=>cc[c.id]=i%7);
+  document.getElementById(elId).innerHTML=
+    coaches.map(c=>`<span class="lchip cc${cc[c.id]}">${esc(c.name)}</span>`).join('')+
+    '<span style="font-size:11px;color:var(--txf);margin-left:4px">· Tap empty cell to add</span>';
+  return cc;
+}
 
-  const today  = ds(new Date());
-  const wkInsts = insts.filter(i => i.date >= ds(wk[0]) && i.date <= ds(wk[6]));
-  const slots = [];
-  for (let h = 6; h < 22; h++) { slots.push(h); slots.push(h + .5); }
+// ── WEEKLY VIEW ───────────────────────────────────────────────
+let baseDate=new Date();
+function getWk(b){
+  const d=new Date(b),day=d.getDay();
+  const m=new Date(d);m.setDate(d.getDate()-((day+6)%7));m.setHours(0,0,0,0);
+  return Array.from({length:7},(_,i)=>{const dd=new Date(m);dd.setDate(m.getDate()+i);return dd});
+}
+function shiftWeek(n){baseDate=new Date(baseDate);baseDate.setDate(baseDate.getDate()+n*7);renderWeek()}
 
-  let html = '<table class="sched"><thead><tr><th class="tcorner" style="width:52px"></th>';
-  wk.forEach(d => {
-    const it = ds(d) === today;
-    html += `<th class="${it ? 'today-h' : ''}"><div>${DAYS[d.getDay()]}</div><div style="font-size:16px${it?';font-weight:700':''}">${d.getDate()}</div></th>`;
+function renderWeek(){
+  const wk=getWk(baseDate);
+  const insts=getInsts();
+  const coaches=getCoaches();
+  const cMap=Object.fromEntries(coaches.map(c=>[c.id,c]));
+  const cc=buildLegend('legend-w');
+  const today=ds(new Date());
+  document.getElementById('week-label').textContent=`${ds(wk[0])} — ${ds(wk[6])}`;
+  const wkI=insts.filter(i=>i.date>=ds(wk[0])&&i.date<=ds(wk[6]));
+  const slots=[];for(let h=6;h<22;h++){slots.push(h);slots.push(h+.5)}
+  let html='<table class="sched"><thead><tr><th class="tcorner" style="width:52px"></th>';
+  wk.forEach(d=>{
+    const it=ds(d)===today;
+    html+=`<th class="${it?'today-h':''}" style="min-width:90px"><div>${DAYS[d.getDay()]}</div><div style="font-size:16px${it?';font-weight:700':''}">${d.getDate()}</div></th>`;
   });
-  html += '</tr></thead><tbody>';
-
-  slots.forEach(h => {
-    const isHalf = h % 1 !== 0;
-    html += `<tr><td class="ttime">${isHalf ? '' : d2t(h)}</td>`;
-    wk.forEach(d => {
-      const dateStr = ds(d);
-      const slotI = wkInsts.filter(i => {
-        if (i.date !== dateStr) return false;
-        const s = t2d(i.start_time), e = t2d(i.end_time);
-        return s <= h && e > h;
-      });
-      const startI  = slotI.filter(i => t2d(i.start_time) === h);
-      const isEmpty  = slotI.length === 0;
-      html += `<td class="tslot${isHalf?' half':''}${isEmpty?' empty':''}" data-date="${dateStr}" data-day="${d.getDay()}" data-hour="${h}" onclick="slotClick(this,${!isEmpty})">`;
-      startI.forEach(inst => {
-        const dur = t2d(inst.end_time) - t2d(inst.start_time);
-        const hpx = dur * 2 * 28 - 2;
-        const cc  = `cc${cColors[inst.coach_id] ?? 0}`;
-        const sc  = inst.status === 'cancelled' ? 'cancelled' : inst.status === 'completed' ? 'completed' : '';
-        const si  = inst.status === 'completed' ? '✅' : inst.status === 'cancelled' ? '❌' : '⬜';
-        html += `<div class="sblock ${cc} ${sc}" style="height:${hpx}px">
-          <div class="sn">${esc(cMap[inst.coach_id]?.name ?? '?')}</div>
-          <div class="sv">${esc(vMap[inst.venue_id]?.name ?? '?')}</div>
+  html+='</tr></thead><tbody>';
+  slots.forEach(h=>{
+    const half=h%1!==0;
+    html+=`<tr><td class="ttime">${half?'':d2t(h)}</td>`;
+    wk.forEach(d=>{
+      const dt=ds(d);
+      const si=wkI.filter(i=>{if(i.date!==dt)return false;const s=t2d(i.start_time),e=t2d(i.end_time);return s<=h&&e>h});
+      const starts=si.filter(i=>t2d(i.start_time)===h);
+      const empty=si.length===0;
+      html+=`<td class="tslot${half?' half':''}${empty?' empty':''}" data-date="${dt}" data-day="${d.getDay()}" data-hour="${h}" onclick="slotClick(this,${!empty})">`;
+      starts.forEach(inst=>{
+        const dur=t2d(inst.end_time)-t2d(inst.start_time);
+        const hpx=dur*2*28-2;
+        const c=`cc${cc[inst.coach_id]??0}`;
+        const sc=inst.status==='cancelled'?'cancelled':inst.status==='completed'?'completed':'';
+        const ic=inst.status==='completed'?'✅':inst.status==='cancelled'?'❌':'⬜';
+        html+=`<div class="sblock ${c} ${sc}" style="height:${hpx}px">
+          <div class="sn">${esc(cMap[inst.coach_id]?.name??'?')}</div>
+          <div class="sv">${esc(vLabel(inst.venue_id,inst.court))}</div>
           <div class="sa">
-            <button title="Cycle status" onclick="cycleStatus(${inst.id})">${si}</button>
-            <button title="Delete" style="color:#ef4444" onclick="delInst(${inst.id})">✕</button>
+            <button onclick="cycleW(${inst.id})">${ic}</button>
+            <button style="color:#ef4444" onclick="if(confirm('Delete?')){delInst(${inst.id});renderWeek()}">✕</button>
           </div>
         </div>`;
       });
-      html += '</td>';
+      html+='</td>';
     });
-    html += '</tr>';
+    html+='</tr>';
   });
-  html += '</tbody></table>';
-  document.getElementById('schedule-table').innerHTML = html;
+  html+='</tbody></table>';
+  document.getElementById('sched-tbl').innerHTML=html;
+}
+function slotClick(td,occ){if(!occ)openModal(td.dataset.date,+td.dataset.day,+td.dataset.hour)}
+function cycleW(id){
+  const i=getInsts().find(x=>x.id===id);if(!i)return;
+  const n=i.status==='scheduled'?'completed':i.status==='completed'?'cancelled':'scheduled';
+  setStatus(id,n);renderWeek();
 }
 
-function slotClick(td, occupied) {
-  if (occupied) return;
-  openModal(td.dataset.date, parseInt(td.dataset.day), parseFloat(td.dataset.hour));
-}
-function cycleStatus(id) {
-  const inst = getInstances().find(x => x.id === id); if (!inst) return;
-  const next = inst.status === 'scheduled' ? 'completed' : inst.status === 'completed' ? 'cancelled' : 'scheduled';
-  updateStatus(id, next); renderSchedule();
-}
-function delInst(id) {
-  if (confirm('Delete this session?')) { removeInstance(id); renderSchedule(); }
+// ── MONTHLY VIEW ──────────────────────────────────────────────
+let calDate=new Date();
+function shiftMonth(n){calDate=new Date(calDate.getFullYear(),calDate.getMonth()+n,1);renderMonth()}
+
+function renderMonth(){
+  const coaches=getCoaches();
+  const cc={};coaches.forEach((c,i)=>cc[c.id]=i%7);
+  buildLegend('legend-m');
+  const yr=calDate.getFullYear(),mo=calDate.getMonth();
+  document.getElementById('month-label').textContent=`${MONTHS[mo]} ${yr}`;
+  const firstDow=new Date(yr,mo,1).getDay();
+  const daysInMo=new Date(yr,mo+1,0).getDate();
+  const today=ds(new Date());
+  const allI=getInsts();
+  document.getElementById('cal-dows').innerHTML=DAYS.map(d=>`<div class="cal-dow">${d}</div>`).join('');
+  const total=Math.ceil((firstDow+daysInMo)/7)*7;
+  let html='';
+  for(let i=0;i<total;i++){
+    const dayN=i-firstDow+1;
+    const inMo=dayN>=1&&dayN<=daysInMo;
+    const d=inMo?new Date(yr,mo,dayN):null;
+    const dt=d?ds(d):'';
+    const isTdy=dt===today;
+    const dayI=inMo?allI.filter(x=>x.date===dt):[];
+    const show=dayI.slice(0,3),more=dayI.length-3;
+    html+=`<div class="cal-cell${!inMo?' other':''}${isTdy?' today':''}" onclick="${inMo?`openDay('${dt}',${d.getDay()})`:''}" >
+      <div class="cal-num">${inMo?dayN:''}</div>
+      ${show.map(inst=>`<div class="cal-chip cc${cc[inst.coach_id]??0}">${esc(coaches.find(c=>c.id===inst.coach_id)?.name??'?')} ${inst.start_time}</div>`).join('')}
+      ${more>0?`<div class="cal-more">+${more} more</div>`:''}
+    </div>`;
+  }
+  document.getElementById('cal-grid').innerHTML=html;
 }
 
-let mDate = '', mDay = 0, mHour = 0;
-function openModal(date, day, hour) {
-  mDate = date; mDay = day; mHour = hour;
-  const coaches = getCoaches().filter(c => c.active);
-  const venues  = getVenues();
-  if (!coaches.length) { alert('Add at least one coach first (Coaches tab).'); return; }
-  document.getElementById('modal-title').textContent = `Add Session — ${date} (${DAYS[day]})`;
-  document.getElementById('modal-coach').innerHTML = coaches.map(c => `<option value="${c.id}">${esc(c.name)}</option>`).join('');
-  document.getElementById('modal-venue').innerHTML = venues.map(v  => `<option value="${v.id}">${esc(v.name)}</option>`).join('');
-  document.getElementById('modal-start').value = d2t(hour);
-  document.getElementById('modal-end').value   = d2t(hour + 1);
-  document.getElementById('modal-recurring').checked = false;
-  document.getElementById('modal-rec-lbl').textContent = `Recurring every ${DAYS[day]}`;
+// ── DAY DETAIL ────────────────────────────────────────────────
+let dayDt='',dayDow=0;
+function openDay(dt,dow){
+  dayDt=dt;dayDow=dow;
+  const insts=getInsts().filter(i=>i.date===dt).sort((a,b)=>a.start_time.localeCompare(b.start_time));
+  const cMap=Object.fromEntries(getCoaches().map(c=>[c.id,c]));
+  document.getElementById('day-ttl').textContent=`${dt} — ${DAYS[dow]}`;
+  let html=insts.length?'':'<div class="empty" style="padding:16px 0">No sessions this day.</div>';
+  insts.forEach(inst=>{
+    const ic=inst.status==='completed'?'✅':inst.status==='cancelled'?'❌':'⬜';
+    html+=`<div class="day-item">
+      <div style="font-weight:600;font-size:13px">${ic} ${esc(cMap[inst.coach_id]?.name??'?')}</div>
+      <div style="font-size:12px;color:var(--txm);margin-top:2px">${inst.start_time}–${inst.end_time} · ${esc(vLabel(inst.venue_id,inst.court))}</div>
+      <div style="display:flex;gap:6px;margin-top:6px">
+        <button class="btn btn-o btn-sm" onclick="cycleDay(${inst.id})">Cycle status</button>
+        <button class="btn btn-o btn-sm" style="color:var(--red)" onclick="if(confirm('Delete?')){delInst(${inst.id});openDay('${dt}',${dow});renderMonth()}">Delete</button>
+      </div>
+    </div>`;
+  });
+  document.getElementById('day-body').innerHTML=html;
+  document.getElementById('day-modal').classList.add('open');
+}
+function cycleDay(id){
+  const i=getInsts().find(x=>x.id===id);if(!i)return;
+  const n=i.status==='scheduled'?'completed':i.status==='completed'?'cancelled':'scheduled';
+  setStatus(id,n);openDay(dayDt,dayDow);renderMonth();
+}
+function openAddFromDay(){
+  document.getElementById('day-modal').classList.remove('open');
+  openModal(dayDt,dayDow,8);
+}
+
+// ── ADD SESSION MODAL ─────────────────────────────────────────
+let mDate='',mDay=0,mHour=0;
+function openModal(date,day,hour){
+  mDate=date;mDay=day;mHour=hour;
+  const coaches=getCoaches().filter(c=>c.active);
+  const venues=getVenues();
+  if(!coaches.length){alert('Add at least one coach first.');return}
+  if(!venues.length){alert('Add at least one venue first.');return}
+  document.getElementById('modal-ttl').textContent=`Add Session — ${date} (${DAYS[day]})`;
+  document.getElementById('m-coach').innerHTML=coaches.map(c=>`<option value="${c.id}">${esc(c.name)}</option>`).join('');
+  document.getElementById('m-venue').innerHTML=venues.map(v=>`<option value="${v.id}">${esc(v.name)}</option>`).join('');
+  document.getElementById('m-start').value=d2t(hour);
+  document.getElementById('m-end').value=d2t(hour+1);
+  document.getElementById('m-rec').checked=false;
+  document.getElementById('m-rec-lbl').textContent=`Recurring every ${DAYS[day]}`;
+  refreshCourts();
   document.getElementById('add-modal').classList.add('open');
 }
-function handleAddSession(e) {
+function refreshCourts(){
+  const vid=parseInt(document.getElementById('m-venue').value);
+  const v=getVenues().find(x=>x.id===vid);
+  const row=document.getElementById('court-row');
+  const sel=document.getElementById('m-court');
+  if(!v||v.num_courts<=1){row.style.display='none';sel.innerHTML='<option value="1">Court 1</option>';return}
+  row.style.display='block';
+  sel.innerHTML=Array.from({length:v.num_courts},(_,i)=>`<option value="${i+1}">Court ${i+1}</option>`).join('');
+}
+function handleAddSession(e){
   e.preventDefault();
-  const cid = parseInt(document.getElementById('modal-coach').value);
-  const vid = parseInt(document.getElementById('modal-venue').value);
-  const st  = document.getElementById('modal-start').value;
-  const et  = document.getElementById('modal-end').value;
-  const rec = document.getElementById('modal-recurring').checked;
-  if (st >= et) { alert('End time must be after start time.'); return; }
-  const sess = saveSession({ coach_id:cid, venue_id:vid, recurring:rec?1:0, day_of_week:rec?mDay:null, date:rec?null:mDate, start_time:st, end_time:et });
-  if (rec) genRecurring(sess.id, cid, vid, mDay, st, et, 12);
-  else     addOneOff(sess.id, cid, vid, mDate, st, et);
+  const cid=+document.getElementById('m-coach').value;
+  const vid=+document.getElementById('m-venue').value;
+  const court=+document.getElementById('m-court').value||1;
+  const st=document.getElementById('m-start').value;
+  const et=document.getElementById('m-end').value;
+  const rec=document.getElementById('m-rec').checked;
+  if(st>=et){alert('End time must be after start time.');return}
+  const sess=saveSession({coach_id:cid,venue_id:vid,court,recurring:rec?1:0,day_of_week:rec?mDay:null,date:rec?null:mDate,start_time:st,end_time:et});
+  if(rec)genRec(sess.id,cid,vid,court,mDay,st,et);
+  else addOneOff(sess.id,cid,vid,court,mDate,st,et);
   document.getElementById('add-modal').classList.remove('open');
-  renderSchedule();
+  renderSched();
 }
 
 // ── COACHES ───────────────────────────────────────────────────
-let editCoachId = null;
-
-function renderCoaches() {
-  const coaches = getCoaches(), venues = getVenues();
-  document.getElementById('coach-form-title').textContent = editCoachId ? 'Edit Coach' : 'Add Coach';
-  document.getElementById('coach-cancel-btn').style.display = editCoachId ? 'inline-flex' : 'none';
-
-  let html = '';
-  if (!coaches.length) {
-    html = '<div class="empty">No coaches yet.</div>';
-  } else {
-    html = `<table class="dtable"><thead><tr><th>Name</th><th>Contact</th><th>Rate/hr</th><th>Status</th><th></th></tr></thead><tbody>`;
-    coaches.forEach(c => {
-      html += `<tr style="${c.active?'':'opacity:.5'}">
+let editCid=null;
+function renderCoaches(){
+  const coaches=getCoaches(),venues=getVenues();
+  document.getElementById('coach-form-hdr').textContent=editCid?'Edit Coach':'Add Coach';
+  document.getElementById('coach-cancel').style.display=editCid?'inline-flex':'none';
+  // Coach list
+  let ch=coaches.length?`<table class="dtable"><thead><tr><th>Name</th><th>Contact</th><th>Status</th><th></th></tr></thead><tbody>`:
+    '<div class="empty">No coaches yet.</div>';
+  if(coaches.length){
+    coaches.forEach(c=>{
+      ch+=`<tr style="${c.active?'':'opacity:.5'}">
         <td style="font-weight:500">${esc(c.name)}</td>
-        <td style="color:#64748b">${esc(c.contact || '—')}</td>
-        <td>${c.hourly_rate > 0 ? 'RM ' + Number(c.hourly_rate).toFixed(2) : '—'}</td>
-        <td><button onclick="toggleCoach(${c.id})" class="badge ${c.active?'bg':'bgr'}" style="cursor:pointer">${c.active?'Active':'Inactive'}</button></td>
-        <td><button class="btn btn-outline btn-sm" onclick="startEditCoach(${c.id})">Edit</button></td>
+        <td style="color:var(--txm)">${esc(c.contact||'—')}</td>
+        <td><span class="badge ${c.active?'b-g':'b-gr'}" onclick="toggleActive(${c.id})">${c.active?'Active':'Inactive'}</span></td>
+        <td><button class="btn btn-o btn-sm" onclick="startEdit(${c.id})">Edit</button></td>
       </tr>`;
     });
-    html += '</tbody></table>';
+    ch+='</tbody></table>';
   }
-  document.getElementById('coaches-list').innerHTML = html;
-
-  let vhtml = venues.map(v =>
-    `<div style="display:flex;align-items:center;padding:5px 0;border-bottom:1px solid #f1f5f9;font-size:13px">${esc(v.name)}</div>`
-  ).join('');
-  document.getElementById('venues-list').innerHTML = vhtml || '<div style="color:#94a3b8;font-size:12px;margin-bottom:8px">No venues yet.</div>';
+  document.getElementById('coaches-list').innerHTML=ch;
+  // Venues
+  let vh=venues.map(v=>`
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--bdr)">
+      <span style="font-size:13px"><strong>${esc(v.name)}</strong> <span style="color:var(--txf);font-size:11px">${v.num_courts} court${v.num_courts>1?'s':''}</span></span>
+      <button class="btn btn-o btn-sm" style="color:var(--red)" onclick="confirmDelVenue(${v.id})">Delete</button>
+    </div>`).join('');
+  document.getElementById('venues-list').innerHTML=vh||'<div style="color:var(--txf);font-size:12px;margin-bottom:4px">No venues yet.</div>';
 }
-function startEditCoach(id) {
-  const c = getCoaches().find(x => x.id === id); if (!c) return;
-  editCoachId = id;
-  document.getElementById('coach-name').value    = c.name;
-  document.getElementById('coach-contact').value = c.contact || '';
-  document.getElementById('coach-rate').value    = c.hourly_rate || '';
-  document.getElementById('coach-active').checked = Boolean(c.active);
+function confirmDelVenue(id){
+  const v=getVenues().find(x=>x.id===id);
+  if(!v)return;
+  if(confirm('Delete "'+v.name+'" and all its sessions?')){deleteVenue(id);renderCoaches()}
+}
+function startEdit(id){
+  const c=getCoaches().find(x=>x.id===id);if(!c)return;
+  editCid=id;
+  document.getElementById('cn').value=c.name;
+  document.getElementById('cc').value=c.contact||'';
+  document.getElementById('ca').checked=!!c.active;
   renderCoaches();
-  document.getElementById('coach-name').focus();
+  document.getElementById('cn').focus();
 }
-function cancelCoachEdit() {
-  editCoachId = null;
-  document.getElementById('coach-form').reset();
-  document.getElementById('coach-active').checked = true;
-  renderCoaches();
-}
-function handleCoachSubmit(e) {
+function cancelCoachEdit(){editCid=null;document.getElementById('coach-form').reset();document.getElementById('ca').checked=true;renderCoaches()}
+function handleCoachSubmit(e){
   e.preventDefault();
-  const name = document.getElementById('coach-name').value.trim(); if (!name) return;
-  const data = { name, contact: document.getElementById('coach-contact').value.trim(), hourly_rate: parseFloat(document.getElementById('coach-rate').value) || 0, active: document.getElementById('coach-active').checked ? 1 : 0 };
-  if (editCoachId) data.id = editCoachId;
-  saveCoach(data);
-  cancelCoachEdit();
+  const name=document.getElementById('cn').value.trim();if(!name)return;
+  const d={name,contact:document.getElementById('cc').value.trim(),active:document.getElementById('ca').checked?1:0};
+  if(editCid)d.id=editCid;
+  saveCoach(d);cancelCoachEdit();
 }
-function toggleCoach(id) {
-  const c = getCoaches().find(x => x.id === id);
-  if (c) { saveCoach({ ...c, active: c.active ? 0 : 1 }); renderCoaches(); }
-}
-function handleVenueSubmit(e) {
+function toggleActive(id){const c=getCoaches().find(x=>x.id===id);if(c){saveCoach({...c,active:c.active?0:1});renderCoaches()}}
+function handleVenueAdd(e){
   e.preventDefault();
-  const name = document.getElementById('venue-name').value.trim(); if (!name) return;
-  saveVenue({ name });
+  const name=document.getElementById('vn').value.trim();if(!name)return;
+  const nc=parseInt(document.getElementById('vc').value)||1;
+  saveVenue({name,num_courts:nc});
   document.getElementById('venue-form').reset();
+  document.getElementById('vc').value='1';
   renderCoaches();
 }
 
 // ── TRACKER ───────────────────────────────────────────────────
-function curMonth() { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`; }
-function monthLabel(ym) { const [y,m] = ym.split('-').map(Number); return new Date(y,m-1,1).toLocaleString('default',{month:'long',year:'numeric'}); }
+function curMonth(){const d=new Date();return`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`}
+function mLabel(ym){const[y,m]=ym.split('-').map(Number);return new Date(y,m-1,1).toLocaleString('default',{month:'long',year:'numeric'})}
+let trackerMonth=curMonth(),expandedCoach=null;
 
-let trackerMonth = curMonth(), expandedCoach = null;
-
-function renderTracker() {
-  const sel = document.getElementById('tracker-month');
-  if (!sel.innerHTML) {
-    sel.innerHTML = Array.from({ length: 15 }, (_, i) => {
-      const d = new Date(); d.setMonth(d.getMonth() - 12 + i);
-      const ym = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
-      return `<option value="${ym}">${monthLabel(ym)}</option>`;
+function renderTracker(){
+  const sel=document.getElementById('tracker-month');
+  if(!sel.innerHTML){
+    sel.innerHTML=Array.from({length:15},(_,i)=>{
+      const d=new Date();d.setMonth(d.getMonth()-12+i);
+      const ym=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+      return`<option value="${ym}">${mLabel(ym)}</option>`;
     }).join('');
   }
-  sel.value = trackerMonth;
-
-  const coaches  = getCoaches();
-  const venues   = getVenues();
-  const vMap     = Object.fromEntries(venues.map(v => [v.id, v]));
-  const mInsts   = getInstances().filter(i => i.date.startsWith(trackerMonth));
-
-  const sums = coaches.map(c => {
-    const ci = mInsts.filter(i => i.coach_id === c.id);
-    const hrs = ci.filter(i => i.status !== 'cancelled').reduce((a, i) => a + i.hours, 0);
-    return { c, ci, total: ci.length, done: ci.filter(i=>i.status==='completed').length, sched: ci.filter(i=>i.status==='scheduled').length, canc: ci.filter(i=>i.status==='cancelled').length, hrs, earn: hrs * c.hourly_rate };
-  }).filter(s => s.total > 0);
-
-  const gHrs  = sums.reduce((a,s) => a + s.hrs, 0);
-  const gEarn = sums.reduce((a,s) => a + s.earn, 0);
-  document.getElementById('ts-coaches').textContent = sums.length;
-  document.getElementById('ts-hours').textContent   = gHrs.toFixed(1);
-  document.getElementById('ts-pay').textContent     = 'RM ' + gEarn.toFixed(2);
-
-  if (!sums.length) {
-    document.getElementById('tracker-table').innerHTML = `<div class="card"><div class="empty">No sessions found for ${monthLabel(trackerMonth)}.</div></div>`;
-    return;
-  }
-
-  let html = `<div class="card"><table class="dtable">
-    <thead><tr>
-      <th>Coach</th><th style="text-align:center">Total</th><th style="text-align:center">Done</th>
-      <th style="text-align:center">Pending</th><th style="text-align:center">Cancelled</th>
-      <th style="text-align:right">Hours</th><th style="text-align:right">Earnings</th><th></th>
-    </tr></thead><tbody>`;
-
-  sums.forEach(s => {
-    const exp = expandedCoach === s.c.id;
-    html += `<tr style="cursor:pointer" onclick="toggleExpand(${s.c.id})">
+  sel.value=trackerMonth;
+  const coaches=getCoaches();
+  const venues=getVenues();
+  const mI=getInsts().filter(i=>i.date.startsWith(trackerMonth));
+  const sums=coaches.map(c=>{
+    const ci=mI.filter(i=>i.coach_id===c.id);
+    const h=ci.filter(i=>i.status!=='cancelled').reduce((a,i)=>a+i.hours,0);
+    return{c,ci,total:ci.length,done:ci.filter(i=>i.status==='completed').length,sched:ci.filter(i=>i.status==='scheduled').length,canc:ci.filter(i=>i.status==='cancelled').length,h};
+  }).filter(s=>s.total>0);
+  const gH=sums.reduce((a,s)=>a+s.h,0);
+  document.getElementById('ts-c').textContent=sums.length;
+  document.getElementById('ts-h').textContent=gH.toFixed(1)+'h';
+  if(!sums.length){document.getElementById('tracker-tbl').innerHTML=`<div class="card"><div class="empty">No sessions for ${mLabel(trackerMonth)}.</div></div>`;return}
+  let html=`<div class="card"><table class="dtable">
+    <thead><tr><th>Coach</th><th style="text-align:center">Total</th><th style="text-align:center">Done</th><th style="text-align:center">Pending</th><th style="text-align:center">Cancelled</th><th style="text-align:right">Hours</th><th></th></tr></thead><tbody>`;
+  sums.forEach(s=>{
+    const exp=expandedCoach===s.c.id;
+    html+=`<tr style="cursor:pointer" onclick="toggleExp(${s.c.id})">
       <td style="font-weight:500">${esc(s.c.name)}</td>
       <td style="text-align:center">${s.total}</td>
-      <td style="text-align:center;color:#16a34a">${s.done}</td>
-      <td style="text-align:center;color:#2563eb">${s.sched}</td>
-      <td style="text-align:center;color:#94a3b8">${s.canc}</td>
-      <td style="text-align:right;font-weight:600">${s.hrs.toFixed(1)}h</td>
-      <td style="text-align:right;color:#16a34a;font-weight:600">${s.earn > 0 ? 'RM ' + s.earn.toFixed(2) : '—'}</td>
-      <td style="color:#94a3b8;font-size:11px">${exp?'▲':'▼'}</td>
+      <td style="text-align:center;color:var(--green)">${s.done}</td>
+      <td style="text-align:center;color:var(--blue)">${s.sched}</td>
+      <td style="text-align:center;color:var(--txf)">${s.canc}</td>
+      <td style="text-align:right;font-weight:600">${s.h.toFixed(1)}h</td>
+      <td style="color:var(--txf);font-size:11px">${exp?'▲':'▼'}</td>
     </tr>`;
-    if (exp) {
-      html += `<tr class="expand-row"><td colspan="8"><div class="expand-inner">
-        <div style="font-size:11px;color:#64748b;margin-bottom:8px">Sessions in ${monthLabel(trackerMonth)}</div>
+    if(exp){
+      html+=`<tr class="exp-row"><td colspan="7"><div class="exp-inner">
+        <div style="font-size:11px;color:var(--txm);margin-bottom:8px">Sessions in ${mLabel(trackerMonth)}</div>
         <table style="width:100%;border-collapse:collapse;font-size:12px">
-          <thead><tr style="color:#94a3b8">
-            <th style="text-align:left;padding-bottom:4px">Date</th><th style="text-align:left;padding-bottom:4px">Time</th>
-            <th style="text-align:left;padding-bottom:4px">Venue</th><th style="text-align:right;padding-bottom:4px">Hours</th>
-            <th style="text-align:center;padding-bottom:4px">Status</th>
-          </tr></thead><tbody>`;
-      s.ci.sort((a,b) => a.date.localeCompare(b.date)).forEach(inst => {
-        const bk = inst.status==='completed'?'bg':inst.status==='cancelled'?'br':'bb';
-        html += `<tr style="border-top:1px solid #f1f5f9">
-          <td style="padding:4px 0;color:#475569">${inst.date}</td>
-          <td style="padding:4px 0;color:#94a3b8">${inst.start_time}–${inst.end_time}</td>
-          <td style="padding:4px 0;color:#94a3b8">${esc(vMap[inst.venue_id]?.name ?? '?')}</td>
+        <thead><tr style="color:var(--txf)"><th style="text-align:left;padding-bottom:4px">Date</th><th style="text-align:left;padding-bottom:4px">Time</th><th style="text-align:left;padding-bottom:4px">Venue</th><th style="text-align:right;padding-bottom:4px">Hours</th><th style="text-align:center;padding-bottom:4px">Status</th></tr></thead><tbody>`;
+      s.ci.sort((a,b)=>a.date.localeCompare(b.date)).forEach(inst=>{
+        const bk=inst.status==='completed'?'b-g':inst.status==='cancelled'?'b-r':'b-b';
+        html+=`<tr style="border-top:1px solid var(--bdr)">
+          <td style="padding:4px 0;color:var(--txm)">${inst.date}</td>
+          <td style="padding:4px 0;color:var(--txf)">${inst.start_time}–${inst.end_time}</td>
+          <td style="padding:4px 0;color:var(--txf)">${esc(vLabel(inst.venue_id,inst.court))}</td>
           <td style="padding:4px 0;text-align:right">${inst.hours.toFixed(1)}h</td>
           <td style="padding:4px 0;text-align:center">
-            <select class="status-sel ${bk}" onclick="event.stopPropagation()" onchange="setStatus(${inst.id},this.value)">
+            <select class="ssel ${bk}" onclick="event.stopPropagation()" onchange="setStatus(${inst.id},this.value);renderTracker()">
               <option value="scheduled"${inst.status==='scheduled'?' selected':''}>Scheduled</option>
               <option value="completed"${inst.status==='completed'?' selected':''}>Completed</option>
               <option value="cancelled"${inst.status==='cancelled'?' selected':''}>Cancelled</option>
@@ -549,28 +691,23 @@ function renderTracker() {
           </td>
         </tr>`;
       });
-      html += '</tbody></table></div></td></tr>';
+      html+=`</tbody></table></div></td></tr>`;
     }
   });
-
-  html += `</tbody>
-    <tfoot style="border-top:2px solid #e2e8f0;background:#f8fafc"><tr>
-      <td style="padding:10px 16px;font-weight:600;color:#334155">Total</td>
-      <td style="text-align:center;font-weight:600;padding:10px 16px">${sums.reduce((a,s)=>a+s.total,0)}</td>
-      <td style="text-align:center;font-weight:600;color:#16a34a;padding:10px 16px">${sums.reduce((a,s)=>a+s.done,0)}</td>
-      <td style="text-align:center;font-weight:600;color:#2563eb;padding:10px 16px">${sums.reduce((a,s)=>a+s.sched,0)}</td>
-      <td style="text-align:center;font-weight:600;color:#94a3b8;padding:10px 16px">${sums.reduce((a,s)=>a+s.canc,0)}</td>
-      <td style="text-align:right;font-weight:700;padding:10px 16px">${gHrs.toFixed(1)}h</td>
-      <td style="text-align:right;font-weight:700;color:#16a34a;padding:10px 16px">RM ${gEarn.toFixed(2)}</td>
-      <td></td>
-    </tr></tfoot>
-  </table></div>`;
-  document.getElementById('tracker-table').innerHTML = html;
+  html+=`</tbody><tfoot><tr>
+    <td style="padding:10px 16px">Total</td>
+    <td style="text-align:center;padding:10px 16px">${sums.reduce((a,s)=>a+s.total,0)}</td>
+    <td style="text-align:center;color:var(--green);padding:10px 16px">${sums.reduce((a,s)=>a+s.done,0)}</td>
+    <td style="text-align:center;color:var(--blue);padding:10px 16px">${sums.reduce((a,s)=>a+s.sched,0)}</td>
+    <td style="text-align:center;color:var(--txf);padding:10px 16px">${sums.reduce((a,s)=>a+s.canc,0)}</td>
+    <td style="text-align:right;padding:10px 16px">${gH.toFixed(1)}h</td>
+    <td></td>
+  </tr></tfoot></table></div>`;
+  document.getElementById('tracker-tbl').innerHTML=html;
 }
-function toggleExpand(id) { expandedCoach = expandedCoach === id ? null : id; renderTracker(); }
-function setStatus(id, status) { updateStatus(id, status); renderTracker(); }
+function toggleExp(id){expandedCoach=expandedCoach===id?null:id;renderTracker()}
 
-// ── BOOT ──────────────────────────────────────────────────────
+// ── BOOT ─────────────────────────────────────────────────────
 showView('schedule');
 </script>
 </body>
