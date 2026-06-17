@@ -80,12 +80,21 @@ table.sched td.tslot.drag-hi{background:rgba(37,99,235,.13)}
 /* clipboard bar */
 #clip-bar{position:fixed;bottom:14px;left:50%;transform:translateX(-50%);background:#0f172a;color:#fff;padding:8px 16px;border-radius:24px;font-size:12px;font-weight:600;display:none;align-items:center;gap:10px;z-index:400;box-shadow:0 4px 20px rgba(0,0,0,.3);white-space:nowrap}
 #clip-bar button{background:rgba(255,255,255,.15);border:1px solid rgba(255,255,255,.3);color:#fff;padding:2px 10px;border-radius:12px;cursor:pointer;font-size:11px}
-/* monthly */
+.sblock.selected{outline:3px solid #fff;box-shadow:0 0 0 4px var(--blue),0 4px 12px rgba(0,0,0,.25)!important}
+/* monthly chip dragging */
+.cal-chip{font-size:10px;padding:3px 6px;border-radius:4px;border:1px solid rgba(0,0,0,.18);margin-bottom:3px;line-height:1.4;cursor:grab;user-select:none}
+.cal-chip:active{cursor:grabbing}
+.cal-chip-venue{font-weight:800}
+.cal-chip-sub{opacity:.88;font-size:9.5px}
+.cal-cell.drop-target{background:rgba(37,99,235,.12);outline:2px dashed var(--blue)}
+/* collapsible cards */
+.card-hdr-btn{display:flex;justify-content:space-between;align-items:center;cursor:pointer}
+.card-hdr-btn:hover{background:var(--surf2)}
 .cal-wrap{border:1px solid var(--bdr);border-radius:10px;overflow:hidden;background:var(--surf)}
 .cal-dow-row{display:grid;grid-template-columns:repeat(7,1fr);border-bottom:2px solid var(--bdr)}
 .cal-dow{text-align:center;padding:6px 3px;font-size:11px;font-weight:800;color:var(--txm);background:var(--surf2);text-transform:uppercase;letter-spacing:.04em}
 .cal-grid{display:grid;grid-template-columns:repeat(7,1fr)}
-.cal-cell{min-height:280px;border-right:1px solid var(--bdr);border-bottom:1px solid var(--bdr);padding:6px;cursor:pointer;transition:background .1s;position:relative;overflow:hidden}
+.cal-cell{min-height:280px;border-right:1px solid var(--bdr);border-bottom:1px solid var(--bdr);padding:6px;transition:background .1s;position:relative}
 .cal-cell:hover{background:var(--hov)}
 .cal-cell.other{opacity:.28;cursor:default}
 .cal-cell.today .cal-num{background:var(--blue);color:#fff;border-radius:50%}
@@ -190,8 +199,10 @@ table.sched td.tslot.drag-hi{background:rgba(37,99,235,.13)}
   <div class="two-col">
     <div>
       <div class="card">
-        <div class="card-hdr" id="coach-form-hdr">Add Coach</div>
-        <div class="card-body">
+        <div class="card-hdr card-hdr-btn" onclick="toggleCard('coach-form-body','coach-form-chevron')">
+          <span id="coach-form-hdr">Add Coach</span><span id="coach-form-chevron">▼</span>
+        </div>
+        <div class="card-body" id="coach-form-body">
           <form id="coach-form" onsubmit="submitCoach(event)">
             <div class="fg"><label>Name *</label><input type="text" id="cn" required placeholder="Coach name"></div>
             <div class="fg"><label>Block Color</label>
@@ -216,8 +227,12 @@ table.sched td.tslot.drag-hi{background:rgba(37,99,235,.13)}
         </div>
       </div>
       <div class="card">
-        <div class="card-hdr">Coach Combo Colors</div>
-        <div class="card-body" id="combo-colors"></div>
+        <div class="card-hdr card-hdr-btn" onclick="toggleCard('combo-colors-body','combo-chevron')">
+          <span>Coach Combo Colors</span><span id="combo-chevron">▶</span>
+        </div>
+        <div class="card-body" id="combo-colors-body" style="display:none">
+          <div id="combo-colors"></div>
+        </div>
       </div>
       <div class="card">
         <div class="card-hdr">Venues (for suggestions)</div>
@@ -451,7 +466,38 @@ function layoutInsts(insts){
 
 // ── WEEKLY VIEW ───────────────────────────────────────────────
 let baseDate=new Date();
-const SLOT_H=34;
+const SLOT_H=40;
+let selectedInstId=null;
+function selectInst(id){
+  selectedInstId=id;
+  document.querySelectorAll('.sblock').forEach(el=>el.classList.remove('selected'));
+  const el=document.querySelector(`[data-inst-id="${id}"]`);
+  if(el)el.classList.add('selected');
+}
+function deselectAll(){selectedInstId=null;document.querySelectorAll('.sblock').forEach(el=>el.classList.remove('selected'))}
+document.addEventListener('keydown',e=>{
+  const tag=document.activeElement.tagName;
+  if(tag==='INPUT'||tag==='TEXTAREA'||tag==='SELECT')return;
+  if((e.key==='Delete'||e.key==='Backspace')&&selectedInstId){
+    e.preventDefault();
+    if(confirm('Delete this session?')){delInst(selectedInstId);selectedInstId=null;renderSched();}
+    return;
+  }
+  if((e.metaKey||e.ctrlKey)&&e.key==='c'&&selectedInstId){
+    const inst=getInsts().find(x=>x.id===selectedInstId);
+    if(inst){
+      clip={coach_ids:inst.coach_ids,color:inst.color,venue_text:inst.venue_text,
+            class_type:inst.class_type,standard:inst.standard,court_no:inst.court_no,
+            notes:inst.notes,start_time:inst.start_time,end_time:inst.end_time};
+      document.getElementById('clip-bar').style.display='flex';
+    }
+    e.preventDefault();return;
+  }
+  if((e.metaKey||e.ctrlKey)&&e.key==='v'&&clip){
+    document.getElementById('clip-bar').style.display='flex';
+    e.preventDefault();return;
+  }
+});
 
 function getWk(b){
   const d=new Date(b),day=d.getDay();
@@ -465,11 +511,19 @@ function renderWeek(){
   const wk=getWk(baseDate);
   const today=ds(new Date());
   document.getElementById('week-lbl').textContent=`${ds(wk[0])} — ${ds(wk[6])}`;
+  const allI=getInsts();
+  const wkI=allI.filter(i=>i.date>=ds(wk[0])&&i.date<=ds(wk[6]));
+  // Pre-calculate max concurrency per day for column widths
+  const dayMaxCon=wk.map(d=>{
+    const laid=layoutInsts(wkI.filter(i=>i.date===ds(d)));
+    return laid.length?Math.max(...laid.map(i=>i._tot)):1;
+  });
   // Header
   let head=`<tr><th class="corner"></th>`;
-  wk.forEach(d=>{
+  wk.forEach((d,di)=>{
     const it=ds(d)===today;
-    head+=`<th class="${it?'today-h':''}" style="min-width:110px"><div>${DAYS[d.getDay()]}</div><div style="font-size:16px${it?';font-weight:900':''}">${d.getDate()}</div></th>`;
+    const colW=Math.max(180,180*dayMaxCon[di]);
+    head+=`<th class="${it?'today-h':''}" style="min-width:${colW}px"><div>${DAYS[d.getDay()]}</div><div style="font-size:16px${it?';font-weight:900':''}">${d.getDate()}</div></th>`;
   });
   document.getElementById('sched-head').innerHTML=head+'</tr>';
   // Build empty rows (6am to 10pm)
@@ -484,9 +538,6 @@ function renderWeek(){
     body+='</tr>';
   });
   document.getElementById('sched-body').innerHTML=body;
-  // Inject session blocks
-  const allI=getInsts();
-  const wkI=allI.filter(i=>i.date>=ds(wk[0])&&i.date<=ds(wk[6]));
   wk.forEach((d,di)=>{
     const dt=ds(d);
     const dayI=wkI.filter(i=>i.date===dt);
@@ -502,17 +553,18 @@ function renderWeek(){
       const td=cells[di];if(!td)return;
       td.style.position='relative';
       const hpx=(endSlot-startSlot)*SLOT_H-2;
-      // cascade layout: each overlapping session offsets 16px right, keeps near-full width
-      const offset=inst._col*16;
+      // True side-by-side: divide column equally by concurrent count
+      const lp=inst._col/inst._tot*100;
+      const wp=100/inst._tot;
       const color=getBlockColor(inst);
       const tc=txColor(color);
       const sc=inst.status==='cancelled'?'cancelled':inst.status==='completed'?'completed':'';
       const si=inst.status==='completed'?'✓':inst.status==='cancelled'?'✕':'○';
       const cn=coachNames(inst.coach_ids);
       const div=document.createElement('div');
-      div.className=`sblock ${sc}`;
+      div.className=`sblock ${sc}${selectedInstId===inst.id?' selected':''}`;
       div.dataset.instId=String(inst.id);
-      div.style.cssText=`background:${color};color:${tc};left:${offset+1}px;width:calc(100% - ${offset+2}px);height:${hpx}px;z-index:${10+inst._col}`;
+      div.style.cssText=`background:${color};color:${tc};left:calc(${lp}% + 1px);width:calc(${wp}% - 2px);height:${hpx}px`;
       div.innerHTML=`
         ${inst.venue_text?`<div class="sb-venue">${esc(inst.venue_text)}</div>`:''}
         ${inst.class_type||inst.standard?`<div class="sb-row">${esc([inst.class_type,inst.standard].filter(Boolean).join(' · '))}</div>`:''}
@@ -587,6 +639,10 @@ function clearHL(){document.querySelectorAll('td.tslot.drag-hi').forEach(x=>x.cl
 
 // ── BLOCK DRAG TO MOVE ────────────────────────────────────────
 function makeBlockDraggable(div,instId){
+  div.addEventListener('click',e=>{
+    if(e.target.closest('.sb-btns')||e.target.closest('.sb-resize'))return;
+    selectInst(instId);
+  });
   div.addEventListener('mousedown',e=>{
     if(e.target.closest('.sb-btns')||e.target.classList.contains('sb-resize')||e.target.closest('.sb-resize'))return;
     e.preventDefault();e.stopPropagation();
@@ -690,7 +746,6 @@ function renderMonth(){
   const dim=new Date(yr,mo+1,0).getDate();
   const today=ds(new Date());
   const allI=getInsts();
-  const coaches=getCoaches();
   document.getElementById('cal-dows').innerHTML=DAYS.map(d=>`<div class="cal-dow">${d}</div>`).join('');
   const total=Math.ceil((first+dim)/7)*7;
   let html='';
@@ -701,13 +756,13 @@ function renderMonth(){
     const dt=d?ds(d):'';
     const isTdy=dt===today;
     const di=inMo?allI.filter(x=>x.date===dt).sort((a,b)=>a.start_time.localeCompare(b.start_time)):[];
-    html+=`<div class="cal-cell${!inMo?' other':''}${isTdy?' today':''}" onclick="${inMo?`openDay('${dt}',${d.getDay()})`:''}" >
-      <div class="cal-num">${inMo?dayN:''}</div>
+    html+=`<div class="cal-cell${!inMo?' other':''}${isTdy?' today':''}" data-date="${dt}">
+      <div class="cal-num" onclick="${inMo?`openDay('${dt}',${d?.getDay()||0})`:''}">${inMo?dayN:''}</div>
       ${di.map(inst=>{
         const color=getBlockColor(inst);
         const tc=txColor(color);
         const cn=coachNames(inst.coach_ids);
-        return`<div class="cal-chip" style="background:${color};color:${tc}">
+        return`<div class="cal-chip" data-inst-id="${inst.id}" style="background:${color};color:${tc}">
           <div class="cal-chip-venue">${esc(inst.venue_text||'')}${inst.court_no?' · Ct '+esc(inst.court_no):''}</div>
           ${inst.class_type||inst.standard?`<div class="cal-chip-sub">${esc([inst.class_type,inst.standard].filter(Boolean).join(' · '))}</div>`:''}
           <div class="cal-chip-sub">${fmt12(inst.start_time)}–${fmt12(inst.end_time)}${cn?' · '+esc(cn):''}</div>
@@ -716,7 +771,61 @@ function renderMonth(){
       }).join('')}
     </div>`;
   }
-  document.getElementById('cal-grid').innerHTML=html;
+  const grid=document.getElementById('cal-grid');
+  grid.innerHTML=html;
+  setupCalChipDrag(grid);
+}
+
+function setupCalChipDrag(grid){
+  grid.addEventListener('mousedown',startCalDrag);
+  grid.addEventListener('touchstart',startCalDrag,{passive:false});
+}
+
+function startCalDrag(e){
+  const chip=e.target.closest('.cal-chip[data-inst-id]');
+  if(!chip)return;
+  const isTouch=e.touches!=null;
+  const startX=isTouch?e.touches[0].clientX:e.clientX;
+  const startY=isTouch?e.touches[0].clientY:e.clientY;
+  const instId=+chip.dataset.instId;
+  const inst=getInsts().find(x=>x.id===instId);if(!inst)return;
+  const rect=chip.getBoundingClientRect();
+  // ghost
+  const ghost=chip.cloneNode(true);
+  ghost.style.cssText=`position:fixed;left:${rect.left}px;top:${rect.top}px;width:${rect.width}px;opacity:.75;pointer-events:none;z-index:1000;border-radius:4px;`;
+  document.body.appendChild(ghost);
+  chip.style.opacity='0.3';
+  let lastCell=null,targetDate=inst.date;
+  function onMove(cx,cy){
+    ghost.style.left=(rect.left+cx-startX)+'px';
+    ghost.style.top=(rect.top+cy-startY)+'px';
+    ghost.style.display='none';
+    const el=document.elementFromPoint(cx,cy);
+    ghost.style.display='';
+    const cell=el?.closest('.cal-cell:not(.other)');
+    if(cell){
+      if(lastCell&&lastCell!==cell)lastCell.classList.remove('drop-target');
+      cell.classList.add('drop-target');lastCell=cell;
+      targetDate=cell.dataset.date||targetDate;
+    }
+  }
+  function onUp(){
+    document.removeEventListener('mousemove',mm);document.removeEventListener('mouseup',mu);
+    document.removeEventListener('touchmove',tm);document.removeEventListener('touchend',tu);
+    document.body.removeChild(ghost);
+    if(lastCell)lastCell.classList.remove('drop-target');
+    if(targetDate&&targetDate!==inst.date){
+      updateInst(instId,{...inst,date:targetDate});
+    }
+    renderMonth();
+  }
+  const mm=e=>onMove(e.clientX,e.clientY);
+  const mu=()=>onUp();
+  const tm=e=>{e.preventDefault();onMove(e.touches[0].clientX,e.touches[0].clientY);};
+  const tu=()=>onUp();
+  if(isTouch){document.addEventListener('touchmove',tm,{passive:false});document.addEventListener('touchend',tu,{once:true});}
+  else{document.addEventListener('mousemove',mm);document.addEventListener('mouseup',mu,{once:true});}
+  e.preventDefault();e.stopPropagation();
 }
 
 // ── DAY DETAIL ────────────────────────────────────────────────
@@ -1031,6 +1140,15 @@ function renderTracker(){
         </div>`;
       }).join('')}
     </div>`;
+}
+
+// ── COLLAPSIBLE CARDS ─────────────────────────────────────────
+function toggleCard(bodyId,chevId){
+  const body=document.getElementById(bodyId);
+  const hidden=body.style.display==='none';
+  body.style.display=hidden?'':'none';
+  const ch=document.getElementById(chevId);
+  if(ch)ch.textContent=hidden?'▼':'▶';
 }
 
 // ── BOOT ─────────────────────────────────────────────────────
