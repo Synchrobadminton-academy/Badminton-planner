@@ -112,9 +112,9 @@ table.sched td.tslot.drag-hi{background:rgba(37,99,235,.13)}
 .b-g{background:#f0fdf4;color:#15803d;border-color:#bbf7d0}
 .b-gr{background:var(--surf2);color:var(--txm);border-color:var(--bdr)}
 [data-dark] .b-g{background:#14532d;color:#4ade80;border-color:#166534}
-.color-btn{width:100%;aspect-ratio:1;border-radius:8px;border:2px solid transparent;cursor:pointer;transition:all .2s}
-.color-btn:hover{transform:scale(1.05)}
-.color-btn.sel{border-color:#000;box-shadow:0 0 0 2px var(--surf)}
+.color-btn{height:20px;border-radius:5px;border:2px solid transparent;cursor:pointer;transition:all .15s;width:100%}
+.color-btn:hover{transform:scale(1.08);border-color:rgba(0,0,0,.2)}
+.color-btn.sel{border-color:#000!important;box-shadow:0 0 0 2px var(--surf),0 0 0 4px #000}
 /* tracker */
 .tgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px}
 .tcard{border:3px solid;border-radius:10px;padding:14px;text-align:center}
@@ -206,7 +206,7 @@ table.sched td.tslot.drag-hi{background:rgba(37,99,235,.13)}
           <form id="coach-form" onsubmit="submitCoach(event)">
             <div class="fg"><label>Name *</label><input type="text" id="cn" required placeholder="Coach name"></div>
             <div class="fg"><label>Block Color</label>
-              <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px">
+              <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:4px;margin-bottom:2px">
                 <button type="button" class="color-btn" data-color="#ef4444" style="background:#ef4444" onclick="setCoachColor(this)"></button>
                 <button type="button" class="color-btn" data-color="#f97316" style="background:#f97316" onclick="setCoachColor(this)"></button>
                 <button type="button" class="color-btn" data-color="#facc15" style="background:#facc15" onclick="setCoachColor(this)"></button>
@@ -215,6 +215,8 @@ table.sched td.tslot.drag-hi{background:rgba(37,99,235,.13)}
                 <button type="button" class="color-btn" data-color="#3b82f6" style="background:#3b82f6" onclick="setCoachColor(this)"></button>
                 <button type="button" class="color-btn" data-color="#8b5cf6" style="background:#8b5cf6" onclick="setCoachColor(this)"></button>
                 <button type="button" class="color-btn" data-color="#f472b6" style="background:#f472b6" onclick="setCoachColor(this)"></button>
+                <button type="button" class="color-btn" data-color="#ffffff" style="background:#fff;border-color:#d1d5db" onclick="setCoachColor(this)"></button>
+                <button type="button" class="color-btn" data-color="" style="background:linear-gradient(135deg,#fff 44%,#ef4444 44%,#ef4444 56%,#fff 56%);border-color:#d1d5db" onclick="setCoachColor(this)" title="No color"></button>
               </div>
               <input type="color" id="ccolor" value="#3b82f6" style="display:none">
             </div>
@@ -227,21 +229,23 @@ table.sched td.tslot.drag-hi{background:rgba(37,99,235,.13)}
         </div>
       </div>
       <div class="card">
-        <div class="card-hdr card-hdr-btn" onclick="toggleCard('combo-colors-body','combo-chevron')">
-          <span>Coach Combo Colors</span><span id="combo-chevron">▶</span>
+        <div class="card-hdr card-hdr-btn" onclick="toggleCard('venues-body','venues-chevron')">
+          <span>Venues</span><span id="venues-chevron">▼</span>
         </div>
-        <div class="card-body" id="combo-colors-body" style="display:none">
-          <div id="combo-colors"></div>
-        </div>
-      </div>
-      <div class="card">
-        <div class="card-hdr">Venues (for suggestions)</div>
-        <div class="card-body" style="padding-top:10px">
+        <div class="card-body" id="venues-body" style="padding-top:10px">
           <div id="venues-list" style="margin-bottom:10px"></div>
           <form id="venue-form" onsubmit="addVenue(event)" style="display:flex;gap:8px">
             <input type="text" id="vn" placeholder="Venue name" required style="flex:1">
             <button type="submit" class="btn btn-o btn-sm">Add</button>
           </form>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-hdr card-hdr-btn" onclick="toggleCard('combo-colors-body','combo-chevron')">
+          <span>Coach Combo Colors</span><span id="combo-chevron">▶</span>
+        </div>
+        <div class="card-body" id="combo-colors-body" style="display:none">
+          <div id="combo-colors"></div>
         </div>
       </div>
     </div>
@@ -269,7 +273,7 @@ table.sched td.tslot.drag-hi{background:rgba(37,99,235,.13)}
     <h2 id="sess-ttl">Add Session</h2>
     <div class="fg"><label>Coaches</label><div id="cchk-wrap" class="cchk-wrap"></div></div>
     <div class="fg"><label>Block Color</label>
-      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px">
+      <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:4px">
         <button type="button" class="color-btn" data-color="#ef4444" style="background:#ef4444" onclick="setModalColor('#ef4444')"></button>
         <button type="button" class="color-btn" data-color="#f97316" style="background:#f97316" onclick="setModalColor('#f97316')"></button>
         <button type="button" class="color-btn" data-color="#facc15" style="background:#facc15" onclick="setModalColor('#facc15')"></button>
@@ -278,6 +282,8 @@ table.sched td.tslot.drag-hi{background:rgba(37,99,235,.13)}
         <button type="button" class="color-btn" data-color="#3b82f6" style="background:#3b82f6" onclick="setModalColor('#3b82f6')"></button>
         <button type="button" class="color-btn" data-color="#8b5cf6" style="background:#8b5cf6" onclick="setModalColor('#8b5cf6')"></button>
         <button type="button" class="color-btn" data-color="#f472b6" style="background:#f472b6" onclick="setModalColor('#f472b6')"></button>
+        <button type="button" class="color-btn" data-color="#ffffff" style="background:#fff;border-color:#d1d5db" onclick="setModalColor('#ffffff')"></button>
+        <button type="button" class="color-btn" data-color="" style="background:linear-gradient(135deg,#fff 44%,#ef4444 44%,#ef4444 56%,#fff 56%);border-color:#d1d5db" onclick="setModalColor('')" title="No color"></button>
       </div>
       <input type="color" id="m-color" value="#3b82f6" style="display:none">
     </div>
@@ -556,15 +562,19 @@ function renderWeek(){
       // True side-by-side: divide column equally by concurrent count
       const lp=inst._col/inst._tot*100;
       const wp=100/inst._tot;
-      const color=getBlockColor(inst);
-      const tc=txColor(color);
+      const rawColor=getBlockColor(inst);
+      const noColor=!rawColor||rawColor==='';
+      const isWhite=rawColor==='#ffffff';
+      const tc=noColor?'var(--tx)':txColor(rawColor);
+      const blockBg=noColor?'rgba(0,0,0,0.04)':rawColor;
+      const blockBorder=noColor?'2px dashed var(--bdr)':isWhite?'1px solid #d1d5db':'1px solid rgba(0,0,0,.18)';
       const sc=inst.status==='cancelled'?'cancelled':inst.status==='completed'?'completed':'';
       const si=inst.status==='completed'?'✓':inst.status==='cancelled'?'✕':'○';
       const cn=coachNames(inst.coach_ids);
       const div=document.createElement('div');
       div.className=`sblock ${sc}${selectedInstId===inst.id?' selected':''}`;
       div.dataset.instId=String(inst.id);
-      div.style.cssText=`background:${color};color:${tc};left:calc(${lp}% + 1px);width:calc(${wp}% - 2px);height:${hpx}px`;
+      div.style.cssText=`background:${blockBg};color:${tc};border:${blockBorder};left:calc(${lp}% + 1px);width:calc(${wp}% - 2px);height:${hpx}px`;
       div.innerHTML=`
         ${inst.venue_text?`<div class="sb-venue">${esc(inst.venue_text)}</div>`:''}
         ${inst.class_type||inst.standard?`<div class="sb-row">${esc([inst.class_type,inst.standard].filter(Boolean).join(' · '))}</div>`:''}
@@ -597,10 +607,13 @@ function setupDrag(){
   const tbody=document.getElementById('sched-body');
   tbody.onmousedown=e=>{
     const td=e.target.closest('td.tslot');if(!td)return;
-    e.preventDefault();
+    const sx=e.clientX,sy=e.clientY;
     drag={date:td.dataset.date,day:+td.dataset.day,s:+td.dataset.h,e:+td.dataset.h};
-    highlight();
+    let dragged=false;
     document.onmousemove=ev=>{
+      const dx=ev.clientX-sx,dy=ev.clientY-sy;
+      if(!dragged&&Math.sqrt(dx*dx+dy*dy)<7)return;
+      dragged=true;e.preventDefault();
       const el=document.elementFromPoint(ev.clientX,ev.clientY);
       const t=el?.closest('td.tslot');
       if(t&&t.dataset.date===drag.date){drag.e=+t.dataset.h;highlight();}
@@ -608,7 +621,15 @@ function setupDrag(){
     document.onmouseup=()=>{
       document.onmousemove=null;document.onmouseup=null;
       clearHL();
-      if(drag){openModal(drag.date,drag.day,Math.min(drag.s,drag.e),Math.max(drag.s,drag.e)+.5);drag=null;}
+      if(drag){
+        if(clip){
+          // Instant paste — no modal
+          pasteClipAt(drag.date,drag.day,Math.min(drag.s,drag.e));
+        } else {
+          openModal(drag.date,drag.day,Math.min(drag.s,drag.e),Math.max(drag.s,drag.e)+.5);
+        }
+        drag=null;
+      }
     };
   };
   // Touch
@@ -621,11 +642,26 @@ function setupDrag(){
     };
     const onEnd=()=>{
       document.removeEventListener('touchmove',onMove);
-      if(drag){openModal(drag.date,drag.day,Math.min(drag.s,drag.e),Math.max(drag.s,drag.e)+.5);drag=null;}
+      if(drag){
+        if(clip){pasteClipAt(drag.date,drag.day,Math.min(drag.s,drag.e));}
+        else{openModal(drag.date,drag.day,Math.min(drag.s,drag.e),Math.max(drag.s,drag.e)+.5);}
+        drag=null;
+      }
     };
     document.addEventListener('touchmove',onMove,{passive:true});
     document.addEventListener('touchend',onEnd,{once:true});
   };
+}
+
+function pasteClipAt(date,day,startH){
+  if(!clip)return;
+  const duration=compHrs(clip.start_time,clip.end_time);
+  const newStart=d2t(startH);
+  const newEnd=d2t(startH+duration);
+  const data={...clip,start_time:newStart,end_time:newEnd};
+  const sess=saveSession({...data,recurring:0,day_of_week:null,date});
+  addOneOff(sess.id,data,date);
+  renderSched();
 }
 function highlight(){
   clearHL();
@@ -639,18 +675,21 @@ function clearHL(){document.querySelectorAll('td.tslot.drag-hi').forEach(x=>x.cl
 
 // ── BLOCK DRAG TO MOVE ────────────────────────────────────────
 function makeBlockDraggable(div,instId){
-  div.addEventListener('click',e=>{
+  div.addEventListener('dblclick',e=>{
+    e.stopPropagation();
     if(e.target.closest('.sb-btns')||e.target.closest('.sb-resize'))return;
-    selectInst(instId);
+    openEdit(instId);
   });
   div.addEventListener('mousedown',e=>{
-    if(e.target.closest('.sb-btns')||e.target.classList.contains('sb-resize')||e.target.closest('.sb-resize'))return;
+    if(e.target.closest('.sb-btns')||e.target.closest('.sb-resize'))return;
     e.preventDefault();e.stopPropagation();
-    startBlockMove(e.clientX,e.clientY,instId);
+    selectInst(instId);
+    startBlockMove(e.clientX,e.clientY,instId,false);
   });
   div.addEventListener('touchstart',e=>{
-    if(e.target.closest('.sb-btns')||e.target.classList.contains('sb-resize')||e.target.closest('.sb-resize'))return;
+    if(e.target.closest('.sb-btns')||e.target.closest('.sb-resize'))return;
     e.stopPropagation();
+    selectInst(instId);
     startBlockMove(e.touches[0].clientX,e.touches[0].clientY,instId,true);
   },{passive:false});
 }
@@ -660,15 +699,20 @@ function startBlockMove(startX,startY,instId,isTouch){
   const duration=compHrs(inst.start_time,inst.end_time);
   const origEl=document.querySelector(`[data-inst-id="${instId}"]`);if(!origEl)return;
   const rect=origEl.getBoundingClientRect();
-  // ghost
-  const ghost=origEl.cloneNode(true);
-  ghost.style.cssText=`position:fixed;left:${rect.left}px;top:${rect.top}px;width:${rect.width}px;height:${rect.height}px;opacity:.7;pointer-events:none;z-index:1000;border-radius:6px;`;
-  document.body.appendChild(ghost);
-  origEl.classList.add('dragging');
+  let ghost=null,hasMoved=false;
   let targetDate=inst.date,targetH=t2d(inst.start_time),lastTd=null;
   function onMove(cx,cy){
-    ghost.style.left=(rect.left+cx-startX)+'px';
-    ghost.style.top=(rect.top+cy-startY)+'px';
+    const dx=cx-startX,dy=cy-startY;
+    if(!hasMoved){
+      if(Math.sqrt(dx*dx+dy*dy)<9)return; // threshold: 9px before drag activates
+      hasMoved=true;
+      ghost=origEl.cloneNode(true);
+      ghost.style.cssText=`position:fixed;left:${rect.left}px;top:${rect.top}px;width:${rect.width}px;height:${rect.height}px;opacity:.65;pointer-events:none;z-index:1000;border-radius:6px;transition:none`;
+      document.body.appendChild(ghost);
+      origEl.classList.add('dragging');
+    }
+    ghost.style.left=(rect.left+dx)+'px';
+    ghost.style.top=(rect.top+dy)+'px';
     ghost.style.display='none';
     const el=document.elementFromPoint(cx,cy);
     ghost.style.display='';
@@ -682,15 +726,14 @@ function startBlockMove(startX,startY,instId,isTouch){
   function onUp(){
     document.removeEventListener('mousemove',mm);document.removeEventListener('mouseup',mu);
     document.removeEventListener('touchmove',tm);document.removeEventListener('touchend',tu);
-    document.body.removeChild(ghost);
+    if(ghost)document.body.removeChild(ghost);
     origEl.classList.remove('dragging');
     if(lastTd)lastTd.classList.remove('drag-hi');
-    const newStart=d2t(targetH);
-    const newEndH=targetH+duration;
-    if(newEndH<=22.5){
-      updateInst(instId,{...inst,date:targetDate,start_time:newStart,end_time:d2t(newEndH)});
+    if(hasMoved){
+      const newEndH=targetH+duration;
+      if(newEndH<=22.5)updateInst(instId,{...inst,date:targetDate,start_time:d2t(targetH),end_time:d2t(newEndH)});
+      renderWeek();
     }
-    renderWeek();
   }
   const mm=e=>onMove(e.clientX,e.clientY);
   const mu=()=>onUp();
@@ -762,7 +805,11 @@ function renderMonth(){
         const color=getBlockColor(inst);
         const tc=txColor(color);
         const cn=coachNames(inst.coach_ids);
-        return`<div class="cal-chip" data-inst-id="${inst.id}" style="background:${color};color:${tc}">
+        const noColor2=!color||color==='';
+        const chipBg=noColor2?'rgba(0,0,0,0.05)':color;
+        const chipBorder=noColor2?'2px dashed var(--bdr)':color==='#ffffff'?'1px solid #d1d5db':'1px solid rgba(0,0,0,.18)';
+        const chipTc=noColor2?'var(--tx)':tc;
+        return`<div class="cal-chip" data-inst-id="${inst.id}" style="background:${chipBg};color:${chipTc};border:${chipBorder}">
           <div class="cal-chip-venue">${esc(inst.venue_text||'')}${inst.court_no?' · Ct '+esc(inst.court_no):''}</div>
           ${inst.class_type||inst.standard?`<div class="cal-chip-sub">${esc([inst.class_type,inst.standard].filter(Boolean).join(' · '))}</div>`:''}
           <div class="cal-chip-sub">${fmt12(inst.start_time)}–${fmt12(inst.end_time)}${cn?' · '+esc(cn):''}</div>
@@ -836,11 +883,13 @@ function openDay(dt,dow){
   document.getElementById('day-ttl').textContent=`${dt} — ${DAYS[dow]}`;
   let html=insts.length?'':'<div class="empty" style="padding:12px 0">No sessions.</div>';
   insts.forEach(inst=>{
-    const color=getBlockColor(inst);
+    const rawC=getBlockColor(inst);
+    const color=(rawC&&rawC!=='')?rawC:'var(--bdr)';
+    const titleColor=(rawC&&rawC!==''&&rawC!=='#ffffff')?rawC:'var(--tx)';
     const si=inst.status==='completed'?'✅':inst.status==='cancelled'?'❌':'⬜';
     const cn=coachNames(inst.coach_ids);
     html+=`<div class="day-item" style="border-color:${color}">
-      <div style="font-weight:800;font-size:13px;color:${color}">${si} ${esc(inst.venue_text||'')}${inst.court_no?' · Ct '+esc(inst.court_no):''}</div>
+      <div style="font-weight:800;font-size:13px;color:${titleColor}">${si} ${esc(inst.venue_text||'')}${inst.court_no?' · Ct '+esc(inst.court_no):''}</div>
       ${inst.class_type||inst.standard?`<div style="font-size:11px;color:var(--txm)">${esc([inst.class_type,inst.standard].filter(Boolean).join(' · '))}</div>`:''}
       <div style="font-size:11px;color:var(--txm)">${fmt12(inst.start_time)} – ${fmt12(inst.end_time)} · ${inst.hours.toFixed(1)}h</div>
       ${inst.notes?`<div style="font-size:11px;color:var(--txm);font-style:italic">${esc(inst.notes)}</div>`:''}
