@@ -241,6 +241,30 @@ table.sched td.tslot.drag-hi{background:rgba(37,99,235,.13)}
         </div>
       </div>
       <div class="card">
+        <div class="card-hdr card-hdr-btn" onclick="toggleCard('classtypes-body','ct-chevron')">
+          <span>Class Types</span><span id="ct-chevron">▶</span>
+        </div>
+        <div class="card-body" id="classtypes-body" style="display:none;padding-top:10px">
+          <div id="classtypes-list" style="margin-bottom:10px"></div>
+          <form id="classtype-form" onsubmit="addClassType(event)" style="display:flex;gap:8px">
+            <input type="text" id="ctn" placeholder="e.g. ActiveSG" required style="flex:1">
+            <button type="submit" class="btn btn-o btn-sm">Add</button>
+          </form>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-hdr card-hdr-btn" onclick="toggleCard('standards-body','std-chevron')">
+          <span>Standards</span><span id="std-chevron">▶</span>
+        </div>
+        <div class="card-body" id="standards-body" style="display:none;padding-top:10px">
+          <div id="standards-list" style="margin-bottom:10px"></div>
+          <form id="standard-form" onsubmit="addStandard(event)" style="display:flex;gap:8px">
+            <input type="text" id="stn" placeholder="e.g. Advance" required style="flex:1">
+            <button type="submit" class="btn btn-o btn-sm">Add</button>
+          </form>
+        </div>
+      </div>
+      <div class="card">
         <div class="card-hdr card-hdr-btn" onclick="toggleCard('combo-colors-body','combo-chevron')">
           <span>Coach Combo Colors</span><span id="combo-chevron">▶</span>
         </div>
@@ -296,12 +320,12 @@ table.sched td.tslot.drag-hi{background:rgba(37,99,235,.13)}
       <div class="fg" style="margin:0">
         <label>Class</label>
         <input type="text" id="m-class" list="clsugg" placeholder="e.g. ActiveSG">
-        <datalist id="clsugg"><option>ActiveSG</option><option>Synchro</option><option>Rise &amp; Rally Adult</option><option>Private Group</option></datalist>
+        <datalist id="clsugg"></datalist>
       </div>
       <div class="fg" style="margin:0">
         <label>Standard</label>
         <input type="text" id="m-std" list="stsugg" placeholder="e.g. Advance">
-        <datalist id="stsugg"><option>Basic</option><option>Advance</option><option>Mix</option><option>Adult</option><option>All</option></datalist>
+        <datalist id="stsugg"></datalist>
       </div>
     </div>
     <div class="fg"><label>Court No (free text)</label><input type="text" id="m-court" placeholder="e.g. 5 &amp; 6, Court 1 &amp; 2"></div>
@@ -360,13 +384,15 @@ const S={
   nextId(a){return a.length?Math.max(...a.map(i=>i.id))+1:1}
 };
 (function init(){
-  if(localStorage.getItem('cmp_v3'))return;
-  S.set('coaches',[]);
-  S.set('venues',['Bukit Canberra SH','Bishan Clubhouse','Woodland SH','Sembawang Pri','Yishun SH','Arena Sport Hall']);
-  S.set('sessions',[]);
-  S.set('instances',[]);
-  S.set('combo-colors',{});
-  localStorage.setItem('cmp_v3','1');
+  if(!localStorage.getItem('cmp_v3')){
+    S.set('coaches',[]);
+    S.set('venues',['Bukit Canberra SH','Bishan Clubhouse','Woodland SH','Sembawang Pri','Yishun SH','Arena Sport Hall']);
+    S.set('sessions',[]);S.set('instances',[]);S.set('combo-colors',{});
+    localStorage.setItem('cmp_v3','1');
+  }
+  // Migrate: seed class-types and standards if missing
+  if(!localStorage.getItem('class-types'))S.set('class-types',['ActiveSG','Synchro','Rise & Rally Adult','Private Group']);
+  if(!localStorage.getItem('standards'))S.set('standards',['Basic','Advance','Mix','Adult','All']);
 })();
 
 const getCoaches=()=>S.get('coaches');
@@ -486,7 +512,7 @@ document.addEventListener('keydown',e=>{
   if(tag==='INPUT'||tag==='TEXTAREA'||tag==='SELECT')return;
   if((e.key==='Delete'||e.key==='Backspace')&&selectedInstId){
     e.preventDefault();
-    if(confirm('Delete this session?')){delInst(selectedInstId);selectedInstId=null;renderSched();}
+    delInst(selectedInstId);selectedInstId=null;renderSched();
     return;
   }
   if((e.metaKey||e.ctrlKey)&&e.key==='c'&&selectedInstId){
@@ -576,17 +602,11 @@ function renderWeek(){
       div.dataset.instId=String(inst.id);
       div.style.cssText=`background:${blockBg};color:${tc};border:${blockBorder};left:calc(${lp}% + 1px);width:calc(${wp}% - 2px);height:${hpx}px`;
       div.innerHTML=`
-        ${inst.venue_text?`<div class="sb-venue">${esc(inst.venue_text)}</div>`:''}
-        ${inst.class_type||inst.standard?`<div class="sb-row">${esc([inst.class_type,inst.standard].filter(Boolean).join(' · '))}</div>`:''}
-        ${inst.court_no?`<div class="sb-row">Ct: ${esc(inst.court_no)}</div>`:''}
+        ${inst.venue_text?`<div class="sb-venue">${esc(inst.venue_text)}</div>`:'<div class="sb-venue" style="opacity:.4">—</div>'}
         <div class="sb-time">${fmt12(inst.start_time)} – ${fmt12(inst.end_time)}</div>
-        ${inst.notes?`<div class="sb-row" style="font-style:italic">${esc(inst.notes)}</div>`:''}
-        ${cn?`<div class="sb-coach">${esc(cn)}</div>`:''}
-        <div class="sb-btns">
-          <button onclick="event.stopPropagation();cycleW(${inst.id})">${si}</button>
-          <button onclick="event.stopPropagation();copyInst(${inst.id})">📋</button>
-          <button onclick="event.stopPropagation();openEdit(${inst.id})">Edit</button>
-        </div>
+        ${inst.class_type||inst.standard?`<div class="sb-row">${esc([inst.class_type,inst.standard].filter(Boolean).join(', '))}</div>`:''}
+        ${inst.court_no?`<div class="sb-row">Court: ${esc(inst.court_no)}</div>`:''}
+        ${inst.notes?`<div class="sb-row" style="font-style:italic;opacity:.85">${esc(inst.notes)}</div>`:''}
         <div class="sb-resize" onmousedown="event.stopPropagation();startBlockResize(event,${inst.id})" ontouchstart="event.stopPropagation();startBlockResize(event,${inst.id})"></div>`;
       td.appendChild(div);
       makeBlockDraggable(div,inst.id);
@@ -623,8 +643,9 @@ function setupDrag(){
       clearHL();
       if(drag){
         if(clip){
-          // Instant paste — no modal
           pasteClipAt(drag.date,drag.day,Math.min(drag.s,drag.e));
+        } else if(selectedInstId){
+          deselectAll();
         } else {
           openModal(drag.date,drag.day,Math.min(drag.s,drag.e),Math.max(drag.s,drag.e)+.5);
         }
@@ -965,6 +986,7 @@ function openModal(date,day,startH,endH){
   document.getElementById('m-rec-btn').innerHTML=`Recurring every <span id="m-rec-day">${DAYS[day]}</span>: <b>Off</b>`;
   document.getElementById('m-del-btn').style.display='none';
   document.getElementById('vsugg').innerHTML=getVenues().map(v=>`<option>${esc(v)}</option>`).join('');
+  updateSessionDatalist();
   document.getElementById('sess-modal').classList.add('open');
   document.getElementById('clip-bar').style.display='none';
 }
@@ -1062,6 +1084,8 @@ function renderCoaches(){
   }
   document.getElementById('coaches-list').innerHTML=html;
   renderComboColors();
+  renderClassTypes();
+  renderStandards();
   let vh=venues.map((v,i)=>`<div style="display:flex;align-items:center;justify-content:space-between;padding:5px 0;border-bottom:1px solid var(--bdr)">
     <span style="font-size:12px">${esc(v)}</span>
     <button class="btn btn-sm btn-red" onclick="removeVenueAt(${i})">✕</button>
@@ -1100,6 +1124,41 @@ function addVenue(e){
   document.getElementById('venue-form').reset();renderCoaches();
 }
 
+const getClassTypes=()=>S.get('class-types');
+const getStandards=()=>S.get('standards');
+function renderClassTypes(){
+  const l=getClassTypes();
+  document.getElementById('classtypes-list').innerHTML=l.length?l.map((t,i)=>`
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:5px 0;border-bottom:1px solid var(--bdr)">
+      <span style="font-size:12px">${esc(t)}</span>
+      <button class="btn btn-sm btn-red" onclick="removeClassType(${i})">✕</button>
+    </div>`).join(''):`<div style="color:var(--txf);font-size:12px">No class types yet.</div>`;
+}
+function renderStandards(){
+  const l=getStandards();
+  document.getElementById('standards-list').innerHTML=l.length?l.map((t,i)=>`
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:5px 0;border-bottom:1px solid var(--bdr)">
+      <span style="font-size:12px">${esc(t)}</span>
+      <button class="btn btn-sm btn-red" onclick="removeStandard(${i})">✕</button>
+    </div>`).join(''):`<div style="color:var(--txf);font-size:12px">No standards yet.</div>`;
+}
+function addClassType(e){
+  e.preventDefault();const name=document.getElementById('ctn').value.trim();if(!name)return;
+  const l=getClassTypes();if(!l.includes(name)){l.push(name);S.set('class-types',l);}
+  document.getElementById('classtype-form').reset();renderClassTypes();
+}
+function removeClassType(i){const l=getClassTypes();l.splice(i,1);S.set('class-types',l);renderClassTypes();}
+function addStandard(e){
+  e.preventDefault();const name=document.getElementById('stn').value.trim();if(!name)return;
+  const l=getStandards();if(!l.includes(name)){l.push(name);S.set('standards',l);}
+  document.getElementById('standard-form').reset();renderStandards();
+}
+function removeStandard(i){const l=getStandards();l.splice(i,1);S.set('standards',l);renderStandards();}
+function updateSessionDatalist(){
+  document.getElementById('clsugg').innerHTML=getClassTypes().map(t=>`<option>${esc(t)}</option>`).join('');
+  document.getElementById('stsugg').innerHTML=getStandards().map(t=>`<option>${esc(t)}</option>`).join('');
+}
+
 function getComboColors(){
   return S.get('combo-colors')||{};
 }
@@ -1133,16 +1192,24 @@ function renderComboColors(){
     document.getElementById('combo-colors').innerHTML='<div class="empty" style="padding:8px 0">Need 2+ coaches for combos.</div>';
     return;
   }
+  const COMBO_COLORS=['#ef4444','#f97316','#facc15','#22c55e','#06b6d4','#3b82f6','#8b5cf6','#f472b6','#ffffff',''];
   html=combos.map(combo=>{
     const ids=combo.map(c=>c.id);
     const key=getComboKey(ids);
     const cc=getComboColors();
-    const color=cc[key]||'#3b82f6';
+    const color=cc[key]!==undefined?cc[key]:'#3b82f6';
     const names=combo.map(c=>c.name).join(' + ');
     return`<div style="display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--bdr)">
       <div style="flex:1;font-size:12px;font-weight:600">${esc(names)}</div>
-      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:4px">
-        ${['#ef4444','#f97316','#facc15','#22c55e','#06b6d4','#3b82f6','#8b5cf6','#f472b6'].map(c=>`<button type="button" style="width:22px;height:22px;border-radius:4px;background:${c};border:${color===c?'2px solid #000':'1px solid rgba(0,0,0,.2)'};cursor:pointer" onclick="saveComboColor('${key}','${c}');renderComboColors()"></button>`).join('')}
+      <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:4px">
+        ${COMBO_COLORS.map(c=>{
+          const isSel=color===c;
+          const isNone=c==='';
+          const isWhite=c==='#ffffff';
+          const bg=isNone?'background:rgba(255,255,255,.7);background-image:repeating-linear-gradient(45deg,rgba(0,0,0,.18) 0,rgba(0,0,0,.18) 2px,transparent 2px,transparent 8px)':`background:${c}`;
+          const bdr=isSel?'border:2px solid #000':isWhite?'border:1px solid #d1d5db':'border:1px solid rgba(0,0,0,.2)';
+          return`<button type="button" style="width:22px;height:22px;border-radius:4px;${bg};${bdr};cursor:pointer" onclick="saveComboColor('${key}','${c}');renderComboColors()"></button>`;
+        }).join('')}
       </div>
     </div>`;
   }).join('');
