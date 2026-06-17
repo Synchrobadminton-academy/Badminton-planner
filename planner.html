@@ -6,10 +6,10 @@
 <title>🏸 Coach Manpower Planner</title>
 <style>
 :root{
-  --bg:#f1f5f9;--surf:#fff;--surf2:#f8fafc;--bdr:#e2e8f0;
-  --tx:#0f172a;--txm:#475569;--txf:#94a3b8;--hov:#e8edf3;
-  --blue:#2563eb;--bluebg:#eff6ff;--green:#16a34a;--red:#dc2626;
-  --slot:34px;
+  --bg:#f9fafb;--surf:#fff;--surf2:#f3f4f6;--bdr:#d1d5db;
+  --tx:#111827;--txm:#6b7280;--txf:#9ca3af;--hov:#f3f4f6;
+  --blue:#3b82f6;--bluebg:#eff6ff;--green:#10b981;--red:#ef4444;
+  --slot:40px;
 }
 [data-dark]{
   --bg:#0f172a;--surf:#1e293b;--surf2:#0f172a;--bdr:#334155;
@@ -80,7 +80,7 @@ table.sched td.tslot.drag-hi{background:rgba(37,99,235,.13)}
 .cal-dow-row{display:grid;grid-template-columns:repeat(7,1fr);border-bottom:2px solid var(--bdr)}
 .cal-dow{text-align:center;padding:6px 3px;font-size:11px;font-weight:800;color:var(--txm);background:var(--surf2);text-transform:uppercase;letter-spacing:.04em}
 .cal-grid{display:grid;grid-template-columns:repeat(7,1fr)}
-.cal-cell{min-height:150px;max-height:220px;overflow-y:auto;border-right:1px solid var(--bdr);border-bottom:1px solid var(--bdr);padding:4px;cursor:pointer;transition:background .1s}
+.cal-cell{min-height:280px;border-right:1px solid var(--bdr);border-bottom:1px solid var(--bdr);padding:6px;cursor:pointer;transition:background .1s;position:relative;overflow:hidden}
 .cal-cell:hover{background:var(--hov)}
 .cal-cell.other{opacity:.28;cursor:default}
 .cal-cell.today .cal-num{background:var(--blue);color:#fff;border-radius:50%}
@@ -98,6 +98,9 @@ table.sched td.tslot.drag-hi{background:rgba(37,99,235,.13)}
 .b-g{background:#f0fdf4;color:#15803d;border-color:#bbf7d0}
 .b-gr{background:var(--surf2);color:var(--txm);border-color:var(--bdr)}
 [data-dark] .b-g{background:#14532d;color:#4ade80;border-color:#166534}
+.color-btn{width:100%;aspect-ratio:1;border-radius:8px;border:2px solid transparent;cursor:pointer;transition:all .2s}
+.color-btn:hover{transform:scale(1.05)}
+.color-btn.sel{border-color:#000;box-shadow:0 0 0 2px var(--surf)}
 /* tracker */
 .tgrid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px}
 .tcard{border:3px solid;border-radius:10px;padding:14px;text-align:center}
@@ -185,11 +188,20 @@ table.sched td.tslot.drag-hi{background:rgba(37,99,235,.13)}
         <div class="card-hdr" id="coach-form-hdr">Add Coach</div>
         <div class="card-body">
           <form id="coach-form" onsubmit="submitCoach(event)">
-            <div class="form-row">
-              <div class="fg" style="margin:0"><label>Name *</label><input type="text" id="cn" required placeholder="Coach name"></div>
-              <div class="fg" style="margin:0"><label>Block Color</label><input type="color" id="ccolor" value="#22c55e"></div>
+            <div class="fg"><label>Name *</label><input type="text" id="cn" required placeholder="Coach name"></div>
+            <div class="fg"><label>Block Color</label>
+              <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px">
+                <button type="button" class="color-btn" data-color="#ef4444" onclick="setCoachColor(this)"></button>
+                <button type="button" class="color-btn" data-color="#f97316" onclick="setCoachColor(this)"></button>
+                <button type="button" class="color-btn" data-color="#eab308" onclick="setCoachColor(this)"></button>
+                <button type="button" class="color-btn" data-color="#10b981" onclick="setCoachColor(this)"></button>
+                <button type="button" class="color-btn" data-color="#06b6d4" onclick="setCoachColor(this)"></button>
+                <button type="button" class="color-btn" data-color="#3b82f6" onclick="setCoachColor(this)"></button>
+                <button type="button" class="color-btn" data-color="#8b5cf6" onclick="setCoachColor(this)"></button>
+                <button type="button" class="color-btn" data-color="#ec4899" onclick="setCoachColor(this)"></button>
+              </div>
+              <input type="color" id="ccolor" value="#3b82f6" style="display:none">
             </div>
-            <div class="fg"><label>Contact</label><input type="text" id="ccontact" placeholder="Phone or email"></div>
             <div class="fg"><label class="chk-row"><input type="checkbox" id="cactive" checked> Active</label></div>
             <div style="display:flex;gap:8px">
               <button type="submit" class="btn btn-p">Save</button>
@@ -197,6 +209,10 @@ table.sched td.tslot.drag-hi{background:rgba(37,99,235,.13)}
             </div>
           </form>
         </div>
+      </div>
+      <div class="card">
+        <div class="card-hdr">Coach Combo Colors</div>
+        <div class="card-body" id="combo-colors"></div>
       </div>
       <div class="card">
         <div class="card-hdr">Venues (for suggestions)</div>
@@ -232,7 +248,19 @@ table.sched td.tslot.drag-hi{background:rgba(37,99,235,.13)}
   <div class="modal">
     <h2 id="sess-ttl">Add Session</h2>
     <div class="fg"><label>Coaches</label><div id="cchk-wrap" class="cchk-wrap"></div></div>
-    <div class="fg"><label>Block Color</label><input type="color" id="m-color" value="#22c55e"></div>
+    <div class="fg"><label>Block Color</label>
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px">
+        <button type="button" class="color-btn" data-color="#ef4444" onclick="setModalColor('#ef4444')"></button>
+        <button type="button" class="color-btn" data-color="#f97316" onclick="setModalColor('#f97316')"></button>
+        <button type="button" class="color-btn" data-color="#eab308" onclick="setModalColor('#eab308')"></button>
+        <button type="button" class="color-btn" data-color="#10b981" onclick="setModalColor('#10b981')"></button>
+        <button type="button" class="color-btn" data-color="#06b6d4" onclick="setModalColor('#06b6d4')"></button>
+        <button type="button" class="color-btn" data-color="#3b82f6" onclick="setModalColor('#3b82f6')"></button>
+        <button type="button" class="color-btn" data-color="#8b5cf6" onclick="setModalColor('#8b5cf6')"></button>
+        <button type="button" class="color-btn" data-color="#ec4899" onclick="setModalColor('#ec4899')"></button>
+      </div>
+      <input type="color" id="m-color" value="#3b82f6" style="display:none">
+    </div>
     <div class="fg">
       <label>Venue</label>
       <input type="text" id="m-venue" list="vsugg" placeholder="e.g. Bukit Canberra SH">
@@ -305,6 +333,7 @@ const S={
   S.set('venues',['Bukit Canberra SH','Bishan Clubhouse','Woodland SH','Sembawang Pri','Yishun SH','Arena Sport Hall']);
   S.set('sessions',[]);
   S.set('instances',[]);
+  S.set('combo-colors',{});
   localStorage.setItem('cmp_v3','1');
 })();
 
@@ -432,8 +461,8 @@ function renderWeek(){
     head+=`<th class="${it?'today-h':''}" style="min-width:110px"><div>${DAYS[d.getDay()]}</div><div style="font-size:16px${it?';font-weight:900':''}">${d.getDate()}</div></th>`;
   });
   document.getElementById('sched-head').innerHTML=head+'</tr>';
-  // Build empty rows
-  const slots=[];for(let h=6;h<22;h++){slots.push(h);slots.push(h+.5)}
+  // Build empty rows (6am to 10pm)
+  const slots=[];for(let h=6;h<23;h++){slots.push(h);slots.push(h+.5)}
   let body='';
   slots.forEach(h=>{
     const half=h%1!==0;
@@ -464,7 +493,7 @@ function renderWeek(){
       const hpx=(endSlot-startSlot)*SLOT_H-2;
       const lp=inst._col/inst._tot*100;
       const wp=100/inst._tot;
-      const color=inst.color||'#3b82f6';
+      const color=getBlockColor(inst);
       const tc=txColor(color);
       const sc=inst.status==='cancelled'?'cancelled':inst.status==='completed'?'completed':'';
       const si=inst.status==='completed'?'✅':inst.status==='cancelled'?'❌':'⬜';
@@ -569,7 +598,7 @@ function renderMonth(){
     html+=`<div class="cal-cell${!inMo?' other':''}${isTdy?' today':''}" onclick="${inMo?`openDay('${dt}',${d.getDay()})`:''}" >
       <div class="cal-num">${inMo?dayN:''}</div>
       ${di.map(inst=>{
-        const color=inst.color||'#3b82f6';
+        const color=getBlockColor(inst);
         const tc=txColor(color);
         const cn=coachNames(inst.coach_ids);
         return`<div class="cal-chip" style="background:${color};color:${tc}">
@@ -592,7 +621,7 @@ function openDay(dt,dow){
   document.getElementById('day-ttl').textContent=`${dt} — ${DAYS[dow]}`;
   let html=insts.length?'':'<div class="empty" style="padding:12px 0">No sessions.</div>';
   insts.forEach(inst=>{
-    const color=inst.color||'#3b82f6';
+    const color=getBlockColor(inst);
     const si=inst.status==='completed'?'✅':inst.status==='cancelled'?'❌':'⬜';
     const cn=coachNames(inst.coach_ids);
     html+=`<div class="day-item" style="border-color:${color}">
@@ -639,17 +668,30 @@ function onCoachChk(inp){
   const checked=Array.from(document.querySelectorAll('#cchk-wrap input:checked'));
   if(checked.length===1){
     const coach=getCoaches().find(c=>c.id===+checked[0].value);
-    if(coach?.color)document.getElementById('m-color').value=coach.color;
+    if(coach?.color){
+      document.getElementById('m-color').value=coach.color;
+      const btn=document.querySelector(`.color-btn[data-color="${coach.color}"]`);
+      if(btn){document.querySelectorAll('.color-btn').forEach(b=>b.classList.remove('sel'));btn.classList.add('sel');}
+    }
   }
+}
+function setModalColor(color){
+  document.getElementById('m-color').value=color;
+  const btn=document.querySelector(`.color-btn[data-color="${color}"]`);
+  if(btn){document.querySelectorAll('.color-btn').forEach(b=>b.classList.remove('sel'));btn.classList.add('sel');}
 }
 
 function openModal(date,day,startH,endH){
-  mDate=date;mDay=day;editId=null;
+  mDate=date;mDay=day;
+  if(!editId)clip=null;
   const src=clip||{};
   document.getElementById('sess-ttl').textContent=
     (clip?'Paste':'Add')+` Session — ${date} (${DAYS[day]})`;
   buildCoachChecks(src.coach_ids);
-  document.getElementById('m-color').value=src.color||getCoaches()[0]?.color||'#3b82f6';
+  const color=src.color||getCoaches()[0]?.color||'#3b82f6';
+  document.getElementById('m-color').value=color;
+  const btn=document.querySelector(`.color-btn[data-color="${color}"]`);
+  if(btn){document.querySelectorAll('.color-btn').forEach(b=>b.classList.remove('sel'));btn.classList.add('sel');}
   document.getElementById('m-venue').value=src.venue_text||'';
   document.getElementById('m-class').value=src.class_type||'';
   document.getElementById('m-std').value=src.standard||'';
@@ -664,7 +706,10 @@ function openModal(date,day,startH,endH){
 }
 function openEdit(id){
   const inst=getInsts().find(x=>x.id===id);if(!inst)return;
-  editId=id;mDate=inst.date;mDay=new Date(inst.date+'T00:00').getDay();
+  clip=null;
+  editId=id;
+  mDate=inst.date;
+  mDay=new Date(inst.date+'T00:00').getDay();
   document.getElementById('sess-ttl').textContent=`Edit Session — ${inst.date}`;
   buildCoachChecks(inst.coach_ids);
   document.getElementById('m-color').value=inst.color||'#3b82f6';
@@ -678,6 +723,7 @@ function openEdit(id){
   document.getElementById('m-rec').checked=false;
   document.getElementById('vsugg').innerHTML=getVenues().map(v=>`<option>${esc(v)}</option>`).join('');
   document.getElementById('sess-modal').classList.add('open');
+  document.getElementById('clip-bar').style.display='none';
 }
 function closeModal(){editId=null;document.getElementById('sess-modal').classList.remove('open')}
 
@@ -694,17 +740,20 @@ function submitSession(){
   const rec=document.getElementById('m-rec').checked;
   if(!start_time||!end_time){alert('Set start and end time.');return}
   if(start_time>=end_time){alert('End must be after start.');return}
-  // auto-save venue name as suggestion
   if(venue_text){const l=getVenues();if(!l.includes(venue_text)){l.push(venue_text);S.set('venues',l);}}
   const data={coach_ids,color,venue_text,class_type,standard,court_no,notes,start_time,end_time};
-  if(editId){
+  const isEdit=!!editId;
+  if(isEdit){
     updateInst(editId,data);
   } else {
     const sess=saveSession({...data,recurring:rec?1:0,day_of_week:rec?mDay:null,date:rec?null:mDate});
     if(rec)genRec(sess.id,data,mDay);
     else addOneOff(sess.id,data,mDate);
   }
-  closeModal();renderSched();
+  clip=null;
+  editId=null;
+  document.getElementById('sess-modal').classList.remove('open');
+  renderSched();
 }
 
 // ── COPY / PASTE ──────────────────────────────────────────────
@@ -722,14 +771,13 @@ function renderCoaches(){
   const coaches=getCoaches(),venues=getVenues();
   document.getElementById('coach-form-hdr').textContent=editCid?'Edit Coach':'Add Coach';
   document.getElementById('coach-cancel').style.display=editCid?'inline-flex':'none';
-  let html=coaches.length?`<table class="dtable"><thead><tr><th></th><th>Name</th><th>Contact</th><th>Status</th><th></th></tr></thead><tbody>`:
+  let html=coaches.length?`<table class="dtable"><thead><tr><th></th><th>Name</th><th>Status</th><th></th></tr></thead><tbody>`:
     '<div class="empty">No coaches yet.</div>';
   if(coaches.length){
     coaches.forEach(c=>{
       html+=`<tr style="${c.active?'':'opacity:.45'}">
         <td><span style="display:inline-block;width:18px;height:18px;border-radius:4px;background:${c.color||'#3b82f6'};border:1px solid rgba(0,0,0,.2)"></span></td>
         <td style="font-weight:700">${esc(c.name)}</td>
-        <td style="color:var(--txm)">${esc(c.contact||'—')}</td>
         <td><span class="badge ${c.active?'b-g':'b-gr'}" onclick="toggleActive(${c.id})">${c.active?'Active':'Inactive'}</span></td>
         <td><button class="btn btn-o btn-sm" onclick="startEditCoach(${c.id})">Edit</button></td>
       </tr>`;
@@ -737,6 +785,7 @@ function renderCoaches(){
     html+='</tbody></table>';
   }
   document.getElementById('coaches-list').innerHTML=html;
+  renderComboColors();
   let vh=venues.map((v,i)=>`<div style="display:flex;align-items:center;justify-content:space-between;padding:5px 0;border-bottom:1px solid var(--bdr)">
     <span style="font-size:12px">${esc(v)}</span>
     <button class="btn btn-sm btn-red" onclick="removeVenueAt(${i})">✕</button>
@@ -744,20 +793,26 @@ function renderCoaches(){
   document.getElementById('venues-list').innerHTML=vh||'<div style="color:var(--txf);font-size:12px">No venues added yet.</div>';
 }
 function removeVenueAt(i){const l=getVenues();l.splice(i,1);S.set('venues',l);renderCoaches()}
+function setCoachColor(btn){
+  document.querySelectorAll('.color-btn').forEach(b=>b.classList.remove('sel'));
+  btn.classList.add('sel');
+  document.getElementById('ccolor').value=btn.dataset.color;
+}
 function startEditCoach(id){
   const c=getCoaches().find(x=>x.id===id);if(!c)return;
   editCid=id;
   document.getElementById('cn').value=c.name;
-  document.getElementById('ccontact').value=c.contact||'';
-  document.getElementById('ccolor').value=c.color||'#22c55e';
+  document.getElementById('ccolor').value=c.color||'#3b82f6';
   document.getElementById('cactive').checked=!!c.active;
+  const btn=document.querySelector(`.color-btn[data-color="${c.color||'#3b82f6'}"]`);
+  if(btn){document.querySelectorAll('.color-btn').forEach(b=>b.classList.remove('sel'));btn.classList.add('sel');}
   renderCoaches();document.getElementById('cn').focus();
 }
-function cancelCoachEdit(){editCid=null;document.getElementById('coach-form').reset();document.getElementById('cactive').checked=true;renderCoaches()}
+function cancelCoachEdit(){editCid=null;document.getElementById('coach-form').reset();document.getElementById('cactive').checked=true;document.querySelectorAll('.color-btn').forEach(b=>b.classList.remove('sel'));renderCoaches()}
 function submitCoach(e){
   e.preventDefault();
   const name=document.getElementById('cn').value.trim();if(!name)return;
-  const d={name,contact:document.getElementById('ccontact').value.trim(),color:document.getElementById('ccolor').value,active:document.getElementById('cactive').checked?1:0};
+  const d={name,color:document.getElementById('ccolor').value,active:document.getElementById('cactive').checked?1:0};
   if(editCid)d.id=editCid;
   saveCoach(d);cancelCoachEdit();
 }
@@ -767,6 +822,55 @@ function addVenue(e){
   const name=document.getElementById('vn').value.trim();if(!name)return;
   const l=getVenues();if(!l.includes(name)){l.push(name);S.set('venues',l);}
   document.getElementById('venue-form').reset();renderCoaches();
+}
+
+function getComboColors(){
+  return S.get('combo-colors')||{};
+}
+function saveComboColor(comboKey,color){
+  const cc=getComboColors();cc[comboKey]=color;S.set('combo-colors',cc);
+}
+function getComboKey(coachIds){
+  return coachIds.sort((a,b)=>a-b).join(',');
+}
+function getBlockColor(inst){
+  if(!inst.coach_ids||inst.coach_ids.length===0)return inst.color||'#3b82f6';
+  const key=getComboKey(inst.coach_ids);
+  const cc=getComboColors();
+  if(cc[key])return cc[key];
+  return inst.color||'#3b82f6';
+}
+function renderComboColors(){
+  const coaches=getCoaches().filter(c=>c.active);
+  if(!coaches.length){
+    document.getElementById('combo-colors').innerHTML='<div class="empty" style="padding:8px 0">Add active coaches first.</div>';
+    return;
+  }
+  let html='';
+  const combos=[];
+  for(let mask=1;mask<(1<<coaches.length);mask++){
+    const combo=coaches.filter((_,i)=>(mask&(1<<i))!==0);
+    if(combo.length<2)continue;
+    combos.push(combo);
+  }
+  if(!combos.length){
+    document.getElementById('combo-colors').innerHTML='<div class="empty" style="padding:8px 0">Need 2+ coaches for combos.</div>';
+    return;
+  }
+  html=combos.map(combo=>{
+    const ids=combo.map(c=>c.id);
+    const key=getComboKey(ids);
+    const cc=getComboColors();
+    const color=cc[key]||'#3b82f6';
+    const names=combo.map(c=>c.name).join(' + ');
+    return`<div style="display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--bdr)">
+      <div style="flex:1;font-size:12px;font-weight:600">${esc(names)}</div>
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:4px">
+        ${['#ef4444','#10b981','#3b82f6','#8b5cf6','#f97316','#06b6d4'].map(c=>`<button type="button" style="width:24px;height:24px;border-radius:4px;background:${c};border:${color===c?'2px solid #000':'1px solid rgba(0,0,0,.2)'};cursor:pointer" onclick="saveComboColor('${key}','${c}');renderComboColors()"></button>`).join('')}
+      </div>
+    </div>`;
+  }).join('');
+  document.getElementById('combo-colors').innerHTML=html;
 }
 
 // ── TRACKER ───────────────────────────────────────────────────
@@ -801,7 +905,7 @@ function renderTracker(){
     <div class="tgrid">
       ${cards.map(x=>{
         const color=x.c.color||'#3b82f6';
-        return`<div class="tcard" style="border-color:${color};background:${color}18">
+        return`<div class="tcard" style="border-color:${color};background:${color}1a">
           <div class="tc-name" style="color:${color}">${esc(x.c.name)}</div>
           <div class="tc-hrs">${x.hrs.toFixed(1)}</div>
           <div class="tc-lbl">hours</div>
