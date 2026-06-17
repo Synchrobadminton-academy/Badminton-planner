@@ -53,25 +53,30 @@ input[type=color]{padding:2px 4px;height:34px;cursor:pointer}
 .lchip{display:inline-flex;align-items:center;font-size:11px;font-weight:700;padding:3px 10px;border-radius:99px;border:1px solid rgba(0,0,0,.2)}
 /* weekly grid */
 .sched-outer{overflow-x:auto;border:1px solid var(--bdr);border-radius:10px;background:var(--surf);user-select:none}
-table.sched{border-collapse:collapse;min-width:740px;width:100%;font-size:11px}
-table.sched th{background:var(--surf2);padding:5px 3px;text-align:center;font-weight:700;color:var(--txm);border:1px solid var(--bdr);white-space:nowrap;min-width:110px}
+table.sched{border-collapse:collapse;min-width:900px;width:100%;font-size:11px}
+table.sched th{background:var(--surf2);padding:5px 3px;text-align:center;font-weight:700;color:var(--txm);border:1px solid var(--bdr);white-space:nowrap;min-width:180px}
 table.sched th.today-h{background:var(--bluebg);color:var(--blue)}
 table.sched th.corner{width:52px;min-width:52px;position:sticky;left:0;z-index:20}
 table.sched td.ttime{width:52px;text-align:right;padding:0 5px;color:var(--txf);background:var(--surf2);border:1px solid var(--bdr);white-space:nowrap;position:sticky;left:0;z-index:10;height:var(--slot);font-size:10px;vertical-align:middle}
-table.sched td.tslot{border:1px solid var(--bdr);padding:0;vertical-align:top;position:relative;height:var(--slot);cursor:crosshair}
+table.sched td.tslot{border:1px solid var(--bdr);border-right:none;padding:0;vertical-align:top;position:relative;height:var(--slot);cursor:crosshair}
+table.sched td.tslot:last-child{border-right:1px solid var(--bdr)}
 table.sched td.tslot.half{border-top-style:dashed}
 table.sched td.tslot.drag-hi{background:rgba(37,99,235,.13)}
 /* session block */
-.sblock{position:absolute;border-radius:4px;padding:3px 5px;overflow:hidden;font-size:10.5px;line-height:1.3;border:1px solid rgba(0,0,0,.25);box-shadow:0 1px 4px rgba(0,0,0,.18);z-index:10;top:0}
+.sblock{position:absolute;border-radius:6px;padding:4px 6px;overflow:hidden;font-size:11px;line-height:1.35;border:1px solid rgba(0,0,0,.18);box-shadow:0 2px 6px rgba(0,0,0,.15);z-index:10;top:0;cursor:grab;transition:box-shadow .1s}
+.sblock:hover{box-shadow:0 4px 12px rgba(0,0,0,.25);z-index:50}
+.sblock.dragging{opacity:.6;cursor:grabbing;box-shadow:0 8px 24px rgba(0,0,0,.3)}
 .sblock.cancelled{opacity:.38;text-decoration:line-through}
-.sblock.completed{opacity:.72}
-.sb-venue{font-weight:800;font-size:11px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.sb-row{font-size:10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;opacity:.92}
-.sb-coach{font-size:10px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:1px}
-.sb-time{font-size:9.5px;opacity:.82}
-.sb-btns{display:flex;gap:2px;margin-top:2px;flex-wrap:wrap}
-.sb-btns button{background:rgba(0,0,0,.18);border:none;cursor:pointer;padding:1px 4px;font-size:10px;border-radius:3px;line-height:1.4;font-weight:700}
-.sb-btns button:hover{background:rgba(0,0,0,.32)}
+.sblock.completed{opacity:.78}
+.sb-venue{font-weight:800;font-size:11.5px}
+.sb-row{font-size:10px;opacity:.92;margin-top:1px}
+.sb-coach{font-size:10px;font-weight:700;margin-top:2px}
+.sb-time{font-size:10px;opacity:.82;margin-top:1px}
+.sb-btns{display:flex;gap:3px;margin-top:4px;flex-wrap:wrap}
+.sb-btns button{background:rgba(0,0,0,.2);border:none;cursor:pointer;padding:2px 6px;font-size:10px;border-radius:4px;line-height:1.4;font-weight:700;white-space:nowrap}
+.sb-btns button:hover{background:rgba(0,0,0,.35)}
+.sb-resize{position:absolute;bottom:0;left:0;right:0;height:8px;cursor:ns-resize;background:rgba(0,0,0,.18);border-radius:0 0 6px 6px;display:flex;align-items:center;justify-content:center}
+.sb-resize::after{content:'';width:24px;height:2px;border-radius:2px;background:rgba(255,255,255,.6)}
 /* clipboard bar */
 #clip-bar{position:fixed;bottom:14px;left:50%;transform:translateX(-50%);background:#0f172a;color:#fff;padding:8px 16px;border-radius:24px;font-size:12px;font-weight:600;display:none;align-items:center;gap:10px;z-index:400;box-shadow:0 4px 20px rgba(0,0,0,.3);white-space:nowrap}
 #clip-bar button{background:rgba(255,255,255,.15);border:1px solid rgba(255,255,255,.3);color:#fff;padding:2px 10px;border-radius:12px;cursor:pointer;font-size:11px}
@@ -115,11 +120,11 @@ table.sched td.tslot.drag-hi{background:rgba(37,99,235,.13)}
 .modal h2{font-size:14px;font-weight:800;margin-bottom:14px}
 .mact{display:flex;gap:8px;margin-top:14px}
 .two-col{display:grid;grid-template-columns:1fr 1fr;gap:16px;align-items:start}
-/* coach checkboxes */
+/* coach chips (no checkbox) */
 .cchk-wrap{display:flex;flex-wrap:wrap;gap:5px}
-.cchk{display:flex;align-items:center;gap:4px;border:1px solid var(--bdr);border-radius:6px;padding:3px 8px;cursor:pointer;font-size:11px;font-weight:700;background:var(--surf2)}
-.cchk input{width:auto;cursor:pointer;accent-color:var(--blue)}
-.cchk.on{border-color:var(--blue);background:var(--bluebg)}
+.cchk{display:flex;align-items:center;gap:5px;border:1.5px solid var(--bdr);border-radius:99px;padding:4px 10px;cursor:pointer;font-size:12px;font-weight:700;background:var(--surf2);transition:all .15s;user-select:none}
+.cchk:hover{background:var(--hov)}
+.cchk.on{border-color:var(--blue);background:var(--bluebg);color:var(--blue)}
 .page-hdr{display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;flex-wrap:wrap;gap:8px}
 .page-title{font-size:16px;font-weight:800}
 .empty{text-align:center;padding:28px;color:var(--txf);font-size:12px}
@@ -191,14 +196,14 @@ table.sched td.tslot.drag-hi{background:rgba(37,99,235,.13)}
             <div class="fg"><label>Name *</label><input type="text" id="cn" required placeholder="Coach name"></div>
             <div class="fg"><label>Block Color</label>
               <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px">
-                <button type="button" class="color-btn" data-color="#ef4444" onclick="setCoachColor(this)"></button>
-                <button type="button" class="color-btn" data-color="#f97316" onclick="setCoachColor(this)"></button>
-                <button type="button" class="color-btn" data-color="#eab308" onclick="setCoachColor(this)"></button>
-                <button type="button" class="color-btn" data-color="#10b981" onclick="setCoachColor(this)"></button>
-                <button type="button" class="color-btn" data-color="#06b6d4" onclick="setCoachColor(this)"></button>
-                <button type="button" class="color-btn" data-color="#3b82f6" onclick="setCoachColor(this)"></button>
-                <button type="button" class="color-btn" data-color="#8b5cf6" onclick="setCoachColor(this)"></button>
-                <button type="button" class="color-btn" data-color="#ec4899" onclick="setCoachColor(this)"></button>
+                <button type="button" class="color-btn" data-color="#ef4444" style="background:#ef4444" onclick="setCoachColor(this)"></button>
+                <button type="button" class="color-btn" data-color="#f97316" style="background:#f97316" onclick="setCoachColor(this)"></button>
+                <button type="button" class="color-btn" data-color="#facc15" style="background:#facc15" onclick="setCoachColor(this)"></button>
+                <button type="button" class="color-btn" data-color="#22c55e" style="background:#22c55e" onclick="setCoachColor(this)"></button>
+                <button type="button" class="color-btn" data-color="#06b6d4" style="background:#06b6d4" onclick="setCoachColor(this)"></button>
+                <button type="button" class="color-btn" data-color="#3b82f6" style="background:#3b82f6" onclick="setCoachColor(this)"></button>
+                <button type="button" class="color-btn" data-color="#8b5cf6" style="background:#8b5cf6" onclick="setCoachColor(this)"></button>
+                <button type="button" class="color-btn" data-color="#f472b6" style="background:#f472b6" onclick="setCoachColor(this)"></button>
               </div>
               <input type="color" id="ccolor" value="#3b82f6" style="display:none">
             </div>
@@ -250,14 +255,14 @@ table.sched td.tslot.drag-hi{background:rgba(37,99,235,.13)}
     <div class="fg"><label>Coaches</label><div id="cchk-wrap" class="cchk-wrap"></div></div>
     <div class="fg"><label>Block Color</label>
       <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:6px">
-        <button type="button" class="color-btn" data-color="#ef4444" onclick="setModalColor('#ef4444')"></button>
-        <button type="button" class="color-btn" data-color="#f97316" onclick="setModalColor('#f97316')"></button>
-        <button type="button" class="color-btn" data-color="#eab308" onclick="setModalColor('#eab308')"></button>
-        <button type="button" class="color-btn" data-color="#10b981" onclick="setModalColor('#10b981')"></button>
-        <button type="button" class="color-btn" data-color="#06b6d4" onclick="setModalColor('#06b6d4')"></button>
-        <button type="button" class="color-btn" data-color="#3b82f6" onclick="setModalColor('#3b82f6')"></button>
-        <button type="button" class="color-btn" data-color="#8b5cf6" onclick="setModalColor('#8b5cf6')"></button>
-        <button type="button" class="color-btn" data-color="#ec4899" onclick="setModalColor('#ec4899')"></button>
+        <button type="button" class="color-btn" data-color="#ef4444" style="background:#ef4444" onclick="setModalColor('#ef4444')"></button>
+        <button type="button" class="color-btn" data-color="#f97316" style="background:#f97316" onclick="setModalColor('#f97316')"></button>
+        <button type="button" class="color-btn" data-color="#facc15" style="background:#facc15" onclick="setModalColor('#facc15')"></button>
+        <button type="button" class="color-btn" data-color="#22c55e" style="background:#22c55e" onclick="setModalColor('#22c55e')"></button>
+        <button type="button" class="color-btn" data-color="#06b6d4" style="background:#06b6d4" onclick="setModalColor('#06b6d4')"></button>
+        <button type="button" class="color-btn" data-color="#3b82f6" style="background:#3b82f6" onclick="setModalColor('#3b82f6')"></button>
+        <button type="button" class="color-btn" data-color="#8b5cf6" style="background:#8b5cf6" onclick="setModalColor('#8b5cf6')"></button>
+        <button type="button" class="color-btn" data-color="#f472b6" style="background:#f472b6" onclick="setModalColor('#f472b6')"></button>
       </div>
       <input type="color" id="m-color" value="#3b82f6" style="display:none">
     </div>
@@ -284,9 +289,15 @@ table.sched td.tslot.drag-hi{background:rgba(37,99,235,.13)}
       <div class="fg" style="margin:0"><label>End</label><input type="time" id="m-end" step="1800" required></div>
     </div>
     <div class="fg"><label>Notes (optional)</label><input type="text" id="m-notes" placeholder="e.g. *Spare*, 1 Hour only"></div>
-    <div class="fg"><label class="chk-row"><input type="checkbox" id="m-rec"> <span id="m-rec-lbl">Recurring weekly</span></label></div>
+    <div class="fg" id="m-rec-wrap">
+      <button type="button" id="m-rec-btn" onclick="toggleRec()" class="btn btn-o" style="width:100%;justify-content:center">
+        Recurring every <span id="m-rec-day">Sun</span>: Off
+      </button>
+      <input type="hidden" id="m-rec" value="0">
+    </div>
     <div class="mact">
       <button class="btn btn-p" style="flex:1" onclick="submitSession()">Save</button>
+      <button class="btn btn-red" id="m-del-btn" style="display:none" onclick="deleteCurrentInst()">Delete</button>
       <button class="btn btn-o" onclick="closeModal()">Cancel</button>
     </div>
   </div>
@@ -483,7 +494,7 @@ function renderWeek(){
     laid.forEach(inst=>{
       const startSlot=(t2d(inst.start_time)-6)*2;
       const endSlot=(t2d(inst.end_time)-6)*2;
-      if(startSlot<0||startSlot>=32)return;
+      if(startSlot<0||startSlot>=34)return;
       const rowIdx=Math.floor(startSlot);
       const rows=document.querySelectorAll('#sched-body tr');
       const row=rows[rowIdx];if(!row)return;
@@ -491,16 +502,17 @@ function renderWeek(){
       const td=cells[di];if(!td)return;
       td.style.position='relative';
       const hpx=(endSlot-startSlot)*SLOT_H-2;
-      const lp=inst._col/inst._tot*100;
-      const wp=100/inst._tot;
+      // cascade layout: each overlapping session offsets 16px right, keeps near-full width
+      const offset=inst._col*16;
       const color=getBlockColor(inst);
       const tc=txColor(color);
       const sc=inst.status==='cancelled'?'cancelled':inst.status==='completed'?'completed':'';
-      const si=inst.status==='completed'?'✅':inst.status==='cancelled'?'❌':'⬜';
+      const si=inst.status==='completed'?'✓':inst.status==='cancelled'?'✕':'○';
       const cn=coachNames(inst.coach_ids);
       const div=document.createElement('div');
       div.className=`sblock ${sc}`;
-      div.style.cssText=`background:${color};color:${tc};left:calc(${lp}% + 1px);width:calc(${wp}% - 2px);height:${hpx}px`;
+      div.dataset.instId=String(inst.id);
+      div.style.cssText=`background:${color};color:${tc};left:${offset+1}px;width:calc(100% - ${offset+2}px);height:${hpx}px;z-index:${10+inst._col}`;
       div.innerHTML=`
         ${inst.venue_text?`<div class="sb-venue">${esc(inst.venue_text)}</div>`:''}
         ${inst.class_type||inst.standard?`<div class="sb-row">${esc([inst.class_type,inst.standard].filter(Boolean).join(' · '))}</div>`:''}
@@ -509,12 +521,13 @@ function renderWeek(){
         ${inst.notes?`<div class="sb-row" style="font-style:italic">${esc(inst.notes)}</div>`:''}
         ${cn?`<div class="sb-coach">${esc(cn)}</div>`:''}
         <div class="sb-btns">
-          <button onclick="event.stopPropagation();cycleW(${inst.id})" title="Status">${si}</button>
-          <button onclick="event.stopPropagation();copyInst(${inst.id})" title="Copy">📋</button>
-          <button onclick="event.stopPropagation();openEdit(${inst.id})" title="Edit">✎</button>
-          <button onclick="event.stopPropagation();if(confirm('Delete?')){delInst(${inst.id});renderWeek()}" title="Delete" style="opacity:.7">✕</button>
-        </div>`;
+          <button onclick="event.stopPropagation();cycleW(${inst.id})">${si}</button>
+          <button onclick="event.stopPropagation();copyInst(${inst.id})">📋</button>
+          <button onclick="event.stopPropagation();openEdit(${inst.id})">Edit</button>
+        </div>
+        <div class="sb-resize" onmousedown="event.stopPropagation();startBlockResize(event,${inst.id})" ontouchstart="event.stopPropagation();startBlockResize(event,${inst.id})"></div>`;
       td.appendChild(div);
+      makeBlockDraggable(div,inst.id);
     });
   });
   setupDrag();
@@ -571,6 +584,99 @@ function highlight(){
   });
 }
 function clearHL(){document.querySelectorAll('td.tslot.drag-hi').forEach(x=>x.classList.remove('drag-hi'))}
+
+// ── BLOCK DRAG TO MOVE ────────────────────────────────────────
+function makeBlockDraggable(div,instId){
+  div.addEventListener('mousedown',e=>{
+    if(e.target.closest('.sb-btns')||e.target.classList.contains('sb-resize')||e.target.closest('.sb-resize'))return;
+    e.preventDefault();e.stopPropagation();
+    startBlockMove(e.clientX,e.clientY,instId);
+  });
+  div.addEventListener('touchstart',e=>{
+    if(e.target.closest('.sb-btns')||e.target.classList.contains('sb-resize')||e.target.closest('.sb-resize'))return;
+    e.stopPropagation();
+    startBlockMove(e.touches[0].clientX,e.touches[0].clientY,instId,true);
+  },{passive:false});
+}
+
+function startBlockMove(startX,startY,instId,isTouch){
+  const inst=getInsts().find(x=>x.id===instId);if(!inst)return;
+  const duration=compHrs(inst.start_time,inst.end_time);
+  const origEl=document.querySelector(`[data-inst-id="${instId}"]`);if(!origEl)return;
+  const rect=origEl.getBoundingClientRect();
+  // ghost
+  const ghost=origEl.cloneNode(true);
+  ghost.style.cssText=`position:fixed;left:${rect.left}px;top:${rect.top}px;width:${rect.width}px;height:${rect.height}px;opacity:.7;pointer-events:none;z-index:1000;border-radius:6px;`;
+  document.body.appendChild(ghost);
+  origEl.classList.add('dragging');
+  let targetDate=inst.date,targetH=t2d(inst.start_time),lastTd=null;
+  function onMove(cx,cy){
+    ghost.style.left=(rect.left+cx-startX)+'px';
+    ghost.style.top=(rect.top+cy-startY)+'px';
+    ghost.style.display='none';
+    const el=document.elementFromPoint(cx,cy);
+    ghost.style.display='';
+    const td=el?.closest('td.tslot');
+    if(td){
+      if(lastTd)lastTd.classList.remove('drag-hi');
+      td.classList.add('drag-hi');lastTd=td;
+      targetDate=td.dataset.date;targetH=+td.dataset.h;
+    }
+  }
+  function onUp(){
+    document.removeEventListener('mousemove',mm);document.removeEventListener('mouseup',mu);
+    document.removeEventListener('touchmove',tm);document.removeEventListener('touchend',tu);
+    document.body.removeChild(ghost);
+    origEl.classList.remove('dragging');
+    if(lastTd)lastTd.classList.remove('drag-hi');
+    const newStart=d2t(targetH);
+    const newEndH=targetH+duration;
+    if(newEndH<=22.5){
+      updateInst(instId,{...inst,date:targetDate,start_time:newStart,end_time:d2t(newEndH)});
+    }
+    renderWeek();
+  }
+  const mm=e=>onMove(e.clientX,e.clientY);
+  const mu=()=>onUp();
+  const tm=e=>{e.preventDefault();onMove(e.touches[0].clientX,e.touches[0].clientY);};
+  const tu=()=>onUp();
+  if(isTouch){document.addEventListener('touchmove',tm,{passive:false});document.addEventListener('touchend',tu,{once:true});}
+  else{document.addEventListener('mousemove',mm);document.addEventListener('mouseup',mu,{once:true});}
+}
+
+// ── BLOCK RESIZE ─────────────────────────────────────────────
+function startBlockResize(e,instId){
+  const isTouch=e.touches!=null;
+  const startY=isTouch?e.touches[0].clientY:e.clientY;
+  const inst=getInsts().find(x=>x.id===instId);if(!inst)return;
+  const origEl=document.querySelector(`[data-inst-id="${instId}"]`);if(!origEl)return;
+  const origEndH=t2d(inst.end_time);
+  const origH=parseInt(origEl.style.height)||0;
+  function onMove(cy){
+    const dy=cy-startY;
+    const deltaSlots=Math.round(dy/SLOT_H);
+    const newEndH=Math.max(t2d(inst.start_time)+0.5,Math.min(22.5,origEndH+deltaSlots*0.5));
+    const startSlot=(t2d(inst.start_time)-6)*2;
+    const endSlot=(newEndH-6)*2;
+    origEl.style.height=Math.max(SLOT_H-2,(endSlot-startSlot)*SLOT_H-2)+'px';
+    origEl._newEndH=newEndH;
+  }
+  function onUp(){
+    document.removeEventListener('mousemove',mm);document.removeEventListener('mouseup',mu);
+    document.removeEventListener('touchmove',tm);document.removeEventListener('touchend',tu);
+    if(origEl._newEndH!==undefined){
+      updateInst(instId,{...inst,end_time:d2t(origEl._newEndH)});
+      delete origEl._newEndH;
+    }
+    renderWeek();
+  }
+  const mm=e=>onMove(e.clientY);
+  const mu=()=>onUp();
+  const tm=e=>{e.preventDefault();onMove(e.touches[0].clientY);};
+  const tu=()=>onUp();
+  if(isTouch){document.addEventListener('touchmove',tm,{passive:false});document.addEventListener('touchend',tu,{once:true});}
+  else{document.addEventListener('mousemove',mm);document.addEventListener('mouseup',mu,{once:true});}
+}
 
 // ── MONTHLY VIEW ──────────────────────────────────────────────
 let calDate=new Date();
@@ -654,25 +760,23 @@ function openAddFromDay(){
 // ── SESSION MODAL ─────────────────────────────────────────────
 let mDate='',mDay=0,editId=null,clip=null;
 
+let selCoachIds=new Set();
 function buildCoachChecks(selectedIds){
+  selCoachIds=new Set((selectedIds||[]).map(Number));
   const coaches=getCoaches().filter(c=>c.active);
   document.getElementById('cchk-wrap').innerHTML=coaches.map(c=>`
-    <label class="cchk${selectedIds?.includes(c.id)?' on':''}" id="cck-${c.id}">
-      <input type="checkbox" value="${c.id}" ${selectedIds?.includes(c.id)?'checked':''} onchange="onCoachChk(this)">
-      <span style="width:10px;height:10px;border-radius:3px;background:${c.color||'#3b82f6'};display:inline-block;flex-shrink:0"></span>
+    <div class="cchk${selCoachIds.has(c.id)?' on':''}" data-cid="${c.id}" onclick="toggleCoachSel(this)">
+      <span style="width:10px;height:10px;border-radius:50%;background:${c.color||'#3b82f6'};display:inline-block;flex-shrink:0;border:1px solid rgba(0,0,0,.15)"></span>
       ${esc(c.name)}
-    </label>`).join('');
+    </div>`).join('');
 }
-function onCoachChk(inp){
-  inp.closest('.cchk').classList.toggle('on',inp.checked);
-  const checked=Array.from(document.querySelectorAll('#cchk-wrap input:checked'));
-  if(checked.length===1){
-    const coach=getCoaches().find(c=>c.id===+checked[0].value);
-    if(coach?.color){
-      document.getElementById('m-color').value=coach.color;
-      const btn=document.querySelector(`.color-btn[data-color="${coach.color}"]`);
-      if(btn){document.querySelectorAll('.color-btn').forEach(b=>b.classList.remove('sel'));btn.classList.add('sel');}
-    }
+function toggleCoachSel(el){
+  const id=+el.dataset.cid;
+  if(selCoachIds.has(id)){selCoachIds.delete(id);el.classList.remove('on');}
+  else{selCoachIds.add(id);el.classList.add('on');}
+  if(selCoachIds.size===1){
+    const coach=getCoaches().find(c=>c.id===[...selCoachIds][0]);
+    if(coach?.color)setModalColor(coach.color);
   }
 }
 function setModalColor(color){
@@ -682,16 +786,13 @@ function setModalColor(color){
 }
 
 function openModal(date,day,startH,endH){
-  mDate=date;mDay=day;
-  if(!editId)clip=null;
+  mDate=date;mDay=day;editId=null;
   const src=clip||{};
   document.getElementById('sess-ttl').textContent=
     (clip?'Paste':'Add')+` Session — ${date} (${DAYS[day]})`;
   buildCoachChecks(src.coach_ids);
   const color=src.color||getCoaches()[0]?.color||'#3b82f6';
-  document.getElementById('m-color').value=color;
-  const btn=document.querySelector(`.color-btn[data-color="${color}"]`);
-  if(btn){document.querySelectorAll('.color-btn').forEach(b=>b.classList.remove('sel'));btn.classList.add('sel');}
+  setModalColor(color);
   document.getElementById('m-venue').value=src.venue_text||'';
   document.getElementById('m-class').value=src.class_type||'';
   document.getElementById('m-std').value=src.standard||'';
@@ -699,20 +800,23 @@ function openModal(date,day,startH,endH){
   document.getElementById('m-notes').value=src.notes||'';
   document.getElementById('m-start').value=d2t(startH);
   document.getElementById('m-end').value=d2t(endH||startH+1);
-  document.getElementById('m-rec').checked=false;
-  document.getElementById('m-rec-lbl').textContent=`Recurring every ${DAYS[day]}`;
+  document.getElementById('m-rec').value='0';
+  document.getElementById('m-rec-day').textContent=DAYS[day];
+  document.getElementById('m-rec-btn').className='btn btn-o';
+  document.getElementById('m-rec-btn').textContent='';
+  document.getElementById('m-rec-btn').innerHTML=`Recurring every <span id="m-rec-day">${DAYS[day]}</span>: <b>Off</b>`;
+  document.getElementById('m-del-btn').style.display='none';
   document.getElementById('vsugg').innerHTML=getVenues().map(v=>`<option>${esc(v)}</option>`).join('');
   document.getElementById('sess-modal').classList.add('open');
+  document.getElementById('clip-bar').style.display='none';
 }
 function openEdit(id){
   const inst=getInsts().find(x=>x.id===id);if(!inst)return;
-  clip=null;
-  editId=id;
-  mDate=inst.date;
-  mDay=new Date(inst.date+'T00:00').getDay();
+  clip=null;editId=id;
+  mDate=inst.date;mDay=new Date(inst.date+'T00:00').getDay();
   document.getElementById('sess-ttl').textContent=`Edit Session — ${inst.date}`;
   buildCoachChecks(inst.coach_ids);
-  document.getElementById('m-color').value=inst.color||'#3b82f6';
+  setModalColor(inst.color||'#3b82f6');
   document.getElementById('m-venue').value=inst.venue_text||'';
   document.getElementById('m-class').value=inst.class_type||'';
   document.getElementById('m-std').value=inst.standard||'';
@@ -720,15 +824,31 @@ function openEdit(id){
   document.getElementById('m-notes').value=inst.notes||'';
   document.getElementById('m-start').value=inst.start_time;
   document.getElementById('m-end').value=inst.end_time;
-  document.getElementById('m-rec').checked=false;
+  document.getElementById('m-rec').value='0';
+  document.getElementById('m-rec-btn').innerHTML=`Recurring every <span id="m-rec-day">${DAYS[mDay]}</span>: <b>Off</b>`;
+  document.getElementById('m-del-btn').style.display='';
   document.getElementById('vsugg').innerHTML=getVenues().map(v=>`<option>${esc(v)}</option>`).join('');
   document.getElementById('sess-modal').classList.add('open');
   document.getElementById('clip-bar').style.display='none';
 }
 function closeModal(){editId=null;document.getElementById('sess-modal').classList.remove('open')}
 
+function toggleRec(){
+  const cur=document.getElementById('m-rec').value==='1';
+  document.getElementById('m-rec').value=cur?'0':'1';
+  document.getElementById('m-rec-btn').innerHTML=`Recurring every <span id="m-rec-day">${DAYS[mDay]}</span>: <b>${cur?'Off':'On'}</b>`;
+  document.getElementById('m-rec-btn').className=cur?'btn btn-o':'btn btn-p';
+}
+function deleteCurrentInst(){
+  if(!editId)return;
+  if(!confirm('Delete this session?'))return;
+  delInst(editId);
+  editId=null;clip=null;
+  document.getElementById('sess-modal').classList.remove('open');
+  renderSched();
+}
 function submitSession(){
-  const coach_ids=Array.from(document.querySelectorAll('#cchk-wrap input:checked')).map(x=>+x.value);
+  const coach_ids=[...selCoachIds];
   const color=document.getElementById('m-color').value;
   const venue_text=document.getElementById('m-venue').value.trim();
   const class_type=document.getElementById('m-class').value.trim();
@@ -737,21 +857,19 @@ function submitSession(){
   const notes=document.getElementById('m-notes').value.trim();
   const start_time=document.getElementById('m-start').value;
   const end_time=document.getElementById('m-end').value;
-  const rec=document.getElementById('m-rec').checked;
+  const rec=document.getElementById('m-rec').value==='1';
   if(!start_time||!end_time){alert('Set start and end time.');return}
   if(start_time>=end_time){alert('End must be after start.');return}
   if(venue_text){const l=getVenues();if(!l.includes(venue_text)){l.push(venue_text);S.set('venues',l);}}
   const data={coach_ids,color,venue_text,class_type,standard,court_no,notes,start_time,end_time};
-  const isEdit=!!editId;
-  if(isEdit){
+  if(editId){
     updateInst(editId,data);
   } else {
     const sess=saveSession({...data,recurring:rec?1:0,day_of_week:rec?mDay:null,date:rec?null:mDate});
     if(rec)genRec(sess.id,data,mDay);
     else addOneOff(sess.id,data,mDate);
   }
-  clip=null;
-  editId=null;
+  clip=null;editId=null;
   document.getElementById('sess-modal').classList.remove('open');
   renderSched();
 }
@@ -865,8 +983,8 @@ function renderComboColors(){
     const names=combo.map(c=>c.name).join(' + ');
     return`<div style="display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--bdr)">
       <div style="flex:1;font-size:12px;font-weight:600">${esc(names)}</div>
-      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:4px">
-        ${['#ef4444','#10b981','#3b82f6','#8b5cf6','#f97316','#06b6d4'].map(c=>`<button type="button" style="width:24px;height:24px;border-radius:4px;background:${c};border:${color===c?'2px solid #000':'1px solid rgba(0,0,0,.2)'};cursor:pointer" onclick="saveComboColor('${key}','${c}');renderComboColors()"></button>`).join('')}
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:4px">
+        ${['#ef4444','#f97316','#facc15','#22c55e','#06b6d4','#3b82f6','#8b5cf6','#f472b6'].map(c=>`<button type="button" style="width:22px;height:22px;border-radius:4px;background:${c};border:${color===c?'2px solid #000':'1px solid rgba(0,0,0,.2)'};cursor:pointer" onclick="saveComboColor('${key}','${c}');renderComboColors()"></button>`).join('')}
       </div>
     </div>`;
   }).join('');
