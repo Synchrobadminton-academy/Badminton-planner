@@ -62,6 +62,7 @@ table.sched td.tslot{border:1px solid var(--bdr);border-right:none;padding:0;ver
 table.sched td.tslot:last-child{border-right:1px solid var(--bdr)}
 table.sched td.tslot.half{border-top-style:dashed}
 table.sched td.tslot.drag-hi{background:rgba(37,99,235,.13)}
+table.sched td.tslot.cell-target{background:rgba(37,99,235,.22)!important;outline:2px solid var(--blue);z-index:1}
 /* session block */
 .sblock{position:absolute;border-radius:6px;padding:4px 6px;overflow:hidden;font-size:11px;line-height:1.35;border:1px solid rgba(0,0,0,.18);box-shadow:0 2px 6px rgba(0,0,0,.15);z-index:10;top:0;cursor:grab;transition:box-shadow .1s}
 .sblock:hover{box-shadow:0 4px 12px rgba(0,0,0,.25);z-index:50}
@@ -501,6 +502,7 @@ let baseDate=new Date();
 const SLOT_H=40;
 let selectedInstId=null;
 function selectInst(id){
+  clearTarget();
   selectedInstId=id;
   document.querySelectorAll('.sblock').forEach(el=>el.classList.remove('selected'));
   const el=document.querySelector(`[data-inst-id="${id}"]`);
@@ -526,7 +528,12 @@ document.addEventListener('keydown',e=>{
     e.preventDefault();return;
   }
   if((e.metaKey||e.ctrlKey)&&e.key==='v'&&clip){
-    document.getElementById('clip-bar').style.display='flex';
+    if(targetCell){
+      pasteClipAt(targetCell.date,targetCell.day,targetCell.s);
+      clearTarget();
+    } else {
+      document.getElementById('clip-bar').style.display='flex';
+    }
     e.preventDefault();return;
   }
 });
@@ -623,6 +630,7 @@ function cycleW(id){
 
 // ── DRAG SELECT ───────────────────────────────────────────────
 let drag=null;
+let targetCell=null;
 function setupDrag(){
   const tbody=document.getElementById('sched-body');
   tbody.onmousedown=e=>{
@@ -642,32 +650,42 @@ function setupDrag(){
       document.onmousemove=null;document.onmouseup=null;
       clearHL();
       if(drag){
-        if(clip){
-          pasteClipAt(drag.date,drag.day,Math.min(drag.s,drag.e));
-        } else if(selectedInstId){
-          deselectAll();
-        } else {
-          openModal(drag.date,drag.day,Math.min(drag.s,drag.e),Math.max(drag.s,drag.e)+.5);
-        }
+        deselectAll();
+        setTarget(drag.date,drag.day,Math.min(drag.s,drag.e),Math.max(drag.s,drag.e));
         drag=null;
       }
     };
   };
-  // Touch
+  // Double-click to open Add Session
+  tbody.ondblclick=e=>{
+    const td=e.target.closest('td.tslot');if(!td)return;
+    clearTarget();
+    openModal(td.dataset.date,+td.dataset.day,+td.dataset.h,+td.dataset.h+.5);
+  };
+  // Touch: tap = highlight cell, long press = open Add Session
   tbody.ontouchstart=e=>{
     const td=e.target.closest('td.tslot');if(!td)return;
     drag={date:td.dataset.date,day:+td.dataset.day,s:+td.dataset.h,e:+td.dataset.h};
+    let longFired=false;
+    const longTimer=setTimeout(()=>{
+      longFired=true;
+      const d=drag;drag=null;
+      clearTarget();
+      openModal(d.date,d.day,d.s,d.s+.5);
+    },500);
     const onMove=ev=>{
+      clearTimeout(longTimer);
+      if(!drag)return;
       const t=document.elementFromPoint(ev.touches[0].clientX,ev.touches[0].clientY)?.closest('td.tslot');
       if(t&&t.dataset.date===drag.date){drag.e=+t.dataset.h;}
     };
     const onEnd=()=>{
+      clearTimeout(longTimer);
       document.removeEventListener('touchmove',onMove);
-      if(drag){
-        if(clip){pasteClipAt(drag.date,drag.day,Math.min(drag.s,drag.e));}
-        else{openModal(drag.date,drag.day,Math.min(drag.s,drag.e),Math.max(drag.s,drag.e)+.5);}
-        drag=null;
-      }
+      if(longFired||!drag)return;
+      deselectAll();
+      setTarget(drag.date,drag.day,Math.min(drag.s,drag.e),Math.max(drag.s,drag.e));
+      drag=null;
     };
     document.addEventListener('touchmove',onMove,{passive:true});
     document.addEventListener('touchend',onEnd,{once:true});
@@ -693,6 +711,14 @@ function highlight(){
   });
 }
 function clearHL(){document.querySelectorAll('td.tslot.drag-hi').forEach(x=>x.classList.remove('drag-hi'))}
+function clearTarget(){targetCell=null;document.querySelectorAll('td.tslot.cell-target').forEach(x=>x.classList.remove('cell-target'))}
+function setTarget(date,day,s,e){
+  clearTarget();
+  targetCell={date,day,s,e};
+  document.querySelectorAll(`td.tslot[data-date="${date}"]`).forEach(td=>{
+    const h=+td.dataset.h;if(h>=s&&h<=e)td.classList.add('cell-target');
+  });
+}
 
 // ── BLOCK DRAG TO MOVE ────────────────────────────────────────
 function makeBlockDraggable(div,instId){
