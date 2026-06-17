@@ -52,7 +52,7 @@ input[type=color]{padding:2px 4px;height:34px;cursor:pointer}
 .legend-wrap{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px;align-items:center}
 .lchip{display:inline-flex;align-items:center;font-size:11px;font-weight:700;padding:3px 10px;border-radius:99px;border:1px solid rgba(0,0,0,.2)}
 /* weekly grid */
-.sched-outer{overflow-x:auto;border:1px solid var(--bdr);border-radius:10px;background:var(--surf);user-select:none}
+.sched-outer{overflow:visible;border:1px solid var(--bdr);border-radius:10px;background:var(--surf);user-select:none}
 table.sched{border-collapse:collapse;min-width:900px;width:100%;font-size:11px}
 table.sched th{background:var(--surf2);padding:5px 3px;text-align:center;font-weight:700;color:var(--txm);border:1px solid var(--bdr);white-space:nowrap;min-width:180px}
 table.sched th.today-h{background:var(--bluebg);color:var(--blue)}
@@ -297,21 +297,7 @@ table.sched td.tslot.cell-target{background:rgba(37,99,235,.22)!important;outlin
   <div class="modal">
     <h2 id="sess-ttl">Add Session</h2>
     <div class="fg"><label>Coaches</label><div id="cchk-wrap" class="cchk-wrap"></div></div>
-    <div class="fg"><label>Block Color</label>
-      <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:4px">
-        <button type="button" class="color-btn" data-color="#ef4444" style="background:#ef4444" onclick="setModalColor('#ef4444')"></button>
-        <button type="button" class="color-btn" data-color="#f97316" style="background:#f97316" onclick="setModalColor('#f97316')"></button>
-        <button type="button" class="color-btn" data-color="#facc15" style="background:#facc15" onclick="setModalColor('#facc15')"></button>
-        <button type="button" class="color-btn" data-color="#22c55e" style="background:#22c55e" onclick="setModalColor('#22c55e')"></button>
-        <button type="button" class="color-btn" data-color="#06b6d4" style="background:#06b6d4" onclick="setModalColor('#06b6d4')"></button>
-        <button type="button" class="color-btn" data-color="#3b82f6" style="background:#3b82f6" onclick="setModalColor('#3b82f6')"></button>
-        <button type="button" class="color-btn" data-color="#8b5cf6" style="background:#8b5cf6" onclick="setModalColor('#8b5cf6')"></button>
-        <button type="button" class="color-btn" data-color="#f472b6" style="background:#f472b6" onclick="setModalColor('#f472b6')"></button>
-        <button type="button" class="color-btn" data-color="#ffffff" style="background:#fff;border-color:#d1d5db" onclick="setModalColor('#ffffff')"></button>
-        <button type="button" class="color-btn" data-color="" style="background:linear-gradient(135deg,#fff 44%,#ef4444 44%,#ef4444 56%,#fff 56%);border-color:#d1d5db" onclick="setModalColor('')" title="No color"></button>
-      </div>
-      <input type="color" id="m-color" value="#3b82f6" style="display:none">
-    </div>
+    <input type="color" id="m-color" value="#3b82f6" style="display:none">
     <div class="fg">
       <label>Venue</label>
       <input type="text" id="m-venue" list="vsugg" placeholder="e.g. Bukit Canberra SH">
@@ -391,9 +377,10 @@ const S={
     S.set('sessions',[]);S.set('instances',[]);S.set('combo-colors',{});
     localStorage.setItem('cmp_v3','1');
   }
-  // Migrate: seed class-types and standards if missing
+  // Migrate: seed missing keys
   if(!localStorage.getItem('class-types'))S.set('class-types',['ActiveSG','Synchro','Rise & Rally Adult','Private Group']);
   if(!localStorage.getItem('standards'))S.set('standards',['Basic','Advance','Mix','Adult','All']);
+  const cc=localStorage.getItem('combo-colors');if(!cc||cc==='[]')S.set('combo-colors',{});
 })();
 
 const getCoaches=()=>S.get('coaches');
@@ -405,6 +392,11 @@ function saveCoach(c){
   if(c.id){const i=l.findIndex(x=>x.id===c.id);if(i>=0)l[i]=c;}
   else{c={...c,id:S.nextId(l)};l.push(c);}
   S.set('coaches',l);return c;
+}
+function deleteCoach(id){
+  S.set('coaches',getCoaches().filter(c=>c.id!==id));
+  if(editCid===id){editCid=null;document.getElementById('coach-form').reset();}
+  renderCoaches();
 }
 function saveSession(s){
   const l=S.get('sessions');
@@ -613,6 +605,7 @@ function renderWeek(){
         <div class="sb-time">${fmt12(inst.start_time)} – ${fmt12(inst.end_time)}</div>
         ${inst.class_type||inst.standard?`<div class="sb-row">${esc([inst.class_type,inst.standard].filter(Boolean).join(', '))}</div>`:''}
         ${inst.court_no?`<div class="sb-row">Court: ${esc(inst.court_no)}</div>`:''}
+        ${cn?`<div class="sb-row" style="font-weight:700">${esc(cn)}</div>`:''}
         ${inst.notes?`<div class="sb-row" style="font-style:italic;opacity:.85">${esc(inst.notes)}</div>`:''}
         <div class="sb-resize" onmousedown="event.stopPropagation();startBlockResize(event,${inst.id})" ontouchstart="event.stopPropagation();startBlockResize(event,${inst.id})"></div>`;
       td.appendChild(div);
@@ -832,11 +825,12 @@ function renderMonth(){
   renderLegend('legend-m');
   const yr=calDate.getFullYear(),mo=calDate.getMonth();
   document.getElementById('month-lbl').textContent=`${MONTHS[mo]} ${yr}`;
-  const first=new Date(yr,mo,1).getDay();
+  const rawFirst=new Date(yr,mo,1).getDay();
+  const first=(rawFirst+6)%7; // shift so Mon=0, Sun=6
   const dim=new Date(yr,mo+1,0).getDate();
   const today=ds(new Date());
   const allI=getInsts();
-  document.getElementById('cal-dows').innerHTML=DAYS.map(d=>`<div class="cal-dow">${d}</div>`).join('');
+  document.getElementById('cal-dows').innerHTML=['Mon','Tue','Wed','Thu','Fri','Sat','Sun'].map(d=>`<div class="cal-dow">${d}</div>`).join('');
   const total=Math.ceil((first+dim)/7)*7;
   let html='';
   for(let i=0;i<total;i++){
@@ -1103,7 +1097,10 @@ function renderCoaches(){
         <td><span style="display:inline-block;width:18px;height:18px;border-radius:4px;background:${c.color||'#3b82f6'};border:1px solid rgba(0,0,0,.2)"></span></td>
         <td style="font-weight:700">${esc(c.name)}</td>
         <td><span class="badge ${c.active?'b-g':'b-gr'}" onclick="toggleActive(${c.id})">${c.active?'Active':'Inactive'}</span></td>
-        <td><button class="btn btn-o btn-sm" onclick="startEditCoach(${c.id})">Edit</button></td>
+        <td style="display:flex;gap:4px">
+          <button class="btn btn-o btn-sm" onclick="startEditCoach(${c.id})">Edit</button>
+          <button class="btn btn-o btn-sm btn-red" onclick="deleteCoach(${c.id})">✕</button>
+        </td>
       </tr>`;
     });
     html+='</tbody></table>';
@@ -1186,7 +1183,8 @@ function updateSessionDatalist(){
 }
 
 function getComboColors(){
-  return S.get('combo-colors')||{};
+  const v=S.get('combo-colors');
+  return(v&&!Array.isArray(v))?v:{};
 }
 function saveComboColor(comboKey,color){
   const cc=getComboColors();cc[comboKey]=color;S.set('combo-colors',cc);
@@ -1198,7 +1196,7 @@ function getBlockColor(inst){
   if(!inst.coach_ids||inst.coach_ids.length===0)return inst.color||'#3b82f6';
   const key=getComboKey(inst.coach_ids);
   const cc=getComboColors();
-  if(cc[key])return cc[key];
+  if(cc[key]!==undefined)return cc[key];
   return inst.color||'#3b82f6';
 }
 function renderComboColors(){
