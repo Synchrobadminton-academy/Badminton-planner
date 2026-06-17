@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>🏸 Coach Manpower Planner</title>
 <style>
 :root{
@@ -141,6 +141,62 @@ table.sched td.tslot.cell-target{background:rgba(37,99,235,.22)!important;outlin
 /* day modal sessions */
 .day-item{border-left:4px solid;border-radius:6px;padding:9px 12px;margin-bottom:8px;background:var(--surf2)}
 @media(max-width:640px){.two-col{grid-template-columns:1fr}.form-row{grid-template-columns:1fr}}
+
+/* ── MOBILE / TABLET ─────────────────────────────────────────── */
+/* Restore internal scroll on tablet/phone so sticky time col works */
+@media(max-width:1100px){
+  .sched-outer{overflow-x:auto}
+}
+/* Nav: compress on small phones */
+@media(max-width:480px){
+  nav{padding:0 8px;gap:2px}
+  .brand{font-size:11px;margin-right:2px}
+  .nav-link{padding:5px 7px;font-size:11px}
+}
+/* Main layout: less outer padding on phones */
+@media(max-width:600px){
+  main{padding:8px}
+  .card-body{padding:12px}
+}
+/* Touch targets: bigger interactive elements on touch devices */
+@media(pointer:coarse){
+  .btn{min-height:38px}
+  .btn-sm{min-height:34px;padding:6px 11px;font-size:12px}
+  .nav-link{min-height:38px}
+  .sub-tog button{padding:8px 16px}
+  .color-btn{height:30px}
+  .card-hdr-btn{padding:4px 0}
+  .dtable td,.dtable th{padding:11px 10px}
+}
+/* Monthly calendar: compressed cells on phones */
+@media(max-width:640px){
+  .cal-cell{min-height:72px;padding:2px 3px}
+  .cal-num{width:18px;height:18px;font-size:10px;margin-bottom:2px}
+  .cal-chip{padding:1px 3px;font-size:8px;margin-bottom:1px;border-radius:2px}
+  .cal-chip-venue{font-size:8px}
+  .cal-chip-sub{display:none}
+}
+@media(min-width:641px)and(max-width:900px){
+  .cal-cell{min-height:140px;padding:4px}
+  .cal-chip-sub{font-size:8.5px}
+}
+/* Clipboard bar: never overflow viewport */
+#clip-bar{max-width:calc(100vw - 28px);flex-wrap:wrap;justify-content:center}
+/* Modal: bottom-sheet on small phones */
+@media(max-width:500px){
+  .overlay{align-items:flex-end;padding:0}
+  .modal{border-radius:20px 20px 0 0;max-height:96vh;padding:16px 14px}
+}
+/* Tracker: smaller grid on phones */
+@media(max-width:640px){
+  .tgrid{grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:8px}
+  .tc-hrs{font-size:22px}
+  .tc-name{font-size:12px}
+}
+/* Coach table: scrollable container on very small screens */
+@media(max-width:500px){
+  .dtable-wrap{overflow-x:auto}
+}
 </style>
 </head>
 <body>
@@ -274,7 +330,7 @@ table.sched td.tslot.cell-target{background:rgba(37,99,235,.22)!important;outlin
         </div>
       </div>
     </div>
-    <div class="card"><div id="coaches-list"></div></div>
+    <div class="card"><div id="coaches-list" class="dtable-wrap"></div></div>
   </div>
 </div>
 
@@ -1197,7 +1253,7 @@ function getBlockColor(inst){
   const key=getComboKey(inst.coach_ids);
   const cc=getComboColors();
   if(cc[key]!==undefined)return cc[key];
-  return inst.color||'#3b82f6';
+  return '';
 }
 function renderComboColors(){
   const coaches=getCoaches().filter(c=>c.active);
@@ -1221,7 +1277,7 @@ function renderComboColors(){
     const ids=combo.map(c=>c.id);
     const key=getComboKey(ids);
     const cc=getComboColors();
-    const color=cc[key]!==undefined?cc[key]:'#3b82f6';
+    const color=cc[key]!==undefined?cc[key]:'';
     const names=combo.map(c=>c.name).join(' + ');
     return`<div style="display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:1px solid var(--bdr)">
       <div style="flex:1;font-size:12px;font-weight:600">${esc(names)}</div>
