@@ -256,6 +256,15 @@ table.sched td.tslot.cell-target{background:rgba(37,99,235,.22)!important;outlin
 .br-table tr:last-child td{border-bottom:none}
 .br-badge-sh{background:#eff6ff;color:#1d4ed8;border:1px solid #bfdbfe;padding:2px 7px;border-radius:99px;font-size:10px;font-weight:700}
 .br-badge-sc{background:#f0fdf4;color:#15803d;border:1px solid #bbf7d0;padding:2px 7px;border-radius:99px;font-size:10px;font-weight:700}
+/* Receipts */
+.rcpt-row{display:flex;align-items:flex-start;gap:12px;padding:12px 0;border-bottom:1px solid var(--bdr)}
+.rcpt-row:last-child{border-bottom:none}
+.rcpt-court-badge{font-size:18px;font-weight:900;color:var(--blue);min-width:46px;text-align:center;flex-shrink:0;padding-top:2px}
+.rcpt-info{flex:1;min-width:0}
+.rcpt-venue{font-weight:700;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.rcpt-meta{font-size:11px;color:var(--txm);margin-top:3px;line-height:1.6}
+.rcpt-incentive{font-size:15px;font-weight:900;color:var(--green);text-align:right;flex-shrink:0;padding-top:2px}
+.rcpt-day-total{text-align:right;padding:8px 0 2px;font-size:12px;font-weight:800;color:var(--txm);border-top:1px solid var(--bdr);margin-top:4px}
 </style>
 </head>
 <body>
@@ -292,6 +301,7 @@ table.sched td.tslot.cell-target{background:rgba(37,99,235,.22)!important;outlin
       <div class="tab-item" data-view="coaches" onclick="showView('coaches')"><span class="tab-icon">👥</span>Coaches</div>
       <div class="tab-item" data-view="admin-class" onclick="showView('admin-class')"><span class="tab-icon">📋</span>Class</div>
       <div class="tab-item" data-view="bookings" onclick="showView('bookings')"><span class="tab-icon">🗓</span>Booking Records</div>
+      <div class="tab-item" data-view="receipts" onclick="showView('receipts')"><span class="tab-icon">🧾</span>Receipts</div>
     </div>
   </div>
 </aside>
@@ -479,6 +489,17 @@ table.sched td.tslot.cell-target{background:rgba(37,99,235,.22)!important;outlin
         </table>
       </div>
     </div>
+  </div>
+</div>
+
+<!-- RECEIPTS -->
+<div class="view" id="view-receipts">
+  <div class="main-inner">
+    <div class="page-hdr">
+      <h1 class="page-title">Receipts</h1>
+      <button class="btn btn-o btn-sm" onclick="loadBookingsFromFirebase()">↻ Refresh</button>
+    </div>
+    <div id="receipts-list"><div class="empty" style="padding:40px 0">Loading…</div></div>
   </div>
 </div>
 
@@ -700,6 +721,7 @@ function showView(v){
   if(v==='admin-class')renderAdminClass();
   if(v==='bookings')loadBookingsFromFirebase();
   if(v==='courts'){renderCourts();loadBookingsFromFirebase();}
+  if(v==='receipts'){renderReceipts();loadBookingsFromFirebase();}
 }
 
 // ── SCHED TOGGLE ──────────────────────────────────────────────
@@ -1578,6 +1600,7 @@ async function loadBookingsFromFirebase(){
     brBookings=res.ok?(await res.json()||{}):{};
     if(currentView==='bookings')renderBookingRecords();
     if(currentView==='courts')renderCourts();
+    if(currentView==='receipts')renderReceipts();
   }catch(e){console.error('Firebase error:',e);}
 }
 
@@ -1681,6 +1704,7 @@ async function deleteBooking(key){
   delete brBookings[key];
   if(currentView==='bookings')renderBookingRecords();
   if(currentView==='courts')renderCourts();
+  if(currentView==='receipts')renderReceipts();
 }
 
 // ── COURTS ────────────────────────────────────────────────────
@@ -1728,6 +1752,55 @@ function showCourtDay(ds,updateGrid=true){
       </div>`).join('')}
     </div>
   </div>`;
+}
+
+// ── RECEIPTS ──────────────────────────────────────────────────
+function renderReceipts(){
+  const list=document.getElementById('receipts-list');if(!list)return;
+  const all=Object.entries(brBookings).filter(([,b])=>b).map(([k,b])=>({...b,_key:k}));
+  if(!all.length){
+    list.innerHTML='<div class="empty" style="padding:40px 0">No receipts yet.</div>';
+    return;
+  }
+  // Group by payment_date descending
+  const byDate={};
+  all.forEach(b=>{
+    const pd=getPaymentDate(b)||'Unknown';
+    if(!byDate[pd])byDate[pd]=[];
+    byDate[pd].push(b);
+  });
+  const dates=Object.keys(byDate).sort((a,b)=>b.localeCompare(a));
+  let grandTotal=0;
+  const sections=dates.map(dt=>{
+    const items=byDate[dt].sort((a,b)=>(a.time||'').localeCompare(b.time||''));
+    const dayTotal=items.reduce((s,b)=>s+(b.incentive||0),0);
+    grandTotal+=dayTotal;
+    let dateLabel=dt;
+    if(dt!=='Unknown'){
+      const d=new Date(dt+'T00:00:00');
+      dateLabel=`${DAYS[d.getDay()]}, ${d.getDate()} ${MONTHS[d.getMonth()]} ${d.getFullYear()}`;
+    }
+    return`<div class="card" style="margin-bottom:14px">
+      <div class="card-hdr">${dateLabel}</div>
+      <div class="card-body" style="padding:0 16px">
+        ${items.map(b=>`<div class="rcpt-row">
+          <div class="rcpt-court-badge">Ct${esc(b.court||'?')}</div>
+          <div class="rcpt-info">
+            <div class="rcpt-venue">${esc(b.venue||'—')}</div>
+            <div class="rcpt-meta">
+              ${b.time||'—'} &nbsp;·&nbsp; ${esc(b.booker||'—')} &nbsp;·&nbsp;
+              <span class="${b.venue_type==='school'?'br-badge-sc':'br-badge-sh'}">${b.venue_type==='school'?'School':'Sports Hall'}</span>
+              &nbsp;·&nbsp; ${b.slots||1} hr${(b.slots||1)>1?'s':''}
+              ${b.court_date&&b.court_date!==dt?`<br>Court date: ${b.court_date}`:''}
+            </div>
+          </div>
+          <div class="rcpt-incentive">$${(b.incentive||0).toFixed(2)}</div>
+        </div>`).join('')}
+        <div class="rcpt-day-total">Day total: $${dayTotal.toFixed(2)}</div>
+      </div>
+    </div>`;
+  });
+  list.innerHTML=`<div style="text-align:right;font-size:12px;color:var(--txm);margin-bottom:12px;font-weight:700">All time total: <span style="color:var(--green);font-size:15px">$${grandTotal.toFixed(2)}</span></div>`+sections.join('');
 }
 
 // Auto-refresh at 12:30pm and 11:59pm
