@@ -106,6 +106,7 @@ table.sched td.tslot.cell-target{background:rgba(37,99,235,.22)!important;outlin
 .cal-chip-sub{opacity:.88;font-size:9.5px}
 .cal-cell.drop-target{background:rgba(37,99,235,.12);outline:2px dashed var(--blue)}
 .cal-cell.cal-selected{background:rgba(37,99,235,.18)!important;outline:2px solid var(--blue)}
+.cal-chip.cal-chip-selected{outline:2px solid #fff;box-shadow:0 0 0 3px var(--blue)!important}
 .card-hdr-btn{display:flex;justify-content:space-between;align-items:center;cursor:pointer}
 .card-hdr-btn:hover{background:var(--surf2)}
 .cal-wrap{border:1px solid var(--bdr);border-radius:10px;overflow:hidden;background:var(--surf)}
@@ -831,19 +832,19 @@ document.addEventListener('keydown',e=>{
     e.preventDefault();
     delInst(selectedInstId);selectedInstId=null;renderSched();return;
   }
-  if((e.metaKey||e.ctrlKey)&&e.key==='c'&&selectedInstId){
-    const inst=getInsts().find(x=>x.id===selectedInstId);
-    if(inst){
-      clip={coach_ids:inst.coach_ids,color:inst.color,venue_text:inst.venue_text,
+  if((e.metaKey||e.ctrlKey)&&e.key==='c'){
+    const copyId=selectedInstId||_calSelectedInstId;
+    if(copyId){
+      const inst=getInsts().find(x=>x.id===copyId);
+      if(inst)clip={coach_ids:inst.coach_ids,color:inst.color,venue_text:inst.venue_text,
             class_type:inst.class_type,standard:inst.standard,court_no:inst.court_no,
             notes:inst.notes,start_time:inst.start_time,end_time:inst.end_time};
-      document.getElementById('clip-bar').style.display='flex';
+      e.preventDefault();return;
     }
-    e.preventDefault();return;
   }
   if((e.metaKey||e.ctrlKey)&&e.key==='v'&&clip){
-    if(targetCell){pasteClipAt(targetCell.date,targetCell.day,targetCell.s);clearTarget();}
-    else{document.getElementById('clip-bar').style.display='flex';}
+    if(targetCell){pasteClipAt(targetCell.date,targetCell.day,targetCell.s);clearTarget();e.preventDefault();return;}
+    if(_calTargetCell){pasteCalClip(_calTargetCell.dataset.date);clearCalTarget();e.preventDefault();return;}
     e.preventDefault();return;
   }
 });
@@ -1074,7 +1075,7 @@ let calDate=new Date();
 function shiftMonth(n){calDate=new Date(calDate.getFullYear(),calDate.getMonth()+n,1);renderMonth()}
 
 function renderMonth(){
-  _calTargetCell=null;
+  _calTargetCell=null;_calSelectedInstId=null;
   renderLegend('legend-m');
   const yr=calDate.getFullYear(),mo=calDate.getMonth();
   document.getElementById('month-lbl').textContent=`${MONTHS[mo]} ${yr}`;
@@ -1112,13 +1113,31 @@ function renderMonth(){
 let _calChipClickId=null,_calChipClickTime=0;
 let _calCellTap=null,_calCellTapTime=0;
 let _calTargetCell=null,_calLongTimer=null,_calMdownCell=null;
+let _calSelectedInstId=null;
 
+function selectCalChip(id){
+  clearCalTarget();
+  document.querySelectorAll('.cal-chip.cal-chip-selected').forEach(el=>el.classList.remove('cal-chip-selected'));
+  _calSelectedInstId=id;
+  const el=document.querySelector(`.cal-chip[data-inst-id="${id}"]`);
+  if(el)el.classList.add('cal-chip-selected');
+}
+function deselectCalChip(){
+  _calSelectedInstId=null;
+  document.querySelectorAll('.cal-chip.cal-chip-selected').forEach(el=>el.classList.remove('cal-chip-selected'));
+}
 function setCalTarget(cell){
+  deselectCalChip();
   if(_calTargetCell)_calTargetCell.classList.remove('cal-selected');
   _calTargetCell=cell;
   if(cell)cell.classList.add('cal-selected');
 }
 function clearCalTarget(){setCalTarget(null);}
+function pasteCalClip(date){
+  if(!clip)return;
+  const sess=saveSession({...clip,recurring:0,day_of_week:null,date});
+  addOneOff(sess.id,clip,date);renderSched();
+}
 
 function setupCalChipDrag(grid){
   grid.addEventListener('mousedown',startCalDrag);
@@ -1186,10 +1205,12 @@ function startCalDrag(e){
     document.removeEventListener('touchmove',tm);document.removeEventListener('touchend',tu);
     document.body.removeChild(ghost);chip.style.opacity='';if(lastCell)lastCell.classList.remove('drop-target');
     if(!hasMoved){
-      const now=Date.now();
-      if(_calChipClickId===instId&&now-_calChipClickTime<350){_calChipClickId=null;_calChipClickTime=0;openEdit(instId);return;}
-      _calChipClickId=instId;_calChipClickTime=now;
-      copyInst(instId);return;
+      if(isTouch){
+        const now=Date.now();
+        if(_calChipClickId===instId&&now-_calChipClickTime<400){_calChipClickId=null;_calChipClickTime=0;openEdit(instId);return;}
+        _calChipClickId=instId;_calChipClickTime=now;
+      }
+      selectCalChip(instId);return;
     }
     if(targetDate&&targetDate!==inst.date)updateInst(instId,{...inst,date:targetDate});
     renderMonth();
