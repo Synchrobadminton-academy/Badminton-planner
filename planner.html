@@ -179,16 +179,6 @@ table.sched td.tslot.cell-target{background:rgba(37,99,235,.22)!important;outlin
 .att-add-input{flex:1;border:1px solid var(--bdr);border-radius:6px;padding:7px 10px;font-size:13px;background:var(--surf);color:var(--tx);outline:none;font-family:inherit}
 .att-add-input:focus{border-color:var(--blue);box-shadow:0 0 0 3px rgba(37,99,235,.12)}
 
-/* Admin Class view */
-.month-section{margin-bottom:10px}
-.month-hdr{display:flex;align-items:center;justify-content:space-between;padding:10px 16px;background:var(--surf2);border-radius:8px;cursor:pointer;font-weight:800;font-size:13px;user-select:none}
-.month-hdr:hover{background:var(--hov)}
-.month-body{margin-top:6px}
-.class-record{border:1px solid var(--bdr);border-radius:8px;margin-bottom:6px;overflow:hidden;background:var(--surf)}
-.class-rec-hdr{display:flex;align-items:center;gap:10px;padding:10px 14px;cursor:pointer}
-.class-rec-hdr:hover{background:var(--hov)}
-.class-rec-body{padding:12px 16px;border-top:1px solid var(--bdr);background:var(--surf2);display:none}
-.class-rec-body.open{display:block}
 .att-chips{display:flex;flex-wrap:wrap;gap:5px;margin-top:8px}
 .att-chip{font-size:11px;padding:3px 9px;border-radius:99px;background:var(--surf);border:1px solid var(--bdr);color:var(--txm)}
 .att-chip.present{background:var(--bluebg);border-color:var(--blue);color:var(--blue)}
@@ -253,13 +243,6 @@ table.sched td.tslot.cell-target{background:rgba(37,99,235,.22)!important;outlin
 .br-table tr:last-child td{border-bottom:none}
 .br-badge-sh{background:#eff6ff;color:#1d4ed8;border:1px solid #bfdbfe;padding:2px 7px;border-radius:99px;font-size:10px;font-weight:700}
 .br-badge-sc{background:#f0fdf4;color:#15803d;border:1px solid #bbf7d0;padding:2px 7px;border-radius:99px;font-size:10px;font-weight:700}
-/* Class Records list */
-.cr-row{display:flex;align-items:center;gap:10px;padding:10px 14px;border-bottom:1px solid var(--bdr);cursor:pointer;transition:background .1s}
-.cr-row:hover{background:var(--hov)}
-.cr-date{font-size:13px;font-weight:900;min-width:42px;padding-left:7px;color:var(--tx)}
-.cr-info{flex:1;min-width:0}
-.cr-title{font-size:12px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.cr-sub{font-size:11px;color:var(--txm);margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 /* Receipts */
 .rcpt-row{display:flex;align-items:flex-start;gap:12px;padding:12px 0;border-bottom:1px solid var(--bdr)}
 .rcpt-row:last-child{border-bottom:none}
@@ -303,8 +286,7 @@ table.sched td.tslot.cell-target{background:rgba(37,99,235,.22)!important;outlin
     <div class="folder-items" id="fitems-admin">
       <div class="tab-item" data-view="tracker" onclick="showView('tracker')"><span class="tab-icon">📊</span>Tracker</div>
       <div class="tab-item" data-view="coaches" onclick="showView('coaches')"><span class="tab-icon">⚙️</span>Calendar Settings</div>
-      <div class="tab-item" data-view="admin-class" onclick="showView('admin-class')"><span class="tab-icon">📋</span>Class</div>
-      <div class="tab-item" data-view="bookings" onclick="showView('bookings')"><span class="tab-icon">🗓</span>Booking Records</div>
+<div class="tab-item" data-view="bookings" onclick="showView('bookings')"><span class="tab-icon">🗓</span>Booking Records</div>
       <div class="tab-item" data-view="receipts" onclick="showView('receipts')"><span class="tab-icon">🧾</span>Receipts</div>
     </div>
   </div>
@@ -463,9 +445,6 @@ table.sched td.tslot.cell-target{background:rgba(37,99,235,.22)!important;outlin
     <div class="card"><div id="coaches-list" class="dtable-wrap"></div></div>
   </div>
 </div>
-
-<!-- ADMIN CLASS -->
-<div class="view" id="view-admin-class"></div>
 
 <!-- BOOKINGS (blank) -->
 <div class="view" id="view-bookings">
@@ -728,8 +707,7 @@ function showView(v){
   if(v==='coaches')renderCoaches();
   if(v==='tracker')renderTracker();
   if(v==='attendance'){attDetailId=null;renderAttendance();}
-  if(v==='admin-class')renderAdminClass();
-  if(v==='bookings')loadBookingsFromFirebase();
+if(v==='bookings')loadBookingsFromFirebase();
   if(v==='courts'){renderCourts();loadBookingsFromFirebase();}
   if(v==='receipts'){renderReceipts();loadBookingsFromFirebase();}
 }
@@ -1436,50 +1414,30 @@ function toggleCard(bodyId,chevId){
 // ── ATTENDANCE VIEW ───────────────────────────────────────────
 let attDetailId=null;
 let attShowAll=false;
-let attFilterMonth=new Date().toISOString().slice(0,7);
 
 function renderAttendance(){
   const el=document.getElementById('view-attendance');
   if(attDetailId!==null){renderAttDetail(attDetailId,el);return;}
 
+  const todayStr=ds(new Date());
   let insts=getInsts().filter(i=>i.status!=='cancelled');
 
   if(attShowAll){
-    // show everything, newest first
     insts=insts.sort((a,b)=>b.date.localeCompare(a.date)||b.start_time.localeCompare(a.start_time));
   } else {
-    // filter to selected month
-    insts=insts.filter(i=>i.date.slice(0,7)===attFilterMonth)
-      .sort((a,b)=>a.date.localeCompare(b.date)||a.start_time.localeCompare(b.start_time));
+    insts=insts.filter(i=>i.date===todayStr)
+      .sort((a,b)=>a.start_time.localeCompare(b.start_time));
   }
 
-  // Build month options from all instances
-  const allMonths=[...new Set(getInsts().map(i=>i.date.slice(0,7)))].sort().reverse();
-  const now=new Date();
-  const curYM=`${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`;
-  if(!allMonths.includes(curYM))allMonths.unshift(curYM);
-  const monthOpts=allMonths.map(ym=>{
-    const[y,m]=ym.split('-').map(Number);
-    const lbl=new Date(y,m-1,1).toLocaleString('default',{month:'short',year:'numeric'});
-    return`<option value="${ym}"${ym===attFilterMonth?' selected':''}>${lbl}</option>`;
-  }).join('');
-
-  let html=`<div class="page-hdr"><h1 class="page-title">Attendance</h1></div>
-  <div class="card" style="margin-bottom:12px">
-    <div class="card-body" style="display:flex;gap:14px;align-items:center;flex-wrap:wrap;padding:10px 14px">
-      <label style="display:flex;align-items:center;gap:6px;font-size:12px;font-weight:700;cursor:pointer">
-        <input type="checkbox" id="att-show-all"${attShowAll?' checked':''} onchange="attShowAll=this.checked;renderAttendance()">
-        Show all
-      </label>
-      <select id="att-month-sel" ${attShowAll?'disabled':''} onchange="attFilterMonth=this.value;renderAttendance()"
-        style="padding:5px 10px;border-radius:8px;border:1px solid var(--bdr);background:var(--surf);color:var(--tx);font-size:12px;font-weight:700;cursor:pointer;opacity:${attShowAll?'.4':'1'}">
-        ${monthOpts}
-      </select>
-    </div>
+  let html=`<div class="page-hdr"><h1 class="page-title">Attendance</h1>
+    <label style="display:flex;align-items:center;gap:6px;font-size:12px;font-weight:700;cursor:pointer">
+      <input type="checkbox" id="att-show-all"${attShowAll?' checked':''} onchange="attShowAll=this.checked;renderAttendance()">
+      Show all
+    </label>
   </div>`;
 
   if(!insts.length){
-    el.innerHTML=html+`<div class="card"><div class="empty">No classes for this period.</div></div>`;return;
+    el.innerHTML=html+`<div class="card"><div class="empty">${attShowAll?'No classes found.':'No classes scheduled for today.'}</div></div>`;return;
   }
   html+=`<div class="card" style="overflow:hidden;padding:0">`;
   insts.forEach(inst=>{
@@ -1569,66 +1527,6 @@ function addAtt(instId){
   setTimeout(()=>{const ni=document.getElementById('att-inp-'+instId);if(ni)ni.focus();},80);
 }
 
-// ── ADMIN CLASS VIEW ──────────────────────────────────────────
-function renderAdminClass(){
-  const el=document.getElementById('view-admin-class');
-  const completed=getInsts()
-    .filter(i=>i.status==='completed')
-    .sort((a,b)=>b.date.localeCompare(a.date)||b.start_time.localeCompare(a.start_time));
-
-  let html=`<div class="page-hdr"><h1 class="page-title">Class Records</h1></div>`;
-  if(!completed.length){el.innerHTML=html+`<div class="card"><div class="empty">No completed classes yet.</div></div>`;return;}
-
-  const byMonth={};
-  completed.forEach(inst=>{
-    const ym=inst.date.slice(0,7);
-    if(!byMonth[ym])byMonth[ym]=[];
-    byMonth[ym].push(inst);
-  });
-
-  Object.keys(byMonth).sort((a,b)=>b.localeCompare(a)).forEach(ym=>{
-    const insts=byMonth[ym];
-    const[y,m]=ym.split('-').map(Number);
-    const label=new Date(y,m-1,1).toLocaleString('default',{month:'long',year:'numeric'});
-    html+=`<div class="card" style="margin-bottom:14px;overflow:hidden">
-      <div class="card-hdr">${label} <span style="font-weight:500;font-size:11px;color:var(--txm)">${insts.length} class${insts.length!==1?'es':''}</span></div>
-      <div class="card-body" style="padding:0">`;
-    insts.forEach(inst=>{
-      const rawColor=getBlockColor(inst);const color=rawColor&&rawColor!==''?rawColor:'#3b82f6';
-      const cn=coachNames(inst.coach_ids);
-      const att=getAttendance(inst.id);
-      const d=new Date(inst.date+'T00:00');
-      const dateLabel=`${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}`;
-      html+=`<div class="cr-row" onclick="toggleClassRecord('cr-${inst.id}','cra-${inst.id}')">
-        <div class="cr-date" style="border-left:3px solid ${esc(color)}">${dateLabel}</div>
-        <div class="cr-info">
-          <div class="cr-title">${esc(inst.venue_text||'(No venue)')}${inst.court_no?' · Ct '+esc(inst.court_no):''}</div>
-          <div class="cr-sub">${fmt12(inst.start_time)}–${fmt12(inst.end_time)}${cn?' · '+esc(cn):''}${inst.class_type?' · '+esc(inst.class_type):''}</div>
-        </div>
-        <span class="att-badge${att.length?' has-att':''}" style="flex-shrink:0">${att.length||'—'}</span>
-        <span id="cra-${inst.id}" style="color:var(--txf);font-size:12px;flex-shrink:0">▶</span>
-      </div>
-      <div class="class-rec-body" id="cr-${inst.id}">
-        ${att.length?`<div class="att-chips" style="padding:8px 14px 10px">${att.map(a=>`<span class="att-chip present">${esc(a.name)}</span>`).join('')}</div>`
-        :'<div style="font-size:12px;color:var(--txf);padding:8px 14px 10px">No attendance recorded.</div>'}
-      </div>`;
-    });
-    html+=`</div></div>`;
-  });
-  el.innerHTML=html;
-}
-
-function toggleMonthSection(bodyId,arrowId){
-  const body=document.getElementById(bodyId);const arrow=document.getElementById(arrowId);
-  const isOpen=body.style.display!=='none'&&body.style.display!=='';
-  body.style.display=isOpen?'none':'';
-  if(arrow)arrow.textContent=isOpen?'▶':'▼';
-}
-function toggleClassRecord(bodyId,arrowId){
-  const body=document.getElementById(bodyId);const arrow=document.getElementById(arrowId);
-  body.classList.toggle('open');
-  if(arrow)arrow.textContent=body.classList.contains('open')?'▼':'▶';
-}
 
 // ── BOOKING RECORDS & COURTS ──────────────────────────────────
 const FIREBASE_URL='https://synchroadmin-133f3-default-rtdb.asia-southeast1.firebasedatabase.app';
