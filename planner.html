@@ -105,6 +105,7 @@ table.sched td.tslot.cell-target{background:rgba(37,99,235,.22)!important;outlin
 .cal-chip-venue{font-weight:800}
 .cal-chip-sub{opacity:.88;font-size:9.5px}
 .cal-cell.drop-target{background:rgba(37,99,235,.12);outline:2px dashed var(--blue)}
+.cal-cell.cal-selected{background:rgba(37,99,235,.18)!important;outline:2px solid var(--blue)}
 .card-hdr-btn{display:flex;justify-content:space-between;align-items:center;cursor:pointer}
 .card-hdr-btn:hover{background:var(--surf2)}
 .cal-wrap{border:1px solid var(--bdr);border-radius:10px;overflow:hidden;background:var(--surf)}
@@ -1073,6 +1074,7 @@ let calDate=new Date();
 function shiftMonth(n){calDate=new Date(calDate.getFullYear(),calDate.getMonth()+n,1);renderMonth()}
 
 function renderMonth(){
+  _calTargetCell=null;
   renderLegend('legend-m');
   const yr=calDate.getFullYear(),mo=calDate.getMonth();
   document.getElementById('month-lbl').textContent=`${MONTHS[mo]} ${yr}`;
@@ -1109,25 +1111,55 @@ function renderMonth(){
 
 let _calChipClickId=null,_calChipClickTime=0;
 let _calCellTap=null,_calCellTapTime=0;
+let _calTargetCell=null,_calLongTimer=null,_calMdownCell=null;
+
+function setCalTarget(cell){
+  if(_calTargetCell)_calTargetCell.classList.remove('cal-selected');
+  _calTargetCell=cell;
+  if(cell)cell.classList.add('cal-selected');
+}
+function clearCalTarget(){setCalTarget(null);}
 
 function setupCalChipDrag(grid){
   grid.addEventListener('mousedown',startCalDrag);
   grid.addEventListener('touchstart',startCalDrag,{passive:false});
-  // Double-click on empty cell or chip (desktop)
+  // Mouse: click on empty cell → select it
+  grid.addEventListener('mousedown',e=>{
+    if(e.target.closest('.cal-chip')||e.target.closest('.cal-num'))return;
+    _calMdownCell=e.target.closest('.cal-cell:not(.other)')||null;
+  });
+  grid.addEventListener('mouseup',e=>{
+    if(e.target.closest('.cal-chip')||e.target.closest('.cal-num'))return;
+    const cell=e.target.closest('.cal-cell:not(.other)');
+    if(cell&&cell===_calMdownCell)setCalTarget(cell);
+    _calMdownCell=null;
+  });
+  // Desktop dblclick on empty cell or chip → open modal/edit
   grid.addEventListener('dblclick',e=>{
     if(e.target.closest('.cal-num'))return;
     const chip=e.target.closest('.cal-chip[data-inst-id]');
     if(chip){openEdit(+chip.dataset.instId);return;}
     const cell=e.target.closest('.cal-cell:not(.other)');
-    if(cell&&cell.dataset.date)openModal(cell.dataset.date,+cell.dataset.dow,8,9);
+    if(cell&&cell.dataset.date){clearCalTarget();openModal(cell.dataset.date,+cell.dataset.dow,8,9);}
   });
-  // Double-tap on empty cell (touch/mobile)
+  // Touch: tap → select cell; long-hold (600ms) or double-tap → open modal
+  grid.addEventListener('touchstart',e=>{
+    if(e.target.closest('.cal-chip')||e.target.closest('.cal-num'))return;
+    const cell=e.target.closest('.cal-cell:not(.other)');if(!cell)return;
+    _calLongTimer=setTimeout(()=>{
+      _calLongTimer=null;clearCalTarget();openModal(cell.dataset.date,+cell.dataset.dow,8,9);
+    },600);
+  },{passive:true});
   grid.addEventListener('touchend',e=>{
+    if(_calLongTimer){clearTimeout(_calLongTimer);_calLongTimer=null;}
     if(e.target.closest('.cal-chip')||e.target.closest('.cal-num'))return;
     const cell=e.target.closest('.cal-cell:not(.other)');if(!cell)return;
     const now=Date.now();
-    if(_calCellTap===cell&&now-_calCellTapTime<400){_calCellTap=null;openModal(cell.dataset.date,+cell.dataset.dow,8,9);}
-    else{_calCellTap=cell;_calCellTapTime=now;}
+    if(_calCellTap===cell&&now-_calCellTapTime<400){
+      _calCellTap=null;clearCalTarget();openModal(cell.dataset.date,+cell.dataset.dow,8,9);
+    } else {
+      _calCellTap=cell;_calCellTapTime=now;setCalTarget(cell);
+    }
   },{passive:true});
 }
 function startCalDrag(e){
