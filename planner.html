@@ -113,6 +113,7 @@ table.sched td.tslot.cell-target{background:rgba(37,99,235,.22)!important;outlin
 .cal-grid{display:grid;grid-template-columns:repeat(7,1fr)}
 .cal-cell{min-height:280px;border-right:1px solid var(--bdr);border-bottom:1px solid var(--bdr);padding:6px;transition:background .1s;position:relative}
 .cal-cell:hover{background:var(--hov)}
+.cal-cell:not(.other){cursor:pointer}
 .cal-cell.other{opacity:.28;cursor:default}
 .cal-cell.today .cal-num{background:var(--blue);color:#fff;border-radius:50%}
 .cal-num{font-size:11px;font-weight:800;width:22px;height:22px;display:flex;align-items:center;justify-content:center;margin-bottom:3px}
@@ -1040,8 +1041,8 @@ function renderMonth(){
     const dayN=i-first+1;const inMo=dayN>=1&&dayN<=dim;
     const d=inMo?new Date(yr,mo,dayN):null;const dt=d?ds(d):'';const isTdy=dt===today;
     const di=inMo?allI.filter(x=>x.date===dt).sort((a,b)=>a.start_time.localeCompare(b.start_time)):[];
-    html+=`<div class="cal-cell${!inMo?' other':''}${isTdy?' today':''}" data-date="${dt}">
-      <div class="cal-num" onclick="${inMo?`openDay('${dt}',${d?.getDay()||0})`:''}">${inMo?dayN:''}</div>
+    html+=`<div class="cal-cell${!inMo?' other':''}${isTdy?' today':''}" data-date="${dt}"${inMo?` onclick="calCellClick(event,'${dt}',${d.getDay()})"`:''}>
+      <div class="cal-num" onclick="${inMo?`event.stopPropagation();openDay('${dt}',${d.getDay()})`:''}">${inMo?dayN:''}</div>
       ${di.map(inst=>{
         const color=getBlockColor(inst);const tc=txColor(color);const cn=coachNames(inst.coach_ids);
         const noColor2=!color||color==='';const chipBg=noColor2?'rgba(0,0,0,0.05)':color;
@@ -1059,6 +1060,11 @@ function renderMonth(){
   const grid=document.getElementById('cal-grid');grid.innerHTML=html;setupCalChipDrag(grid);
 }
 
+function calCellClick(e,dt,dow){
+  if(e.target.closest('.cal-chip')||e.target.closest('.cal-num'))return;
+  openModal(dt,dow,8,9);
+}
+
 function setupCalChipDrag(grid){
   grid.addEventListener('mousedown',startCalDrag);
   grid.addEventListener('touchstart',startCalDrag,{passive:false});
@@ -1073,8 +1079,10 @@ function startCalDrag(e){
   const ghost=chip.cloneNode(true);
   ghost.style.cssText=`position:fixed;left:${rect.left}px;top:${rect.top}px;width:${rect.width}px;opacity:.75;pointer-events:none;z-index:1000;border-radius:4px;`;
   document.body.appendChild(ghost);chip.style.opacity='0.3';
-  let lastCell=null,targetDate=inst.date;
+  let lastCell=null,targetDate=inst.date,hasMoved=false;
   function onMove(cx,cy){
+    const dx=cx-startX,dy=cy-startY;
+    if(Math.sqrt(dx*dx+dy*dy)>8)hasMoved=true;
     ghost.style.left=(rect.left+cx-startX)+'px';ghost.style.top=(rect.top+cy-startY)+'px';
     ghost.style.display='none';const el=document.elementFromPoint(cx,cy);ghost.style.display='';
     const cell=el?.closest('.cal-cell:not(.other)');
@@ -1083,7 +1091,8 @@ function startCalDrag(e){
   function onUp(){
     document.removeEventListener('mousemove',mm);document.removeEventListener('mouseup',mu);
     document.removeEventListener('touchmove',tm);document.removeEventListener('touchend',tu);
-    document.body.removeChild(ghost);if(lastCell)lastCell.classList.remove('drop-target');
+    document.body.removeChild(ghost);chip.style.opacity='';if(lastCell)lastCell.classList.remove('drop-target');
+    if(!hasMoved){openEdit(instId);return;}
     if(targetDate&&targetDate!==inst.date)updateInst(instId,{...inst,date:targetDate});
     renderMonth();
   }
