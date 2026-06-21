@@ -223,6 +223,21 @@ table.sched td.tslot.cell-target{background:rgba(37,99,235,.22)!important;outlin
 @media(min-width:641px)and(max-width:900px){.cal-cell{min-height:140px;padding:4px}.cal-chip-sub{font-size:8.5px}}
 @media(max-width:500px){.overlay{align-items:flex-end;padding:0}.modal{border-radius:20px 20px 0 0;max-height:96vh;padding:16px 14px}}
 #clip-bar{max-width:calc(100vw - 28px);flex-wrap:wrap;justify-content:center}
+/* Booking Records */
+.br-summary{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px}
+.br-card{border:2px solid var(--bdr);border-radius:10px;padding:14px;text-align:center}
+.br-card-name{font-weight:800;font-size:13px;margin-bottom:6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.br-card-amt{font-size:26px;font-weight:900;color:var(--green);line-height:1}
+.br-card-lbl{font-size:10px;color:var(--txm);margin-top:4px}
+.br-drag-item{display:flex;align-items:center;gap:10px;padding:10px 14px;background:var(--surf);border:1px solid var(--bdr);border-radius:8px;margin-bottom:6px;cursor:grab;user-select:none;touch-action:none}
+.br-drag-item.drag-over{border-color:var(--blue);background:var(--bluebg)}
+.br-drag-handle{color:var(--txf);font-size:16px;cursor:grab}
+.br-table{width:100%;border-collapse:collapse;font-size:12px}
+.br-table th{text-align:left;padding:9px 12px;background:var(--surf2);border-bottom:1px solid var(--bdr);font-weight:700;color:var(--txm);font-size:11px;text-transform:uppercase;letter-spacing:.04em;white-space:nowrap}
+.br-table td{padding:9px 12px;border-bottom:1px solid var(--bdr);vertical-align:middle;white-space:nowrap}
+.br-table tr:last-child td{border-bottom:none}
+.br-badge-sh{background:#eff6ff;color:#1d4ed8;border:1px solid #bfdbfe;padding:2px 7px;border-radius:99px;font-size:10px;font-weight:700}
+.br-badge-sc{background:#f0fdf4;color:#15803d;border:1px solid #bbf7d0;padding:2px 7px;border-radius:99px;font-size:10px;font-weight:700}
 </style>
 </head>
 <body>
@@ -258,7 +273,7 @@ table.sched td.tslot.cell-target{background:rgba(37,99,235,.22)!important;outlin
       <div class="tab-item" data-view="tracker" onclick="showView('tracker')"><span class="tab-icon">📊</span>Tracker</div>
       <div class="tab-item" data-view="coaches" onclick="showView('coaches')"><span class="tab-icon">👥</span>Coaches</div>
       <div class="tab-item" data-view="admin-class" onclick="showView('admin-class')"><span class="tab-icon">📋</span>Class</div>
-      <div class="tab-item" data-view="bookings" onclick="showView('bookings')"><span class="tab-icon">🗓</span>Bookings</div>
+      <div class="tab-item" data-view="bookings" onclick="showView('bookings')"><span class="tab-icon">🗓</span>Booking Records</div>
     </div>
   </div>
 </aside>
@@ -418,11 +433,36 @@ table.sched td.tslot.cell-target{background:rgba(37,99,235,.22)!important;outlin
 
 <!-- BOOKINGS (blank) -->
 <div class="view" id="view-bookings">
-  <div class="page-hdr"><h1 class="page-title">Bookings</h1></div>
-  <div class="blank-view">
-    <div class="blank-icon">🗓</div>
-    <div class="blank-title">Bookings</div>
-    <div class="blank-sub">Coming soon</div>
+  <div class="main-inner">
+    <div class="page-hdr">
+      <h1 class="page-title">Booking Records</h1>
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+        <select class="fc" id="br-month" onchange="renderBookingRecords()" style="width:auto;font-size:12px;padding:5px 8px"></select>
+        <button class="btn btn-o btn-sm" onclick="loadBookingsFromFirebase()">↻ Refresh</button>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-hdr">Monthly Incentives</div>
+      <div class="card-body"><div id="br-summary" class="br-summary"><div class="empty">Loading…</div></div></div>
+    </div>
+    <div class="card">
+      <div class="card-hdr card-hdr-btn" onclick="toggleCard('br-order-body','br-order-chev')">
+        <span>Booker Order</span><span id="br-order-chev">▼</span>
+      </div>
+      <div class="card-body" id="br-order-body">
+        <div style="font-size:11px;color:var(--txm);margin-bottom:8px">Drag to reorder how bookers appear.</div>
+        <div id="br-order-list"></div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-hdr">All Bookings</div>
+      <div style="overflow-x:auto">
+        <table class="br-table">
+          <thead><tr><th>Date</th><th>Venue</th><th>Court</th><th>Time</th><th>Booker</th><th>Type</th><th>Incentive</th><th></th></tr></thead>
+          <tbody id="br-tbody"><tr><td colspan="8" style="padding:20px;text-align:center;color:var(--txf)">Loading…</td></tr></tbody>
+        </table>
+      </div>
+    </div>
   </div>
 </div>
 
@@ -642,6 +682,7 @@ function showView(v){
   if(v==='tracker')renderTracker();
   if(v==='attendance'){attDetailId=null;renderAttendance();}
   if(v==='admin-class')renderAdminClass();
+  if(v==='bookings')loadBookingsFromFirebase();
 }
 
 // ── SCHED TOGGLE ──────────────────────────────────────────────
@@ -1507,6 +1548,112 @@ function toggleClassRecord(bodyId,arrowId){
   body.classList.toggle('open');
   if(arrow)arrow.textContent=body.classList.contains('open')?'▼':'▶';
 }
+
+// ── BOOKING RECORDS ───────────────────────────────────────────
+const FIREBASE_URL='https://synchroadmin-133f3-default-rtdb.asia-southeast1.firebasedatabase.app';
+let brBookings={};
+
+function initBRMonthSel(){
+  const sel=document.getElementById('br-month');
+  if(!sel||sel.options.length)return;
+  const now=new Date();
+  for(let i=5;i>=-1;i--){
+    const d=new Date(now.getFullYear(),now.getMonth()-i,1);
+    const ym=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+    const opt=document.createElement('option');
+    opt.value=ym;opt.textContent=d.toLocaleString('default',{month:'long',year:'numeric'});
+    if(i===0)opt.selected=true;
+    sel.appendChild(opt);
+  }
+}
+
+async function loadBookingsFromFirebase(){
+  const tbody=document.getElementById('br-tbody');
+  const sum=document.getElementById('br-summary');
+  if(tbody)tbody.innerHTML='<tr><td colspan="8" style="padding:20px;text-align:center;color:var(--txf)">Loading…</td></tr>';
+  if(sum)sum.innerHTML='<div class="empty">Loading…</div>';
+  try{
+    const res=await fetch(`${FIREBASE_URL}/bookings.json`);
+    brBookings=res.ok?(await res.json()||{}):{};
+    renderBookingRecords();
+  }catch(e){console.error('Firebase error:',e);if(tbody)tbody.innerHTML='<tr><td colspan="8" style="padding:20px;text-align:center;color:var(--red)">Failed to load. Check connection.</td></tr>';}
+}
+
+function getBookerOrder(){try{return JSON.parse(localStorage.getItem('booker-order')||'[]')}catch{return[]}}
+function saveBookerOrder(o){localStorage.setItem('booker-order',JSON.stringify(o))}
+
+function renderBookingRecords(){
+  initBRMonthSel();
+  const month=document.getElementById('br-month')?.value||new Date().toISOString().slice(0,7);
+  const all=Object.entries(brBookings).filter(([,b])=>b&&b.month===month).map(([k,b])=>({...b,_key:k}));
+  const allBookers=[...new Set(Object.values(brBookings).filter(Boolean).map(b=>b.booker).filter(Boolean))];
+  let order=getBookerOrder();
+  allBookers.forEach(n=>{if(!order.includes(n))order.push(n);});
+  order=order.filter(n=>allBookers.includes(n));
+  saveBookerOrder(order);
+
+  // Summary
+  const totals={};order.forEach(n=>totals[n]=0);
+  all.forEach(b=>{if(b.booker)totals[b.booker]=(totals[b.booker]||0)+(b.incentive||0);});
+  document.getElementById('br-summary').innerHTML=order.length
+    ?order.map(n=>`<div class="br-card"><div class="br-card-name">${esc(n)}</div><div class="br-card-amt">$${(totals[n]||0).toFixed(2)}</div><div class="br-card-lbl">incentive</div></div>`).join('')
+    :'<div class="empty">No bookings yet</div>';
+
+  // Drag order list
+  renderBROrderList(order);
+
+  // Table
+  const sorted=all.sort((a,b)=>(b.date+b.time).localeCompare(a.date+a.time));
+  document.getElementById('br-tbody').innerHTML=sorted.length
+    ?sorted.map(b=>`<tr>
+      <td>${b.date||''}</td>
+      <td style="font-weight:600;max-width:180px;white-space:normal">${esc(b.venue||'')}</td>
+      <td><b>Court ${esc(b.court||'')}</b></td>
+      <td>${b.time||''}</td>
+      <td>${esc(b.booker||'')}</td>
+      <td><span class="${b.venue_type==='school'?'br-badge-sc':'br-badge-sh'}">${b.venue_type==='school'?'School':'Sports Hall'}</span></td>
+      <td style="font-weight:700;color:var(--green)">$${(b.incentive||0).toFixed(2)}</td>
+      <td><button class="btn btn-red btn-sm" onclick="deleteBooking('${b._key}')">✕</button></td>
+    </tr>`).join('')
+    :'<tr><td colspan="8" style="padding:20px;text-align:center;color:var(--txf)">No bookings this month</td></tr>';
+}
+
+function renderBROrderList(order){
+  const list=document.getElementById('br-order-list');if(!list)return;
+  list.innerHTML=order.map((name,i)=>`
+    <div class="br-drag-item" draggable="true" data-i="${i}"
+      ondragstart="brDS(event)" ondragover="brDO(event)" ondrop="brDrop(event,${i})" ondragend="brDE()">
+      <span class="br-drag-handle">⠿</span>
+      <span style="font-weight:600;flex:1">${esc(name)}</span>
+      <span style="font-size:11px;color:var(--txm)">#${i+1}</span>
+    </div>`).join('');
+}
+let brDragI=null;
+function brDS(e){brDragI=+e.currentTarget.dataset.i;e.currentTarget.style.opacity='.4';}
+function brDO(e){e.preventDefault();e.currentTarget.classList.add('drag-over');}
+function brDE(){document.querySelectorAll('.br-drag-item').forEach(el=>{el.style.opacity='';el.classList.remove('drag-over');});}
+function brDrop(e,toI){
+  e.preventDefault();brDE();
+  if(brDragI===null||brDragI===toI)return;
+  const o=getBookerOrder();const[m]=o.splice(brDragI,1);o.splice(toI,0,m);
+  saveBookerOrder(o);brDragI=null;renderBookingRecords();
+}
+
+async function deleteBooking(key){
+  await fetch(`${FIREBASE_URL}/bookings/${key}.json`,{method:'DELETE'});
+  delete brBookings[key];renderBookingRecords();
+}
+
+// Auto-refresh at 12:30pm and 11:59pm
+function scheduleAutoRefresh(){
+  const now=new Date();
+  [{h:12,m:30},{h:23,m:59}].forEach(t=>{
+    const d=new Date(now);d.setHours(t.h,t.m,0,0);
+    if(d<=now)d.setDate(d.getDate()+1);
+    setTimeout(()=>{if(currentView==='bookings')loadBookingsFromFirebase();scheduleAutoRefresh();},d-now);
+  });
+}
+scheduleAutoRefresh();
 
 // ── BOOT ─────────────────────────────────────────────────────
 // Init folder states
