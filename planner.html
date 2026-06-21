@@ -1027,7 +1027,7 @@ function renderMonth(){
     const dayN=i-first+1;const inMo=dayN>=1&&dayN<=dim;
     const d=inMo?new Date(yr,mo,dayN):null;const dt=d?ds(d):'';const isTdy=dt===today;
     const di=inMo?allI.filter(x=>x.date===dt).sort((a,b)=>a.start_time.localeCompare(b.start_time)):[];
-    html+=`<div class="cal-cell${!inMo?' other':''}${isTdy?' today':''}" data-date="${dt}"${inMo?` onclick="calCellClick(event,'${dt}',${d.getDay()})"`:''}>
+    html+=`<div class="cal-cell${!inMo?' other':''}${isTdy?' today':''}" data-date="${dt}" data-dow="${inMo?d.getDay():0}">
       <div class="cal-num" onclick="${inMo?`event.stopPropagation();openDay('${dt}',${d.getDay()})`:''}">${inMo?dayN:''}</div>
       ${di.map(inst=>{
         const color=getBlockColor(inst);const tc=txColor(color);const cn=coachNames(inst.coach_ids);
@@ -1046,14 +1046,28 @@ function renderMonth(){
   const grid=document.getElementById('cal-grid');grid.innerHTML=html;setupCalChipDrag(grid);
 }
 
-function calCellClick(e,dt,dow){
-  if(e.target.closest('.cal-chip')||e.target.closest('.cal-num'))return;
-  openModal(dt,dow,8,9);
-}
+let _calChipClickId=null,_calChipClickTime=0;
+let _calCellTap=null,_calCellTapTime=0;
 
 function setupCalChipDrag(grid){
   grid.addEventListener('mousedown',startCalDrag);
   grid.addEventListener('touchstart',startCalDrag,{passive:false});
+  // Double-click on empty cell or chip (desktop)
+  grid.addEventListener('dblclick',e=>{
+    if(e.target.closest('.cal-num'))return;
+    const chip=e.target.closest('.cal-chip[data-inst-id]');
+    if(chip){openEdit(+chip.dataset.instId);return;}
+    const cell=e.target.closest('.cal-cell:not(.other)');
+    if(cell&&cell.dataset.date)openModal(cell.dataset.date,+cell.dataset.dow,8,9);
+  });
+  // Double-tap on empty cell (touch/mobile)
+  grid.addEventListener('touchend',e=>{
+    if(e.target.closest('.cal-chip')||e.target.closest('.cal-num'))return;
+    const cell=e.target.closest('.cal-cell:not(.other)');if(!cell)return;
+    const now=Date.now();
+    if(_calCellTap===cell&&now-_calCellTapTime<400){_calCellTap=null;openModal(cell.dataset.date,+cell.dataset.dow,8,9);}
+    else{_calCellTap=cell;_calCellTapTime=now;}
+  },{passive:true});
 }
 function startCalDrag(e){
   const chip=e.target.closest('.cal-chip[data-inst-id]');if(!chip)return;
@@ -1078,7 +1092,12 @@ function startCalDrag(e){
     document.removeEventListener('mousemove',mm);document.removeEventListener('mouseup',mu);
     document.removeEventListener('touchmove',tm);document.removeEventListener('touchend',tu);
     document.body.removeChild(ghost);chip.style.opacity='';if(lastCell)lastCell.classList.remove('drop-target');
-    if(!hasMoved){openEdit(instId);return;}
+    if(!hasMoved){
+      const now=Date.now();
+      if(_calChipClickId===instId&&now-_calChipClickTime<350){_calChipClickId=null;_calChipClickTime=0;openEdit(instId);return;}
+      _calChipClickId=instId;_calChipClickTime=now;
+      copyInst(instId);return;
+    }
     if(targetDate&&targetDate!==inst.date)updateInst(instId,{...inst,date:targetDate});
     renderMonth();
   }
