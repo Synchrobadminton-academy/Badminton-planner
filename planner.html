@@ -145,6 +145,8 @@ table.sched td.tslot.cell-target{background:rgba(37,99,235,.22)!important;outlin
 .overlay.open{display:flex}
 .modal{background:var(--surf);border-radius:12px;padding:20px;width:100%;max-width:430px;box-shadow:0 20px 60px rgba(0,0,0,.3);max-height:93vh;overflow-y:auto}
 .modal h2{font-size:14px;font-weight:800;margin-bottom:14px}
+.img-modal-inner{background:var(--surf);border-radius:12px;padding:16px;width:100%;max-width:560px;max-height:93vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,.3)}
+.img-modal-inner img{max-width:100%;border-radius:8px;display:block;margin:0 auto}
 .mact{display:flex;gap:8px;margin-top:14px}
 .two-col{display:grid;grid-template-columns:1fr 1fr;gap:16px;align-items:start}
 .cchk-wrap{display:flex;flex-wrap:wrap;gap:5px}
@@ -608,6 +610,17 @@ table.sched td.tslot.cell-target{background:rgba(37,99,235,.22)!important;outlin
       <button class="btn btn-p" style="flex:1" onclick="openAddFromDay()">+ Add Session</button>
       <button class="btn btn-o" onclick="document.getElementById('day-modal').classList.remove('open')">Close</button>
     </div>
+  </div>
+</div>
+
+<!-- RECEIPT IMAGE MODAL -->
+<div class="overlay" id="img-modal" onclick="if(event.target===this)closeImgModal()">
+  <div class="img-modal-inner">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+      <div style="font-size:13px;font-weight:800">Receipt</div>
+      <button class="btn btn-o btn-sm" onclick="closeImgModal()">✕ Close</button>
+    </div>
+    <div id="img-modal-body" style="min-height:80px;display:flex;align-items:center;justify-content:center"></div>
   </div>
 </div>
 
@@ -2181,7 +2194,7 @@ function renderCourts(){
 function showCourtDay(ds,updateGrid=true){
   courtsSelectedDate=ds;
   if(updateGrid)renderCourts();
-  const allB=Object.values(brBookings).filter(Boolean).filter(b=>getCourtDate(b)===ds);
+  const allB=Object.entries(brBookings).filter(([,b])=>b&&getCourtDate(b)===ds).map(([k,b])=>({...b,_key:k}));
   const d=new Date(ds+'T00:00:00');
   const detail=document.getElementById('courts-detail');
   if(!allB.length){
@@ -2194,13 +2207,32 @@ function showCourtDay(ds,updateGrid=true){
     <div class="card-body" style="padding:0">
       ${sorted.map(b=>`<div class="court-booking-item" style="padding:14px 16px">
         <div class="court-num">Ct ${esc(b.court||'?')}</div>
-        <div>
+        <div style="flex:1">
           <div style="font-weight:700;font-size:13px">${esc(b.venue||'')}</div>
           <div style="color:var(--txm);font-size:12px;margin-top:2px">${b.time||''}${b.source==='activesg'?' · <span style="color:#d97706;font-weight:700">ActiveSG</span>':` · ${esc(b.booker||'')} · <span class="${b.venue_type==='school'?'br-badge-sc':'br-badge-sh'}">${b.venue_type==='school'?'School':'Sports Hall'}</span>`}</div>
+          ${b.source!=='activesg'?`<button onclick="viewReceiptImage('${b._key}')" style="margin-top:6px;background:none;border:1px solid var(--bdr);border-radius:6px;padding:3px 10px;font-size:11px;font-weight:700;cursor:pointer;color:var(--tx)">📷 View Receipt</button>`:''}
         </div>
       </div>`).join('')}
     </div>
   </div>`;
+}
+
+function viewReceiptImage(key){
+  const modal=document.getElementById('img-modal');
+  const body=document.getElementById('img-modal-body');
+  modal.classList.add('open');
+  body.innerHTML='<div style="color:var(--txm);font-size:13px;padding:20px">Loading…</div>';
+  fetch(`${FIREBASE_URL}/booking_images/${key}.json`)
+    .then(r=>r.json())
+    .then(img=>{
+      if(!img||!img.data){body.innerHTML='<div style="color:var(--txm);font-size:13px;padding:20px">Image not available.</div>';return;}
+      body.innerHTML=`<img src="data:${img.type||'image/jpeg'};base64,${img.data}" alt="Receipt">`;
+    })
+    .catch(()=>{body.innerHTML='<div style="color:var(--txm);font-size:13px;padding:20px">Failed to load image.</div>';});
+}
+function closeImgModal(){
+  document.getElementById('img-modal').classList.remove('open');
+  document.getElementById('img-modal-body').innerHTML='';
 }
 
 // ── RECEIPTS ──────────────────────────────────────────────────
