@@ -430,6 +430,23 @@ table.sched td.tslot.cell-target{background:rgba(37,99,235,.22)!important;outlin
         </div>
       </div>
       <div class="card">
+        <div class="card-hdr card-hdr-btn" onclick="toggleCard('classtypes-body','ct-chevron')">
+          <span>Class Types</span><span id="ct-chevron">▶</span>
+        </div>
+        <div class="card-body" id="classtypes-body" style="display:none;padding-top:10px">
+          <div id="classtypes-list" style="margin-bottom:10px"></div>
+          <form id="ct-form" onsubmit="addClassType(event)" style="display:grid;grid-template-columns:1fr auto auto;gap:6px;align-items:end">
+            <input type="text" id="ct-name" placeholder="Class name" required>
+            <select id="ct-cat" class="fc" style="width:auto">
+              <option value="group">Group</option>
+              <option value="activesg">ActiveSG</option>
+              <option value="private">Private</option>
+            </select>
+            <button type="submit" class="btn btn-o btn-sm">Add</button>
+          </form>
+        </div>
+      </div>
+      <div class="card">
         <div class="card-hdr card-hdr-btn" onclick="toggleCard('combo-colors-body','combo-chevron')">
           <span>Coach Combo Colors</span><span id="combo-chevron">▶</span>
         </div>
@@ -509,13 +526,7 @@ table.sched td.tslot.cell-target{background:rgba(37,99,235,.22)!important;outlin
     <div class="form-row">
       <div class="fg" style="margin:0">
         <label>Class</label>
-        <select id="m-class" class="fc">
-          <option value="">— None —</option>
-          <option>ActiveSG</option>
-          <option>Synchro</option>
-          <option>Rise &amp; Rally Adult</option>
-          <option>Private Group</option>
-        </select>
+        <select id="m-class" class="fc"></select>
       </div>
       <div class="fg" style="margin:0">
         <label>Standard</label>
@@ -584,7 +595,13 @@ const S={
     S.set('sessions',[]);S.set('instances',[]);S.set('combo-colors',{});
     localStorage.setItem('cmp_v3','1');
   }
-  if(!localStorage.getItem('class-types'))S.set('class-types',['ActiveSG','Synchro','Rise & Rally Adult','Private Group']);
+  // Migrate class-types from string[] to {id,name,cat}[]
+  (function(){
+    const raw=localStorage.getItem('class-types');
+    const defaults=[{id:1,name:'ActiveSG',cat:'activesg'},{id:2,name:'Synchro',cat:'group'},{id:3,name:'Rise & Rally Adult',cat:'group'},{id:4,name:'Private Group',cat:'private'}];
+    if(!raw){S.set('class-types',defaults);return;}
+    try{const p=JSON.parse(raw);if(Array.isArray(p)&&p.length&&typeof p[0]==='string'){S.set('class-types',p.map((n,i)=>({id:i+1,name:n,cat:n.toLowerCase().includes('activesg')?'activesg':n.toLowerCase().includes('private')?'private':'group'})));}}catch(e){}
+  })();
   if(!localStorage.getItem('standards'))S.set('standards',['Basic','Advance','Mix','Adult','All']);
   const cc=localStorage.getItem('combo-colors');if(!cc||cc==='[]')S.set('combo-colors',{});
 })();
@@ -1279,7 +1296,7 @@ function renderCoaches(){
     html+='</tbody></table>';
   }
   document.getElementById('coaches-list').innerHTML=html;
-  renderComboColors();renderStandards();
+  renderComboColors();renderStandards();renderClassTypes();
   let vh=venues.map((v,i)=>`<div style="display:flex;align-items:center;justify-content:space-between;padding:5px 0;border-bottom:1px solid var(--bdr)">
     <span style="font-size:12px">${esc(v)}</span>
     <button class="btn btn-sm btn-red" onclick="removeVenueAt(${i})">✕</button>
@@ -1330,10 +1347,64 @@ function addStandard(e){
   document.getElementById('standard-form').reset();renderStandards();
 }
 function removeStandard(i){const l=getStandards();l.splice(i,1);S.set('standards',l);renderStandards();}
+
+// ── CLASS TYPES ───────────────────────────────────────────────
+const getClassTypes=()=>S.get('class-types');
+const CT_CAT_LABEL={activesg:'ActiveSG',group:'Group',private:'Private'};
+const CT_CAT_COLOR={activesg:'#3b82f6',group:'#10b981',private:'#ef4444'};
+function renderClassTypes(){
+  const list=getClassTypes();
+  document.getElementById('classtypes-list').innerHTML=list.length?list.map(ct=>`
+    <div id="ct-row-${ct.id}" style="display:flex;align-items:center;gap:7px;padding:5px 0;border-bottom:1px solid var(--bdr)">
+      <span style="flex:1;font-size:12px">${esc(ct.name)}</span>
+      <span style="font-size:10px;padding:2px 8px;border-radius:99px;background:${CT_CAT_COLOR[ct.cat]||'#6b7280'};color:#fff;font-weight:700">${CT_CAT_LABEL[ct.cat]||ct.cat}</span>
+      <button class="btn btn-sm btn-o" onclick="editClassType(${ct.id})">✎</button>
+      <button class="btn btn-sm btn-red" onclick="removeClassType(${ct.id})">✕</button>
+    </div>`).join(''):`<div style="color:var(--txf);font-size:12px">No class types yet.</div>`;
+}
+function editClassType(id){
+  const ct=getClassTypes().find(x=>x.id===id);if(!ct)return;
+  const row=document.getElementById('ct-row-'+id);if(!row)return;
+  row.style.flexWrap='wrap';
+  row.innerHTML=`
+    <input id="ct-en-${id}" type="text" value="${esc(ct.name)}" style="flex:1;min-width:80px;border:1px solid var(--bdr);border-radius:6px;padding:4px 7px;font-size:12px;font-family:inherit;background:var(--surf);color:var(--tx)">
+    <select id="ct-ec-${id}" style="border:1px solid var(--bdr);border-radius:6px;padding:4px 6px;font-size:12px;font-family:inherit;background:var(--surf);color:var(--tx)">
+      <option value="group"${ct.cat==='group'?' selected':''}>Group</option>
+      <option value="activesg"${ct.cat==='activesg'?' selected':''}>ActiveSG</option>
+      <option value="private"${ct.cat==='private'?' selected':''}>Private</option>
+    </select>
+    <button class="btn btn-p btn-sm" onclick="saveClassTypeEdit(${id})">Save</button>
+    <button class="btn btn-o btn-sm" onclick="renderClassTypes()">Cancel</button>`;
+  document.getElementById('ct-en-'+id)?.focus();
+}
+function saveClassTypeEdit(id){
+  const name=document.getElementById('ct-en-'+id)?.value.trim();
+  const cat=document.getElementById('ct-ec-'+id)?.value;
+  if(!name)return;
+  const list=getClassTypes();const i=list.findIndex(x=>x.id===id);
+  if(i>=0){list[i].name=name;list[i].cat=cat;S.set('class-types',list);}
+  renderClassTypes();updateSessionDatalist();
+}
+function addClassType(e){
+  e.preventDefault();
+  const name=document.getElementById('ct-name').value.trim();
+  const cat=document.getElementById('ct-cat').value;
+  if(!name)return;
+  const list=getClassTypes();
+  if(!list.some(x=>x.name.toLowerCase()===name.toLowerCase())){list.push({id:S.nextId(list),name,cat});S.set('class-types',list);}
+  document.getElementById('ct-form').reset();
+  renderClassTypes();updateSessionDatalist();
+}
+function removeClassType(id){
+  S.set('class-types',getClassTypes().filter(x=>x.id!==id));
+  renderClassTypes();updateSessionDatalist();
+}
+
 function updateSessionDatalist(){
-  const sel=document.getElementById('m-std');
-  if(!sel)return;
-  sel.innerHTML='<option value="">— None —</option>'+getStandards().map(t=>`<option>${esc(t)}</option>`).join('');
+  const stdSel=document.getElementById('m-std');
+  if(stdSel)stdSel.innerHTML='<option value="">— None —</option>'+getStandards().map(t=>`<option>${esc(t)}</option>`).join('');
+  const clsSel=document.getElementById('m-class');
+  if(clsSel)clsSel.innerHTML='<option value="">— None —</option>'+getClassTypes().map(t=>`<option value="${esc(t.name)}">${esc(t.name)}</option>`).join('');
 }
 function getComboColors(){const v=S.get('combo-colors');return(v&&!Array.isArray(v))?v:{};}
 function saveComboColor(comboKey,color){const cc=getComboColors();cc[comboKey]=color;S.set('combo-colors',cc);}
@@ -1423,6 +1494,9 @@ function toggleCard(bodyId,chevId){
 // ── ANALYTICS ────────────────────────────────────────────────
 function classCategory(ct){
   if(!ct)return'group';
+  const found=getClassTypes().find(x=>x.name.toLowerCase()===ct.toLowerCase());
+  if(found)return found.cat;
+  // fallback by keyword for legacy data
   const t=ct.toLowerCase();
   if(t.includes('activesg'))return'activesg';
   if(t.includes('private'))return'private';
