@@ -183,6 +183,13 @@ table.sched td.tslot.cell-target{background:rgba(37,99,235,.22)!important;outlin
 .att-chip{font-size:11px;padding:3px 9px;border-radius:99px;background:var(--surf);border:1px solid var(--bdr);color:var(--txm)}
 .att-chip.present{background:var(--bluebg);border-color:var(--blue);color:var(--blue)}
 
+/* Analytics */
+.anl-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:12px;margin-bottom:14px}
+.anl-card{background:var(--surf);border:1px solid var(--bdr);border-radius:10px;padding:16px}
+.anl-val{font-size:28px;font-weight:800;color:var(--blue);line-height:1.2}
+.anl-lbl{font-size:11px;font-weight:700;color:var(--txm);margin-top:4px;text-transform:uppercase;letter-spacing:.05em}
+.anl-sub{font-size:11px;color:var(--txf);margin-top:3px}
+
 /* Blank views */
 .blank-view{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:300px;gap:10px;color:var(--txm)}
 .blank-view .blank-icon{font-size:48px;opacity:.3}
@@ -285,6 +292,7 @@ table.sched td.tslot.cell-target{background:rgba(37,99,235,.22)!important;outlin
     </div>
     <div class="folder-items" id="fitems-admin">
       <div class="tab-item" data-view="tracker" onclick="showView('tracker')"><span class="tab-icon">📊</span>Tracker</div>
+      <div class="tab-item" data-view="analytics" onclick="showView('analytics')"><span class="tab-icon">📈</span>Analytics</div>
       <div class="tab-item" data-view="coaches" onclick="showView('coaches')"><span class="tab-icon">⚙️</span>Calendar Settings</div>
 <div class="tab-item" data-view="bookings" onclick="showView('bookings')"><span class="tab-icon">🗓</span>Booking Records</div>
       <div class="tab-item" data-view="receipts" onclick="showView('receipts')"><span class="tab-icon">🧾</span>Receipts</div>
@@ -410,18 +418,6 @@ table.sched td.tslot.cell-target{background:rgba(37,99,235,.22)!important;outlin
         </div>
       </div>
       <div class="card">
-        <div class="card-hdr card-hdr-btn" onclick="toggleCard('classtypes-body','ct-chevron')">
-          <span>Class Types</span><span id="ct-chevron">▶</span>
-        </div>
-        <div class="card-body" id="classtypes-body" style="display:none;padding-top:10px">
-          <div id="classtypes-list" style="margin-bottom:10px"></div>
-          <form id="classtype-form" onsubmit="addClassType(event)" style="display:flex;gap:8px">
-            <input type="text" id="ctn" placeholder="e.g. ActiveSG" required style="flex:1">
-            <button type="submit" class="btn btn-o btn-sm">Add</button>
-          </form>
-        </div>
-      </div>
-      <div class="card">
         <div class="card-hdr card-hdr-btn" onclick="toggleCard('standards-body','std-chevron')">
           <span>Standards</span><span id="std-chevron">▶</span>
         </div>
@@ -492,6 +488,9 @@ table.sched td.tslot.cell-target{background:rgba(37,99,235,.22)!important;outlin
   </div>
 </div>
 
+<!-- ANALYTICS -->
+<div class="view" id="view-analytics"><div class="main-inner"><div class="empty" style="padding:40px">Loading…</div></div></div>
+
 </div><!-- /main-inner -->
 </div><!-- /main-content -->
 </div><!-- /app-layout -->
@@ -510,13 +509,17 @@ table.sched td.tslot.cell-target{background:rgba(37,99,235,.22)!important;outlin
     <div class="form-row">
       <div class="fg" style="margin:0">
         <label>Class</label>
-        <input type="text" id="m-class" list="clsugg" placeholder="e.g. ActiveSG">
-        <datalist id="clsugg"></datalist>
+        <select id="m-class" class="fc">
+          <option value="">— None —</option>
+          <option>ActiveSG</option>
+          <option>Synchro</option>
+          <option>Rise &amp; Rally Adult</option>
+          <option>Private Group</option>
+        </select>
       </div>
       <div class="fg" style="margin:0">
         <label>Standard</label>
-        <input type="text" id="m-std" list="stsugg" placeholder="e.g. Advance">
-        <datalist id="stsugg"></datalist>
+        <select id="m-std" class="fc"></select>
       </div>
     </div>
     <div class="fg"><label>Court No (free text)</label><input type="text" id="m-court" placeholder="e.g. 5 &amp; 6, Court 1 &amp; 2"></div>
@@ -710,6 +713,7 @@ function showView(v){
 if(v==='bookings')loadBookingsFromFirebase();
   if(v==='courts'){renderCourts();loadBookingsFromFirebase();}
   if(v==='receipts'){renderReceipts();loadBookingsFromFirebase();}
+  if(v==='analytics')renderAnalytics();
 }
 
 // ── SCHED TOGGLE ──────────────────────────────────────────────
@@ -1256,7 +1260,7 @@ function renderCoaches(){
     html+='</tbody></table>';
   }
   document.getElementById('coaches-list').innerHTML=html;
-  renderComboColors();renderClassTypes();renderStandards();
+  renderComboColors();renderStandards();
   let vh=venues.map((v,i)=>`<div style="display:flex;align-items:center;justify-content:space-between;padding:5px 0;border-bottom:1px solid var(--bdr)">
     <span style="font-size:12px">${esc(v)}</span>
     <button class="btn btn-sm btn-red" onclick="removeVenueAt(${i})">✕</button>
@@ -1292,16 +1296,7 @@ function addVenue(e){
   const l=getVenues();if(!l.includes(name)){l.push(name);S.set('venues',l);}
   document.getElementById('venue-form').reset();renderCoaches();
 }
-const getClassTypes=()=>S.get('class-types');
 const getStandards=()=>S.get('standards');
-function renderClassTypes(){
-  const l=getClassTypes();
-  document.getElementById('classtypes-list').innerHTML=l.length?l.map((t,i)=>`
-    <div style="display:flex;align-items:center;justify-content:space-between;padding:5px 0;border-bottom:1px solid var(--bdr)">
-      <span style="font-size:12px">${esc(t)}</span>
-      <button class="btn btn-sm btn-red" onclick="removeClassType(${i})">✕</button>
-    </div>`).join(''):`<div style="color:var(--txf);font-size:12px">No class types yet.</div>`;
-}
 function renderStandards(){
   const l=getStandards();
   document.getElementById('standards-list').innerHTML=l.length?l.map((t,i)=>`
@@ -1310,12 +1305,6 @@ function renderStandards(){
       <button class="btn btn-sm btn-red" onclick="removeStandard(${i})">✕</button>
     </div>`).join(''):`<div style="color:var(--txf);font-size:12px">No standards yet.</div>`;
 }
-function addClassType(e){
-  e.preventDefault();const name=document.getElementById('ctn').value.trim();if(!name)return;
-  const l=getClassTypes();if(!l.includes(name)){l.push(name);S.set('class-types',l);}
-  document.getElementById('classtype-form').reset();renderClassTypes();
-}
-function removeClassType(i){const l=getClassTypes();l.splice(i,1);S.set('class-types',l);renderClassTypes();}
 function addStandard(e){
   e.preventDefault();const name=document.getElementById('stn').value.trim();if(!name)return;
   const l=getStandards();if(!l.includes(name)){l.push(name);S.set('standards',l);}
@@ -1323,8 +1312,9 @@ function addStandard(e){
 }
 function removeStandard(i){const l=getStandards();l.splice(i,1);S.set('standards',l);renderStandards();}
 function updateSessionDatalist(){
-  document.getElementById('clsugg').innerHTML=getClassTypes().map(t=>`<option>${esc(t)}</option>`).join('');
-  document.getElementById('stsugg').innerHTML=getStandards().map(t=>`<option>${esc(t)}</option>`).join('');
+  const sel=document.getElementById('m-std');
+  if(!sel)return;
+  sel.innerHTML='<option value="">— None —</option>'+getStandards().map(t=>`<option>${esc(t)}</option>`).join('');
 }
 function getComboColors(){const v=S.get('combo-colors');return(v&&!Array.isArray(v))?v:{};}
 function saveComboColor(comboKey,color){const cc=getComboColors();cc[comboKey]=color;S.set('combo-colors',cc);}
@@ -1411,9 +1401,193 @@ function toggleCard(bodyId,chevId){
   if(ch)ch.textContent=hidden?'▼':'▶';
 }
 
+// ── ANALYTICS ────────────────────────────────────────────────
+function classCategory(ct){
+  if(!ct)return'group';
+  const t=ct.toLowerCase();
+  if(t.includes('activesg'))return'activesg';
+  if(t.includes('private'))return'private';
+  return'group';
+}
+
+function buildStudentMap(){
+  const map={};
+  getInsts().filter(i=>i.status!=='cancelled').forEach(inst=>{
+    getAttendance(inst.id).forEach(a=>{
+      const key=a.name.trim().toLowerCase();
+      if(!map[key])map[key]={name:a.name.trim(),sessions:[]};
+      map[key].sessions.push({date:inst.date,class_type:inst.class_type||'',numCoaches:(inst.coach_ids||[]).length});
+    });
+  });
+  return map;
+}
+
+function renderAnalytics(){
+  const el=document.getElementById('view-analytics');
+  const insts=getInsts().filter(i=>i.status!=='cancelled');
+  const sm=buildStudentMap();
+  const students=Object.values(sm);
+  const today=new Date();
+  const todayStr=ds(today);
+
+  // 1. Active students — attended in last 14 days
+  const cut14=ds(new Date(today.getFullYear(),today.getMonth(),today.getDate()-14));
+  const activeSet=new Set();
+  students.forEach(s=>{if(s.sessions.some(x=>x.date>=cut14))activeSet.add(s.name.toLowerCase());});
+  const totalActive=activeSet.size;
+
+  // 2. Class fill rate — ActiveSG cap 16, Group cap 5×coaches
+  let asFill=0,asN=0,grFill=0,grN=0;
+  insts.forEach(inst=>{
+    const cat=classCategory(inst.class_type);
+    const att=getAttendance(inst.id);
+    if(cat==='activesg'){asFill+=att.length/16;asN++;}
+    else if(cat==='group'){const nc=Math.max(1,(inst.coach_ids||[]).length);grFill+=att.length/(5*nc);grN++;}
+  });
+  const asRate=asN?Math.round(asFill/asN*100):null;
+  const grRate=grN?Math.round(grFill/grN*100):null;
+
+  // 3. Drop-off rate — last seen >60 days ago (exclude ASG-only students)
+  const cut60=ds(new Date(today.getFullYear(),today.getMonth(),today.getDate()-60));
+  let dropped=0;
+  students.forEach(s=>{
+    const last=s.sessions.map(x=>x.date).sort().pop();
+    if(last<cut60&&s.sessions.some(x=>classCategory(x.class_type)!=='activesg'))dropped++;
+  });
+  const dropRate=students.length?Math.round(dropped/students.length*100):null;
+
+  // 4. Conversion rate — attended ASG then later Group
+  let asgBase=0,conv=0;
+  students.forEach(s=>{
+    const asgFirst=s.sessions.filter(x=>classCategory(x.class_type)==='activesg').map(x=>x.date).sort()[0];
+    if(!asgFirst)return;
+    asgBase++;
+    if(s.sessions.some(x=>classCategory(x.class_type)==='group'&&x.date>asgFirst))conv++;
+  });
+  const convRate=asgBase?Math.round(conv/asgBase*100):null;
+
+  // 5. Coach:student ratio by type
+  const rmap={activesg:[0,0],private:[0,0],group:[0,0]};
+  insts.forEach(inst=>{
+    const cat=classCategory(inst.class_type);
+    const att=getAttendance(inst.id);
+    if(!att.length)return;
+    const nc=(inst.coach_ids||[]).length||1;
+    rmap[cat][0]+=att.length/nc;rmap[cat][1]++;
+  });
+
+  // 6. Retention rate — 2+ sessions
+  const retained=students.filter(s=>s.sessions.length>=2).length;
+  const retRate=students.length?Math.round(retained/students.length*100):null;
+
+  // 7. Avg student tenure
+  let tenSum=0,tenN=0;
+  students.forEach(s=>{
+    if(s.sessions.length<2)return;
+    const dates=s.sessions.map(x=>x.date).sort();
+    tenSum+=Math.round((new Date(dates[dates.length-1])-new Date(dates[0]))/86400000);
+    tenN++;
+  });
+  const avgTenure=tenN?Math.round(tenSum/tenN):null;
+
+  // 8. New sign-ups per month
+  const signups={};
+  students.forEach(s=>{
+    const first=s.sessions.map(x=>x.date).sort()[0];
+    if(first){const mo=first.slice(0,7);signups[mo]=(signups[mo]||0)+1;}
+  });
+  const signupRows=Object.entries(signups).sort((a,b)=>b[0].localeCompare(a[0]));
+
+  const fmtPct=v=>v!==null?v+'%':'—';
+  const fmtRatio=r=>r[1]?`1 : ${Math.round(r[0]/r[1])}`:'—';
+
+  el.innerHTML=`<div class="main-inner">
+    <div class="page-hdr"><h1 class="page-title">Analytics</h1></div>
+    <div class="anl-grid">
+      <div class="anl-card">
+        <div class="anl-val">${totalActive}</div>
+        <div class="anl-lbl">Active Students</div>
+        <div class="anl-sub">attended in last 14 days</div>
+      </div>
+      <div class="anl-card">
+        <div class="anl-val">${fmtPct(asRate)}</div>
+        <div class="anl-lbl">ActiveSG Fill Rate</div>
+        <div class="anl-sub">avg vs cap of 16</div>
+      </div>
+      <div class="anl-card">
+        <div class="anl-val">${fmtPct(grRate)}</div>
+        <div class="anl-lbl">Group Fill Rate</div>
+        <div class="anl-sub">avg vs 5 per coach</div>
+      </div>
+      <div class="anl-card">
+        <div class="anl-val">${fmtPct(dropRate)}</div>
+        <div class="anl-lbl">Drop-off Rate</div>
+        <div class="anl-sub">last seen &gt;60 days ago</div>
+      </div>
+      <div class="anl-card">
+        <div class="anl-val">${fmtPct(convRate)}</div>
+        <div class="anl-lbl">Conversion Rate</div>
+        <div class="anl-sub">ActiveSG → Group</div>
+      </div>
+      <div class="anl-card">
+        <div class="anl-val">${fmtPct(retRate)}</div>
+        <div class="anl-lbl">Retention Rate</div>
+        <div class="anl-sub">attended 2+ sessions</div>
+      </div>
+      <div class="anl-card">
+        <div class="anl-val">${avgTenure!==null?avgTenure+'d':'—'}</div>
+        <div class="anl-lbl">Avg Student Tenure</div>
+        <div class="anl-sub">first → last session</div>
+      </div>
+      <div class="anl-card">
+        <div style="font-size:11px;font-weight:800;color:var(--txm);text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px">Coach : Student</div>
+        ${['activesg','group','private'].map(t=>`
+          <div style="display:flex;justify-content:space-between;align-items:center;padding:5px 0;border-bottom:1px solid var(--bdr);font-size:12px">
+            <span style="color:var(--txm)">${t==='activesg'?'ActiveSG':t==='group'?'Group':'Private'}</span>
+            <span style="font-weight:700">${fmtRatio(rmap[t])}</span>
+          </div>`).join('')}
+      </div>
+    </div>
+    ${signupRows.length?`<div class="card">
+      <div class="card-hdr">New Sign-ups per Month</div>
+      <table style="width:100%;border-collapse:collapse">
+        <thead><tr style="border-bottom:1px solid var(--bdr)">
+          <th style="padding:9px 14px;text-align:left;font-size:11px;color:var(--txm);font-weight:700">Month</th>
+          <th style="padding:9px 14px;text-align:right;font-size:11px;color:var(--txm);font-weight:700">New Students</th>
+        </tr></thead>
+        <tbody>${signupRows.map(([mo,cnt])=>{
+          const[y,m]=mo.split('-').map(Number);
+          const lbl=new Date(y,m-1,1).toLocaleString('default',{month:'long',year:'numeric'});
+          return`<tr style="border-bottom:1px solid var(--bdr)">
+            <td style="padding:9px 14px;font-size:12px">${lbl}</td>
+            <td style="padding:9px 14px;font-size:12px;font-weight:700;text-align:right">${cnt}</td>
+          </tr>`;
+        }).join('')}</tbody>
+      </table>
+    </div>`:'<div class="card"><div class="empty">No attendance data yet.</div></div>'}
+  </div>`;
+}
+
 // ── ATTENDANCE VIEW ───────────────────────────────────────────
 let attDetailId=null;
 let attShowAll=false;
+let attFilterMonth=new Date().toISOString().slice(0,7);
+
+function attMonthDropdownHtml(){
+  const all=getInsts().filter(i=>i.status!=='cancelled');
+  const months=new Set(all.map(i=>i.date.slice(0,7)));
+  const now=new Date();
+  months.add(`${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`);
+  const sorted=[...months].sort((a,b)=>b.localeCompare(a));
+  if(!attFilterMonth||!sorted.includes(attFilterMonth))attFilterMonth=sorted[0]||attFilterMonth;
+  return`<select style="padding:5px 10px;border-radius:8px;border:1px solid var(--bdr);background:var(--surf);color:var(--tx);font-size:12px;font-weight:700;cursor:pointer" onchange="attFilterMonth=this.value;renderAttendance()">${
+    sorted.map(ym=>{
+      const[y,m]=ym.split('-').map(Number);
+      const lbl=new Date(y,m-1,1).toLocaleString('default',{month:'long',year:'numeric'});
+      return`<option value="${ym}"${ym===attFilterMonth?' selected':''}>${lbl}</option>`;
+    }).join('')
+  }</select>`;
+}
 
 function renderAttendance(){
   const el=document.getElementById('view-attendance');
@@ -1423,21 +1597,25 @@ function renderAttendance(){
   let insts=getInsts().filter(i=>i.status!=='cancelled');
 
   if(attShowAll){
-    insts=insts.sort((a,b)=>b.date.localeCompare(a.date)||b.start_time.localeCompare(a.start_time));
+    insts=insts.filter(i=>i.date.slice(0,7)===attFilterMonth)
+      .sort((a,b)=>a.date.localeCompare(b.date)||a.start_time.localeCompare(b.start_time));
   } else {
     insts=insts.filter(i=>i.date===todayStr)
       .sort((a,b)=>a.start_time.localeCompare(b.start_time));
   }
 
   let html=`<div class="page-hdr"><h1 class="page-title">Attendance</h1>
-    <label style="display:flex;align-items:center;gap:6px;font-size:12px;font-weight:700;cursor:pointer">
-      <input type="checkbox" id="att-show-all"${attShowAll?' checked':''} onchange="attShowAll=this.checked;renderAttendance()">
-      Show all
-    </label>
+    <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+      ${attShowAll?attMonthDropdownHtml():''}
+      <label style="display:flex;align-items:center;gap:6px;font-size:12px;font-weight:700;cursor:pointer">
+        <input type="checkbox" id="att-show-all"${attShowAll?' checked':''} onchange="attShowAll=this.checked;renderAttendance()">
+        Show all
+      </label>
+    </div>
   </div>`;
 
   if(!insts.length){
-    el.innerHTML=html+`<div class="card"><div class="empty">${attShowAll?'No classes found.':'No classes scheduled for today.'}</div></div>`;return;
+    el.innerHTML=html+`<div class="card"><div class="empty">${attShowAll?'No classes this month.':'No classes scheduled for today.'}</div></div>`;return;
   }
   html+=`<div class="card" style="overflow:hidden;padding:0">`;
   insts.forEach(inst=>{
