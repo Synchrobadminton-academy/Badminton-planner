@@ -964,10 +964,20 @@ function setupDrag(){
   tbody.ontouchstart=e=>{
     const td=e.target.closest('td.tslot');if(!td)return;
     drag={date:td.dataset.date,day:+td.dataset.day,s:+td.dataset.h,e:+td.dataset.h};
-    let longFired=false;
-    const longTimer=setTimeout(()=>{longFired=true;const d=drag;drag=null;clearTarget();openModal(d.date,d.day,d.s,d.s+.5);},500);
-    const onMove=ev=>{clearTimeout(longTimer);if(!drag)return;const t=document.elementFromPoint(ev.touches[0].clientX,ev.touches[0].clientY)?.closest('td.tslot');if(t&&t.dataset.date===drag.date){drag.e=+t.dataset.h;}};
-    const onEnd=()=>{clearTimeout(longTimer);document.removeEventListener('touchmove',onMove);if(longFired||!drag)return;deselectAll();setTarget(drag.date,drag.day,Math.min(drag.s,drag.e),Math.max(drag.s,drag.e));drag=null;};
+    const onMove=ev=>{if(!drag)return;const t=document.elementFromPoint(ev.touches[0].clientX,ev.touches[0].clientY)?.closest('td.tslot');if(t&&t.dataset.date===drag.date){drag.e=+t.dataset.h;}};
+    const onEnd=()=>{
+      document.removeEventListener('touchmove',onMove);
+      if(!drag)return;
+      const hasDragged=drag.s!==drag.e;
+      if(hasDragged){deselectAll();setTarget(drag.date,drag.day,Math.min(drag.s,drag.e),Math.max(drag.s,drag.e));drag=null;return;}
+      const now=Date.now();
+      if(_schedCellTap===td&&now-_schedCellTapTime<400){
+        _schedCellTap=null;clearTarget();openModal(drag.date,drag.day,drag.s,drag.s+.5);
+      } else {
+        _schedCellTap=td;_schedCellTapTime=now;deselectAll();setTarget(drag.date,drag.day,drag.s,drag.e);
+      }
+      drag=null;
+    };
     document.addEventListener('touchmove',onMove,{passive:true});
     document.addEventListener('touchend',onEnd,{once:true});
   };
@@ -1112,7 +1122,8 @@ function renderMonth(){
 
 let _calChipClickId=null,_calChipClickTime=0;
 let _calCellTap=null,_calCellTapTime=0;
-let _calTargetCell=null,_calLongTimer=null,_calMdownCell=null;
+let _calTargetCell=null,_calMdownCell=null;
+let _schedCellTap=null,_schedCellTapTime=0;
 let _calSelectedInstId=null;
 
 function selectCalChip(id){
@@ -1161,16 +1172,8 @@ function setupCalChipDrag(grid){
     const cell=e.target.closest('.cal-cell:not(.other)');
     if(cell&&cell.dataset.date){clearCalTarget();openModal(cell.dataset.date,+cell.dataset.dow,8,9);}
   });
-  // Touch: tap → select cell; long-hold (600ms) or double-tap → open modal
-  grid.addEventListener('touchstart',e=>{
-    if(e.target.closest('.cal-chip')||e.target.closest('.cal-num'))return;
-    const cell=e.target.closest('.cal-cell:not(.other)');if(!cell)return;
-    _calLongTimer=setTimeout(()=>{
-      _calLongTimer=null;clearCalTarget();openModal(cell.dataset.date,+cell.dataset.dow,8,9);
-    },600);
-  },{passive:true});
+  // Touch: single tap → select cell; double-tap → open modal
   grid.addEventListener('touchend',e=>{
-    if(_calLongTimer){clearTimeout(_calLongTimer);_calLongTimer=null;}
     if(e.target.closest('.cal-chip')||e.target.closest('.cal-num'))return;
     const cell=e.target.closest('.cal-cell:not(.other)');if(!cell)return;
     const now=Date.now();
