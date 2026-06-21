@@ -1117,7 +1117,10 @@ function renderMonth(){
       }).join('')}
     </div>`;
   }
-  const grid=document.getElementById('cal-grid');grid.innerHTML=html;setupCalChipDrag(grid);
+  const oldGrid=document.getElementById('cal-grid');
+  const grid=oldGrid.cloneNode(false);
+  oldGrid.replaceWith(grid);
+  grid.innerHTML=html;setupCalChipDrag(grid);
 }
 
 let _calChipClickId=null,_calChipClickTime=0;
