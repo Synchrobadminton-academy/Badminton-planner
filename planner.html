@@ -223,6 +223,24 @@ table.sched td.tslot.cell-target{background:rgba(37,99,235,.22)!important;outlin
 @media(min-width:641px)and(max-width:900px){.cal-cell{min-height:140px;padding:4px}.cal-chip-sub{font-size:8.5px}}
 @media(max-width:500px){.overlay{align-items:flex-end;padding:0}.modal{border-radius:20px 20px 0 0;max-height:96vh;padding:16px 14px}}
 #clip-bar{max-width:calc(100vw - 28px);flex-wrap:wrap;justify-content:center}
+/* Courts day grid */
+.courts-day-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(110px,1fr));gap:10px;margin-bottom:4px}
+.court-day-card{border:2px solid var(--bdr);border-radius:10px;padding:12px 10px;text-align:center;cursor:pointer;transition:all .15s;background:var(--surf)}
+.court-day-card:hover{border-color:var(--blue);background:var(--bluebg)}
+.court-day-card.active{border-color:var(--blue);background:var(--bluebg)}
+.court-day-card.today{border-color:var(--green)}
+.court-day-name{font-size:11px;font-weight:800;color:var(--txm);text-transform:uppercase;letter-spacing:.05em}
+.court-day-num{font-size:22px;font-weight:900;margin:4px 0}
+.court-day-month{font-size:11px;color:var(--txm);margin-bottom:6px}
+.court-day-count{font-size:11px;font-weight:700;color:var(--blue)}
+.court-day-count.none{color:var(--txf);font-weight:400}
+.court-booking-item{display:flex;align-items:center;gap:14px;padding:12px 0;border-bottom:1px solid var(--bdr)}
+.court-booking-item:last-child{border-bottom:none}
+.court-num{font-size:24px;font-weight:900;color:var(--blue);min-width:70px;text-align:center}
+/* Booking Records monthly tabs */
+.br-month-tabs{display:flex;gap:6px;overflow-x:auto;padding-bottom:10px;margin-bottom:4px;-webkit-overflow-scrolling:touch}
+.br-month-tab{flex-shrink:0;padding:6px 16px;border-radius:99px;border:1px solid var(--bdr);font-size:12px;font-weight:700;cursor:pointer;background:var(--surf);color:var(--txm);white-space:nowrap}
+.br-month-tab.active{background:var(--blue);color:#fff;border-color:var(--blue)}
 /* Booking Records */
 .br-summary{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px}
 .br-card{border:2px solid var(--bdr);border-radius:10px;padding:14px;text-align:center}
@@ -322,13 +340,12 @@ table.sched td.tslot.cell-target{background:rgba(37,99,235,.22)!important;outlin
 <!-- ATTENDANCE -->
 <div class="view" id="view-attendance"></div>
 
-<!-- COURTS (blank) -->
+<!-- COURTS -->
 <div class="view" id="view-courts">
-  <div class="page-hdr"><h1 class="page-title">Courts</h1></div>
-  <div class="blank-view">
-    <div class="blank-icon">🏸</div>
-    <div class="blank-title">Courts</div>
-    <div class="blank-sub">Coming soon</div>
+  <div class="main-inner">
+    <div class="page-hdr"><h1 class="page-title">Courts</h1></div>
+    <div id="courts-day-grid" class="courts-day-grid"></div>
+    <div id="courts-detail"></div>
   </div>
 </div>
 
@@ -436,13 +453,12 @@ table.sched td.tslot.cell-target{background:rgba(37,99,235,.22)!important;outlin
   <div class="main-inner">
     <div class="page-hdr">
       <h1 class="page-title">Booking Records</h1>
-      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-        <select class="fc" id="br-month" onchange="renderBookingRecords()" style="width:auto;font-size:12px;padding:5px 8px"></select>
-        <button class="btn btn-o btn-sm" onclick="loadBookingsFromFirebase()">↻ Refresh</button>
-      </div>
+      <button class="btn btn-o btn-sm" onclick="loadBookingsFromFirebase()">↻ Refresh</button>
     </div>
+    <!-- Monthly tabs -->
+    <div class="br-month-tabs" id="br-month-tabs"></div>
     <div class="card">
-      <div class="card-hdr">Monthly Incentives</div>
+      <div class="card-hdr">Incentives — <span id="br-month-lbl"></span></div>
       <div class="card-body"><div id="br-summary" class="br-summary"><div class="empty">Loading…</div></div></div>
     </div>
     <div class="card">
@@ -450,16 +466,16 @@ table.sched td.tslot.cell-target{background:rgba(37,99,235,.22)!important;outlin
         <span>Booker Order</span><span id="br-order-chev">▼</span>
       </div>
       <div class="card-body" id="br-order-body">
-        <div style="font-size:11px;color:var(--txm);margin-bottom:8px">Drag to reorder how bookers appear.</div>
+        <div style="font-size:11px;color:var(--txm);margin-bottom:8px">Drag to reorder.</div>
         <div id="br-order-list"></div>
       </div>
     </div>
     <div class="card">
-      <div class="card-hdr">All Bookings</div>
+      <div class="card-hdr">All Payments — <span id="br-month-lbl2"></span></div>
       <div style="overflow-x:auto">
         <table class="br-table">
-          <thead><tr><th>Date</th><th>Venue</th><th>Court</th><th>Time</th><th>Booker</th><th>Type</th><th>Incentive</th><th></th></tr></thead>
-          <tbody id="br-tbody"><tr><td colspan="8" style="padding:20px;text-align:center;color:var(--txf)">Loading…</td></tr></tbody>
+          <thead><tr><th>Payment Date</th><th>Court Date</th><th>Venue</th><th>Court</th><th>Time</th><th>Booker</th><th>Type</th><th>Incentive</th><th></th></tr></thead>
+          <tbody id="br-tbody"><tr><td colspan="9" style="padding:20px;text-align:center;color:var(--txf)">Loading…</td></tr></tbody>
         </table>
       </div>
     </div>
@@ -683,6 +699,7 @@ function showView(v){
   if(v==='attendance'){attDetailId=null;renderAttendance();}
   if(v==='admin-class')renderAdminClass();
   if(v==='bookings')loadBookingsFromFirebase();
+  if(v==='courts'){renderCourts();loadBookingsFromFirebase();}
 }
 
 // ── SCHED TOGGLE ──────────────────────────────────────────────
@@ -1549,73 +1566,93 @@ function toggleClassRecord(bodyId,arrowId){
   if(arrow)arrow.textContent=body.classList.contains('open')?'▼':'▶';
 }
 
-// ── BOOKING RECORDS ───────────────────────────────────────────
+// ── BOOKING RECORDS & COURTS ──────────────────────────────────
 const FIREBASE_URL='https://synchroadmin-133f3-default-rtdb.asia-southeast1.firebasedatabase.app';
 let brBookings={};
-
-function initBRMonthSel(){
-  const sel=document.getElementById('br-month');
-  if(!sel||sel.options.length)return;
-  const now=new Date();
-  for(let i=5;i>=-1;i--){
-    const d=new Date(now.getFullYear(),now.getMonth()-i,1);
-    const ym=`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
-    const opt=document.createElement('option');
-    opt.value=ym;opt.textContent=d.toLocaleString('default',{month:'long',year:'numeric'});
-    if(i===0)opt.selected=true;
-    sel.appendChild(opt);
-  }
-}
+let brSelectedMonth=new Date().toISOString().slice(0,7);
+let courtsSelectedDate=null;
 
 async function loadBookingsFromFirebase(){
-  const tbody=document.getElementById('br-tbody');
-  const sum=document.getElementById('br-summary');
-  if(tbody)tbody.innerHTML='<tr><td colspan="8" style="padding:20px;text-align:center;color:var(--txf)">Loading…</td></tr>';
-  if(sum)sum.innerHTML='<div class="empty">Loading…</div>';
   try{
     const res=await fetch(`${FIREBASE_URL}/bookings.json`);
     brBookings=res.ok?(await res.json()||{}):{};
-    renderBookingRecords();
-  }catch(e){console.error('Firebase error:',e);if(tbody)tbody.innerHTML='<tr><td colspan="8" style="padding:20px;text-align:center;color:var(--red)">Failed to load. Check connection.</td></tr>';}
+    if(currentView==='bookings')renderBookingRecords();
+    if(currentView==='courts')renderCourts();
+  }catch(e){console.error('Firebase error:',e);}
 }
+
+// Helper: get payment date (falls back to created_at or date for old records)
+function getPaymentDate(b){return b.payment_date||b.created_at?.slice(0,10)||b.date||'';}
+function getCourtDate(b){return b.court_date||b.date||'';}
 
 function getBookerOrder(){try{return JSON.parse(localStorage.getItem('booker-order')||'[]')}catch{return[]}}
 function saveBookerOrder(o){localStorage.setItem('booker-order',JSON.stringify(o))}
 
+// ── MONTHLY TABS ──────────────────────────────────────────────
+function renderBRMonthTabs(){
+  const now=new Date();
+  // Collect months that have data + last 4 months always
+  const monthsWithData=new Set(Object.values(brBookings).filter(Boolean).map(b=>getPaymentDate(b).slice(0,7)).filter(Boolean));
+  for(let i=3;i>=0;i--){const d=new Date(now.getFullYear(),now.getMonth()-i,1);monthsWithData.add(`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`);}
+  const sorted=[...monthsWithData].sort();
+  const tabs=document.getElementById('br-month-tabs');
+  tabs.innerHTML=sorted.map(ym=>{
+    const[y,m]=ym.split('-').map(Number);
+    const label=new Date(y,m-1,1).toLocaleString('default',{month:'short',year:'numeric'});
+    return`<div class="br-month-tab${ym===brSelectedMonth?' active':''}" onclick="brSelectMonth('${ym}')">${label}</div>`;
+  }).join('');
+  // Scroll active tab into view
+  setTimeout(()=>tabs.querySelector('.active')?.scrollIntoView({block:'nearest',inline:'center'}),50);
+}
+
+function brSelectMonth(ym){
+  brSelectedMonth=ym;
+  renderBookingRecords();
+}
+
+// ── BOOKING RECORDS ───────────────────────────────────────────
 function renderBookingRecords(){
-  initBRMonthSel();
-  const month=document.getElementById('br-month')?.value||new Date().toISOString().slice(0,7);
-  const all=Object.entries(brBookings).filter(([,b])=>b&&b.month===month).map(([k,b])=>({...b,_key:k}));
+  renderBRMonthTabs();
+  const[y,m]=brSelectedMonth.split('-').map(Number);
+  const lbl=new Date(y,m-1,1).toLocaleString('default',{month:'long',year:'numeric'});
+  document.getElementById('br-month-lbl').textContent=lbl;
+  document.getElementById('br-month-lbl2').textContent=lbl;
+
+  // Filter by payment month
+  const all=Object.entries(brBookings).filter(([,b])=>b&&getPaymentDate(b).slice(0,7)===brSelectedMonth).map(([k,b])=>({...b,_key:k}));
   const allBookers=[...new Set(Object.values(brBookings).filter(Boolean).map(b=>b.booker).filter(Boolean))];
   let order=getBookerOrder();
   allBookers.forEach(n=>{if(!order.includes(n))order.push(n);});
   order=order.filter(n=>allBookers.includes(n));
   saveBookerOrder(order);
 
-  // Summary
+  // Incentive summary
   const totals={};order.forEach(n=>totals[n]=0);
   all.forEach(b=>{if(b.booker)totals[b.booker]=(totals[b.booker]||0)+(b.incentive||0);});
-  document.getElementById('br-summary').innerHTML=order.length
-    ?order.map(n=>`<div class="br-card"><div class="br-card-name">${esc(n)}</div><div class="br-card-amt">$${(totals[n]||0).toFixed(2)}</div><div class="br-card-lbl">incentive</div></div>`).join('')
-    :'<div class="empty">No bookings yet</div>';
+  document.getElementById('br-summary').innerHTML=order.filter(n=>totals[n]>0||all.some(b=>b.booker===n)).map(n=>`
+    <div class="br-card">
+      <div class="br-card-name">${esc(n)}</div>
+      <div class="br-card-amt">$${(totals[n]||0).toFixed(2)}</div>
+      <div class="br-card-lbl">incentive</div>
+    </div>`).join('')||'<div class="empty">No payments this month</div>';
 
-  // Drag order list
   renderBROrderList(order);
 
-  // Table
-  const sorted=all.sort((a,b)=>(b.date+b.time).localeCompare(a.date+a.time));
+  // Table sorted by payment date desc
+  const sorted=all.sort((a,b)=>getPaymentDate(b).localeCompare(getPaymentDate(a)));
   document.getElementById('br-tbody').innerHTML=sorted.length
     ?sorted.map(b=>`<tr>
-      <td>${b.date||''}</td>
-      <td style="font-weight:600;max-width:180px;white-space:normal">${esc(b.venue||'')}</td>
-      <td><b>Court ${esc(b.court||'')}</b></td>
+      <td>${getPaymentDate(b)}</td>
+      <td>${getCourtDate(b)}</td>
+      <td style="font-weight:600;max-width:160px;white-space:normal">${esc(b.venue||'')}</td>
+      <td><b>Ct ${esc(b.court||'')}</b></td>
       <td>${b.time||''}</td>
       <td>${esc(b.booker||'')}</td>
-      <td><span class="${b.venue_type==='school'?'br-badge-sc':'br-badge-sh'}">${b.venue_type==='school'?'School':'Sports Hall'}</span></td>
+      <td><span class="${b.venue_type==='school'?'br-badge-sc':'br-badge-sh'}">${b.venue_type==='school'?'School':'S.Hall'}</span></td>
       <td style="font-weight:700;color:var(--green)">$${(b.incentive||0).toFixed(2)}</td>
       <td><button class="btn btn-red btn-sm" onclick="deleteBooking('${b._key}')">✕</button></td>
     </tr>`).join('')
-    :'<tr><td colspan="8" style="padding:20px;text-align:center;color:var(--txf)">No bookings this month</td></tr>';
+    :'<tr><td colspan="9" style="padding:20px;text-align:center;color:var(--txf)">No payments recorded this month</td></tr>';
 }
 
 function renderBROrderList(order){
@@ -1635,13 +1672,62 @@ function brDE(){document.querySelectorAll('.br-drag-item').forEach(el=>{el.style
 function brDrop(e,toI){
   e.preventDefault();brDE();
   if(brDragI===null||brDragI===toI)return;
-  const o=getBookerOrder();const[m]=o.splice(brDragI,1);o.splice(toI,0,m);
+  const o=getBookerOrder();const[mv]=o.splice(brDragI,1);o.splice(toI,0,mv);
   saveBookerOrder(o);brDragI=null;renderBookingRecords();
 }
 
 async function deleteBooking(key){
   await fetch(`${FIREBASE_URL}/bookings/${key}.json`,{method:'DELETE'});
-  delete brBookings[key];renderBookingRecords();
+  delete brBookings[key];
+  if(currentView==='bookings')renderBookingRecords();
+  if(currentView==='courts')renderCourts();
+}
+
+// ── COURTS ────────────────────────────────────────────────────
+function renderCourts(){
+  const today=new Date();today.setHours(0,0,0,0);
+  const todayStr=today.toISOString().slice(0,10);
+  const allB=Object.values(brBookings).filter(Boolean);
+  const grid=document.getElementById('courts-day-grid');if(!grid)return;
+  grid.innerHTML=Array.from({length:15},(_,i)=>{
+    const d=new Date(today);d.setDate(today.getDate()+i);
+    const ds=d.toISOString().slice(0,10);
+    const dayB=allB.filter(b=>getCourtDate(b)===ds);
+    const isToday=ds===todayStr;
+    const isActive=courtsSelectedDate===ds;
+    return`<div class="court-day-card${isToday?' today':''}${isActive?' active':''}" onclick="showCourtDay('${ds}')">
+      <div class="court-day-name">${DAYS[d.getDay()]}</div>
+      <div class="court-day-num">${d.getDate()}</div>
+      <div class="court-day-month">${MONTHS[d.getMonth()].slice(0,3)}</div>
+      <div class="court-day-count${!dayB.length?' none':''}">${dayB.length?`${dayB.length} court${dayB.length>1?'s':''}`:'—'}</div>
+    </div>`;
+  }).join('');
+  if(courtsSelectedDate)showCourtDay(courtsSelectedDate,false);
+}
+
+function showCourtDay(ds,updateGrid=true){
+  courtsSelectedDate=ds;
+  if(updateGrid)renderCourts();
+  const allB=Object.values(brBookings).filter(Boolean).filter(b=>getCourtDate(b)===ds);
+  const d=new Date(ds);
+  const detail=document.getElementById('courts-detail');
+  if(!allB.length){
+    detail.innerHTML=`<div class="card" style="margin-top:14px"><div class="card-body"><div class="empty">No courts booked for ${DAYS[d.getDay()]} ${d.getDate()} ${MONTHS[d.getMonth()]}.</div></div></div>`;
+    return;
+  }
+  const sorted=allB.sort((a,b)=>(a.time||'').localeCompare(b.time||''));
+  detail.innerHTML=`<div class="card" style="margin-top:14px">
+    <div class="card-hdr">${DAYS[d.getDay()]}, ${d.getDate()} ${MONTHS[d.getMonth()]} ${d.getFullYear()}</div>
+    <div class="card-body" style="padding:0">
+      ${sorted.map(b=>`<div class="court-booking-item" style="padding:14px 16px">
+        <div class="court-num">Ct ${esc(b.court||'?')}</div>
+        <div>
+          <div style="font-weight:700;font-size:13px">${esc(b.venue||'')}</div>
+          <div style="color:var(--txm);font-size:12px;margin-top:2px">${b.time||''} · ${esc(b.booker||'')} · <span class="${b.venue_type==='school'?'br-badge-sc':'br-badge-sh'}">${b.venue_type==='school'?'School':'Sports Hall'}</span></div>
+        </div>
+      </div>`).join('')}
+    </div>
+  </div>`;
 }
 
 // Auto-refresh at 12:30pm and 11:59pm
@@ -1650,7 +1736,7 @@ function scheduleAutoRefresh(){
   [{h:12,m:30},{h:23,m:59}].forEach(t=>{
     const d=new Date(now);d.setHours(t.h,t.m,0,0);
     if(d<=now)d.setDate(d.getDate()+1);
-    setTimeout(()=>{if(currentView==='bookings')loadBookingsFromFirebase();scheduleAutoRefresh();},d-now);
+    setTimeout(()=>{loadBookingsFromFirebase();scheduleAutoRefresh();},d-now);
   });
 }
 scheduleAutoRefresh();
