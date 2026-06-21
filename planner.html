@@ -316,10 +316,10 @@ table.sched td.tslot.cell-target{background:rgba(37,99,235,.22)!important;outlin
 <!-- SCHEDULE -->
 <div class="view active" id="view-schedule">
   <div class="sub-tog">
-    <button id="tog-w" class="active" onclick="switchSched('week')">Week</button>
-    <button id="tog-m" onclick="switchSched('month')">Month</button>
+    <button id="tog-w" onclick="switchSched('week')">Week</button>
+    <button id="tog-m" class="active" onclick="switchSched('month')">Month</button>
   </div>
-  <div id="sv-week">
+  <div id="sv-week" style="display:none">
     <div class="ctrl-row">
       <button class="btn btn-o btn-sm" onclick="shiftWeek(-1)">◀ Prev</button>
       <span class="ctrl-lbl" id="week-lbl"></span>
@@ -332,7 +332,7 @@ table.sched td.tslot.cell-target{background:rgba(37,99,235,.22)!important;outlin
       <table class="sched"><thead id="sched-head"></thead><tbody id="sched-body"></tbody></table>
     </div>
   </div>
-  <div id="sv-month" style="display:none">
+  <div id="sv-month">
     <div class="ctrl-row">
       <button class="btn btn-o btn-sm" onclick="shiftMonth(-1)">◀ Prev</button>
       <span class="ctrl-lbl" id="month-lbl"></span>
@@ -383,6 +383,12 @@ table.sched td.tslot.cell-target{background:rgba(37,99,235,.22)!important;outlin
         <div class="card-body" id="coach-form-body">
           <form id="coach-form" onsubmit="submitCoach(event)">
             <div class="fg"><label>Name *</label><input type="text" id="cn" required placeholder="Coach name"></div>
+            <div class="fg"><label>Role</label>
+              <div style="display:flex;gap:16px">
+                <label class="chk-row"><input type="radio" name="crole" id="crole-main" value="main" checked> Main</label>
+                <label class="chk-row"><input type="radio" name="crole" id="crole-adhoc" value="adhoc"> Ad hoc</label>
+              </div>
+            </div>
             <div class="fg"><label>Block Color</label>
               <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:4px;margin-bottom:2px">
                 <button type="button" class="color-btn" data-color="#ef4444" style="background:#ef4444" onclick="setCoachColor(this)"></button>
@@ -725,7 +731,7 @@ function showView(v){
 }
 
 // ── SCHED TOGGLE ──────────────────────────────────────────────
-let schedMode='week';
+let schedMode='month';
 function switchSched(m){
   schedMode=m;
   document.getElementById('tog-w').classList.toggle('active',m==='week');
@@ -819,7 +825,7 @@ function renderWeek(){
     head+=`<th class="${it?'today-h':''}" style="min-width:${colW}px"><div>${DAYS[d.getDay()]}</div><div style="font-size:16px${it?';font-weight:900':''}">${d.getDate()}</div></th>`;
   });
   document.getElementById('sched-head').innerHTML=head+'</tr>';
-  const slots=[];for(let h=6;h<23;h++){slots.push(h);slots.push(h+.5)}
+  const slots=[];for(let h=8;h<22;h++){slots.push(h);slots.push(h+.5)}
   let body='';
   slots.forEach(h=>{
     const half=h%1!==0;
@@ -833,9 +839,9 @@ function renderWeek(){
     const dayI=wkI.filter(i=>i.date===dt);
     const laid=layoutInsts(dayI);
     laid.forEach(inst=>{
-      const startSlot=(t2d(inst.start_time)-6)*2;
-      const endSlot=(t2d(inst.end_time)-6)*2;
-      if(startSlot<0||startSlot>=34)return;
+      const startSlot=(t2d(inst.start_time)-8)*2;
+      const endSlot=(t2d(inst.end_time)-8)*2;
+      if(startSlot<0||startSlot>=28)return;
       const rowIdx=Math.floor(startSlot);
       const rows=document.querySelectorAll('#sched-body tr');
       const row=rows[rowIdx];if(!row)return;
@@ -1133,11 +1139,17 @@ let selCoachIds=new Set();
 function buildCoachChecks(selectedIds){
   selCoachIds=new Set((selectedIds||[]).map(Number));
   const coaches=getCoaches().filter(c=>c.active);
-  document.getElementById('cchk-wrap').innerHTML=coaches.map(c=>`
-    <div class="cchk${selCoachIds.has(c.id)?' on':''}" data-cid="${c.id}" onclick="toggleCoachSel(this)">
-      <span style="width:10px;height:10px;border-radius:50%;background:${c.color||'#3b82f6'};display:inline-block;flex-shrink:0;border:1px solid rgba(0,0,0,.15)"></span>
-      ${esc(c.name)}
-    </div>`).join('');
+  const main=coaches.filter(c=>(c.type||'main')==='main');
+  const adhoc=coaches.filter(c=>c.type==='adhoc');
+  const chip=c=>`<div class="cchk${selCoachIds.has(c.id)?' on':''}" data-cid="${c.id}" onclick="toggleCoachSel(this)">
+    <span style="width:10px;height:10px;border-radius:50%;background:${(c.type||'main')==='adhoc'?'var(--bdr)':c.color||'#3b82f6'};display:inline-block;flex-shrink:0;border:1px solid rgba(0,0,0,.15)"></span>
+    ${esc(c.name)}
+  </div>`;
+  const lbl=t=>`<div style="font-size:10px;font-weight:800;color:var(--txm);text-transform:uppercase;letter-spacing:.05em;width:100%;margin:4px 0 2px">${t}</div>`;
+  let html='';
+  if(main.length)html+=lbl('Main')+main.map(chip).join('');
+  if(adhoc.length)html+=lbl('Ad hoc')+adhoc.map(chip).join('');
+  document.getElementById('cchk-wrap').innerHTML=html;
 }
 function toggleCoachSel(el){
   const id=+el.dataset.cid;
@@ -1236,13 +1248,15 @@ function renderCoaches(){
   const coaches=getCoaches(),venues=getVenues();
   document.getElementById('coach-form-hdr').textContent=editCid?'Edit Coach':'Add Coach';
   document.getElementById('coach-cancel').style.display=editCid?'inline-flex':'none';
-  let html=coaches.length?`<table class="dtable"><thead><tr><th></th><th>Name</th><th>Status</th><th></th></tr></thead><tbody>`:
+  let html=coaches.length?`<table class="dtable"><thead><tr><th></th><th>Name</th><th>Role</th><th>Status</th><th></th></tr></thead><tbody>`:
     '<div class="empty">No coaches yet.</div>';
   if(coaches.length){
     coaches.forEach(c=>{
+      const isAdhoc=(c.type||'main')==='adhoc';
       html+=`<tr style="${c.active?'':'opacity:.45'}">
-        <td><span style="display:inline-block;width:18px;height:18px;border-radius:4px;background:${c.color||'#3b82f6'};border:1px solid rgba(0,0,0,.2)"></span></td>
+        <td><span style="display:inline-block;width:18px;height:18px;border-radius:4px;background:${isAdhoc?'none':c.color||'#3b82f6'};border:${isAdhoc?'2px dashed var(--bdr)':'1px solid rgba(0,0,0,.2)'}"></span></td>
         <td style="font-weight:700">${esc(c.name)}</td>
+        <td><span style="font-size:10px;font-weight:700;padding:2px 8px;border-radius:99px;background:${isAdhoc?'var(--surf2)':'var(--bluebg)'};color:${isAdhoc?'var(--txm)':'var(--blue)'};border:1px solid ${isAdhoc?'var(--bdr)':'var(--blue)'}">${isAdhoc?'Ad hoc':'Main'}</span></td>
         <td><span class="badge ${c.active?'b-g':'b-gr'}" onclick="toggleActive(${c.id})">${c.active?'Active':'Inactive'}</span></td>
         <td style="display:flex;gap:4px">
           <button class="btn btn-o btn-sm" onclick="startEditCoach(${c.id})">Edit</button>
@@ -1270,15 +1284,18 @@ function startEditCoach(id){
   editCid=id;document.getElementById('cn').value=c.name;
   document.getElementById('ccolor').value=c.color||'#3b82f6';
   document.getElementById('cactive').checked=!!c.active;
+  const roleEl=document.querySelector(`input[name="crole"][value="${c.type||'main'}"]`);
+  if(roleEl)roleEl.checked=true;
   const btn=document.querySelector(`.color-btn[data-color="${c.color||'#3b82f6'}"]`);
   if(btn){document.querySelectorAll('.color-btn').forEach(b=>b.classList.remove('sel'));btn.classList.add('sel');}
   renderCoaches();document.getElementById('cn').focus();
 }
-function cancelCoachEdit(){editCid=null;document.getElementById('coach-form').reset();document.getElementById('cactive').checked=true;document.querySelectorAll('.color-btn').forEach(b=>b.classList.remove('sel'));renderCoaches()}
+function cancelCoachEdit(){editCid=null;document.getElementById('coach-form').reset();document.getElementById('cactive').checked=true;document.getElementById('crole-main').checked=true;document.querySelectorAll('.color-btn').forEach(b=>b.classList.remove('sel'));renderCoaches()}
 function submitCoach(e){
   e.preventDefault();
   const name=document.getElementById('cn').value.trim();if(!name)return;
-  const d={name,color:document.getElementById('ccolor').value,active:document.getElementById('cactive').checked?1:0};
+  const role=document.querySelector('input[name="crole"]:checked')?.value||'main';
+  const d={name,color:document.getElementById('ccolor').value,active:document.getElementById('cactive').checked?1:0,type:role};
   if(editCid)d.id=editCid;
   saveCoach(d);cancelCoachEdit();
 }
@@ -1326,12 +1343,15 @@ function getComboColors(){const v=S.get('combo-colors');return(v&&!Array.isArray
 function saveComboColor(comboKey,color){const cc=getComboColors();cc[comboKey]=color;S.set('combo-colors',cc);}
 function getComboKey(coachIds){return coachIds.sort((a,b)=>a-b).join(',')}
 function getBlockColor(inst){
-  if(!inst.coach_ids||inst.coach_ids.length===0)return inst.color||'#3b82f6';
-  const key=getComboKey(inst.coach_ids);const cc=getComboColors();
+  if(!inst.coach_ids||inst.coach_ids.length===0)return inst.color||'';
+  const coaches=getCoaches();
+  const mainIds=inst.coach_ids.filter(id=>{const c=coaches.find(x=>x.id===id);return c&&(c.type||'main')==='main';});
+  if(!mainIds.length)return '';
+  const key=getComboKey([...mainIds]);const cc=getComboColors();
   if(cc[key]!==undefined)return cc[key];return '';
 }
 function renderComboColors(){
-  const coaches=getCoaches().filter(c=>c.active);
+  const coaches=getCoaches().filter(c=>c.active&&(c.type||'main')==='main');
   if(!coaches.length){document.getElementById('combo-colors').innerHTML='<div class="empty" style="padding:8px 0">Add active coaches first.</div>';return;}
   let html='';const combos=[];
   for(let mask=1;mask<(1<<coaches.length);mask++){
@@ -1432,7 +1452,6 @@ function renderAttendance(){
     const dotColor=rawColor&&rawColor!==''?rawColor:'var(--bdr)';
     const cn=coachNames(inst.coach_ids);
     const att=getAttendance(inst.id);
-    const present=att.filter(a=>a.present).length;
     const statusIcon=inst.status==='completed'?'✅':'⏰';
     html+=`<div class="att-list-item" onclick="attDetailId=${inst.id};renderAttendance()">
       <div class="att-color-dot" style="background:${dotColor}"></div>
@@ -1441,7 +1460,7 @@ function renderAttendance(){
         <div class="att-list-sub">${inst.date} · ${fmt12(inst.start_time)}–${fmt12(inst.end_time)}${cn?' · '+esc(cn):''}</div>
         ${inst.class_type||inst.standard?`<div class="att-list-sub">${esc([inst.class_type,inst.standard].filter(Boolean).join(' · '))}</div>`:''}
       </div>
-      <span class="att-badge${att.length?' has-att':''}">${att.length?`${present}/${att.length}`:'—'}</span>
+      <span class="att-badge${att.length?' has-att':''}">${att.length?`${att.length}`:'—'}</span>
       <span style="color:var(--txf);font-size:18px;line-height:1">›</span>
     </div>`;
   });
@@ -1457,7 +1476,7 @@ function renderAttDetail(instId,elArg){
   const rawColor=getBlockColor(inst);
   const color=rawColor&&rawColor!==''?rawColor:'#3b82f6';
   const cn=coachNames(inst.coach_ids);
-  const present=att.filter(a=>a.present).length;
+  const total=att.length;
 
   let listHtml='';
   if(!att.length){
@@ -1465,8 +1484,7 @@ function renderAttDetail(instId,elArg){
   } else {
     att.forEach(a=>{
       listHtml+=`<li class="att-check-item">
-        <div class="att-cb${a.present?' checked':''}" onclick="toggleAtt(${instId},${a.id})">${a.present?'✓':''}</div>
-        <span class="att-name${a.present?' done':''}">${esc(a.name)}</span>
+        <span class="att-name">${esc(a.name)}</span>
         <button class="att-del" onclick="removeAtt(${instId},${a.id})" title="Remove">✕</button>
       </li>`;
     });
@@ -1479,12 +1497,12 @@ function renderAttDetail(instId,elArg){
       ${inst.class_type||inst.standard?`<div style="font-size:12px;color:var(--txm);margin-bottom:2px">${esc([inst.class_type,inst.standard].filter(Boolean).join(' · '))}</div>`:''}
       <div style="font-size:12px;color:var(--txm)">${inst.date} · ${fmt12(inst.start_time)}–${fmt12(inst.end_time)}</div>
       ${cn?`<div style="font-size:12px;font-weight:700;margin-top:4px">${esc(cn)}</div>`:''}
-      <div style="font-size:11px;color:var(--txm);margin-top:6px;padding-top:6px;border-top:1px solid var(--bdr)">${present} present · ${att.length-present} absent · ${att.length} total</div>
+      <div style="font-size:11px;color:var(--txm);margin-top:6px;padding-top:6px;border-top:1px solid var(--bdr)">${total} attending</div>
     </div>
     <div class="card" style="overflow:hidden;padding:0">
       <div class="card-hdr" style="display:flex;justify-content:space-between;align-items:center">
         <span>Students</span>
-        <span style="font-size:11px;color:var(--txm);font-weight:500">${att.length} added</span>
+        <span style="font-size:11px;color:var(--txm);font-weight:500">${total} attending</span>
       </div>
       <ul class="att-check-list">${listHtml}</ul>
       <div class="att-add-row">
@@ -1510,7 +1528,7 @@ function addAtt(instId){
   const inp=document.getElementById('att-inp-'+instId);
   const name=inp?.value.trim();if(!name)return;
   const att=getAttendance(instId);
-  att.push({id:attNextId(att),name,present:false});
+  att.push({id:attNextId(att),name,present:true});
   saveAttendance(instId,att);
   renderAttDetail(instId);
   setTimeout(()=>{const ni=document.getElementById('att-inp-'+instId);if(ni)ni.focus();},80);
@@ -1538,7 +1556,7 @@ function renderAdminClass(){
     const insts=byMonth[ym];
     const[y,m]=ym.split('-').map(Number);
     const label=new Date(y,m-1,1).toLocaleString('default',{month:'long',year:'numeric'});
-    const totalAtt=insts.reduce((s,i)=>s+getAttendance(i.id).filter(a=>a.present).length,0);
+    const totalAtt=insts.reduce((s,i)=>s+getAttendance(i.id).length,0);
     html+=`<div class="month-section">
       <div class="month-hdr" onclick="toggleMonthSection('ms-${ym}','msa-${ym}')">
         <span>${label}</span>
@@ -1549,7 +1567,6 @@ function renderAdminClass(){
       const rawColor=getBlockColor(inst);const color=rawColor&&rawColor!==''?rawColor:'#3b82f6';
       const cn=coachNames(inst.coach_ids);
       const att=getAttendance(inst.id);
-      const present=att.filter(a=>a.present).length;
       html+=`<div class="class-record">
         <div class="class-rec-hdr" onclick="toggleClassRecord('cr-${inst.id}','cra-${inst.id}')">
           <div style="width:10px;height:10px;border-radius:50%;background:${esc(color)};flex-shrink:0;border:1px solid rgba(0,0,0,.1)"></div>
@@ -1558,14 +1575,14 @@ function renderAdminClass(){
             <div style="font-size:11px;color:var(--txm)">${inst.date} · ${fmt12(inst.start_time)}–${fmt12(inst.end_time)}${cn?' · '+esc(cn):''}</div>
             ${inst.class_type||inst.standard?`<div style="font-size:10px;color:var(--txf)">${esc([inst.class_type,inst.standard].filter(Boolean).join(' · '))}</div>`:''}
           </div>
-          ${att.length?`<span class="att-badge has-att">${present}/${att.length}</span>`:'<span class="att-badge">No att.</span>'}
+          ${att.length?`<span class="att-badge has-att">${att.length}</span>`:'<span class="att-badge">No att.</span>'}
           <span id="cra-${inst.id}" style="color:var(--txf);font-size:12px;margin-left:4px">▶</span>
         </div>
         <div class="class-rec-body" id="cr-${inst.id}">
           ${att.length?`
-            <div style="font-size:12px;font-weight:700;margin-bottom:8px;color:var(--txm)">${present} present · ${att.length-present} absent</div>
+            <div style="font-size:12px;font-weight:700;margin-bottom:8px;color:var(--txm)">${att.length} attending</div>
             <div class="att-chips">
-              ${att.map(a=>`<span class="att-chip${a.present?' present':''}">${esc(a.name)}</span>`).join('')}
+              ${att.map(a=>`<span class="att-chip present">${esc(a.name)}</span>`).join('')}
             </div>`
           :'<div style="font-size:12px;color:var(--txf)">No attendance recorded for this class.</div>'}
         </div>
