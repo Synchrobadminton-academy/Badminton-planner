@@ -238,10 +238,6 @@ table.sched td.tslot.cell-target{background:rgba(37,99,235,.22)!important;outlin
 .court-booking-item{display:flex;align-items:center;gap:14px;padding:12px 0;border-bottom:1px solid var(--bdr)}
 .court-booking-item:last-child{border-bottom:none}
 .court-num{font-size:24px;font-weight:900;color:var(--blue);min-width:70px;text-align:center}
-/* Booking Records monthly tabs */
-.br-month-tabs{display:flex;gap:6px;overflow-x:auto;padding-bottom:10px;margin-bottom:4px;-webkit-overflow-scrolling:touch}
-.br-month-tab{flex-shrink:0;padding:6px 16px;border-radius:99px;border:1px solid var(--bdr);font-size:12px;font-weight:700;cursor:pointer;background:var(--surf);color:var(--txm);white-space:nowrap}
-.br-month-tab.active{background:var(--blue);color:#fff;border-color:var(--blue)}
 /* Booking Records */
 .br-summary{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px}
 .br-card{border:2px solid var(--bdr);border-radius:10px;padding:14px;text-align:center}
@@ -257,6 +253,13 @@ table.sched td.tslot.cell-target{background:rgba(37,99,235,.22)!important;outlin
 .br-table tr:last-child td{border-bottom:none}
 .br-badge-sh{background:#eff6ff;color:#1d4ed8;border:1px solid #bfdbfe;padding:2px 7px;border-radius:99px;font-size:10px;font-weight:700}
 .br-badge-sc{background:#f0fdf4;color:#15803d;border:1px solid #bbf7d0;padding:2px 7px;border-radius:99px;font-size:10px;font-weight:700}
+/* Class Records list */
+.cr-row{display:flex;align-items:center;gap:10px;padding:10px 14px;border-bottom:1px solid var(--bdr);cursor:pointer;transition:background .1s}
+.cr-row:hover{background:var(--hov)}
+.cr-date{font-size:13px;font-weight:900;min-width:42px;padding-left:7px;color:var(--tx)}
+.cr-info{flex:1;min-width:0}
+.cr-title{font-size:12px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cr-sub{font-size:11px;color:var(--txm);margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 /* Receipts */
 .rcpt-row{display:flex;align-items:flex-start;gap:12px;padding:12px 0;border-bottom:1px solid var(--bdr)}
 .rcpt-row:last-child{border-bottom:none}
@@ -469,10 +472,11 @@ table.sched td.tslot.cell-target{background:rgba(37,99,235,.22)!important;outlin
   <div class="main-inner">
     <div class="page-hdr">
       <h1 class="page-title">Booking Records</h1>
-      <button class="btn btn-o btn-sm" onclick="loadBookingsFromFirebase()">↻ Refresh</button>
+      <div style="display:flex;gap:8px;align-items:center">
+        <select id="br-month-sel" onchange="brSelectMonth(this.value)" style="padding:5px 10px;border-radius:8px;border:1px solid var(--bdr);background:var(--surf);color:var(--tx);font-size:12px;font-weight:700;cursor:pointer"></select>
+        <button class="btn btn-o btn-sm" onclick="loadBookingsFromFirebase()">↻ Refresh</button>
+      </div>
     </div>
-    <!-- Monthly tabs -->
-    <div class="br-month-tabs" id="br-month-tabs"></div>
     <div class="card">
       <div class="card-hdr">Incentives — <span id="br-month-lbl"></span></div>
       <div class="card-body"><div id="br-summary" class="br-summary"><div class="empty">Loading…</div></div></div>
@@ -1431,26 +1435,51 @@ function toggleCard(bodyId,chevId){
 
 // ── ATTENDANCE VIEW ───────────────────────────────────────────
 let attDetailId=null;
+let attShowAll=false;
+let attFilterMonth=new Date().toISOString().slice(0,7);
 
 function renderAttendance(){
   const el=document.getElementById('view-attendance');
   if(attDetailId!==null){renderAttDetail(attDetailId,el);return;}
 
+  let insts=getInsts().filter(i=>i.status!=='cancelled');
+
+  if(attShowAll){
+    // show everything, newest first
+    insts=insts.sort((a,b)=>b.date.localeCompare(a.date)||b.start_time.localeCompare(a.start_time));
+  } else {
+    // filter to selected month
+    insts=insts.filter(i=>i.date.slice(0,7)===attFilterMonth)
+      .sort((a,b)=>a.date.localeCompare(b.date)||a.start_time.localeCompare(b.start_time));
+  }
+
+  // Build month options from all instances
+  const allMonths=[...new Set(getInsts().map(i=>i.date.slice(0,7)))].sort().reverse();
   const now=new Date();
-  const cutoff=new Date(now.getTime()-24*60*60*1000);
-  const cutoffStr=ds(cutoff);
+  const curYM=`${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`;
+  if(!allMonths.includes(curYM))allMonths.unshift(curYM);
+  const monthOpts=allMonths.map(ym=>{
+    const[y,m]=ym.split('-').map(Number);
+    const lbl=new Date(y,m-1,1).toLocaleString('default',{month:'short',year:'numeric'});
+    return`<option value="${ym}"${ym===attFilterMonth?' selected':''}>${lbl}</option>`;
+  }).join('');
 
-  const insts=getInsts().filter(i=>{
-    if(i.status==='cancelled')return false;
-    if(i.status!=='completed')return i.date>=cutoffStr;
-    // completed: show if class end time is within last 24hrs
-    const endDt=new Date(i.date+'T'+i.end_time+':00');
-    return endDt>=cutoff;
-  }).sort((a,b)=>a.date.localeCompare(b.date)||a.start_time.localeCompare(b.start_time));
+  let html=`<div class="page-hdr"><h1 class="page-title">Attendance</h1></div>
+  <div class="card" style="margin-bottom:12px">
+    <div class="card-body" style="display:flex;gap:14px;align-items:center;flex-wrap:wrap;padding:10px 14px">
+      <label style="display:flex;align-items:center;gap:6px;font-size:12px;font-weight:700;cursor:pointer">
+        <input type="checkbox" id="att-show-all"${attShowAll?' checked':''} onchange="attShowAll=this.checked;renderAttendance()">
+        Show all
+      </label>
+      <select id="att-month-sel" ${attShowAll?'disabled':''} onchange="attFilterMonth=this.value;renderAttendance()"
+        style="padding:5px 10px;border-radius:8px;border:1px solid var(--bdr);background:var(--surf);color:var(--tx);font-size:12px;font-weight:700;cursor:pointer;opacity:${attShowAll?'.4':'1'}">
+        ${monthOpts}
+      </select>
+    </div>
+  </div>`;
 
-  let html=`<div class="page-hdr"><h1 class="page-title">Attendance</h1><span style="font-size:11px;color:var(--txm)">Tap a class to mark attendance</span></div>`;
   if(!insts.length){
-    el.innerHTML=html+`<div class="card"><div class="empty">No upcoming or recent classes to track.</div></div>`;return;
+    el.innerHTML=html+`<div class="card"><div class="empty">No classes for this period.</div></div>`;return;
   }
   html+=`<div class="card" style="overflow:hidden;padding:0">`;
   insts.forEach(inst=>{
@@ -1547,10 +1576,9 @@ function renderAdminClass(){
     .filter(i=>i.status==='completed')
     .sort((a,b)=>b.date.localeCompare(a.date)||b.start_time.localeCompare(a.start_time));
 
-  let html=`<div class="page-hdr"><h1 class="page-title">Class Records</h1><span style="font-size:11px;color:var(--txm)">Completed classes</span></div>`;
+  let html=`<div class="page-hdr"><h1 class="page-title">Class Records</h1></div>`;
   if(!completed.length){el.innerHTML=html+`<div class="card"><div class="empty">No completed classes yet.</div></div>`;return;}
 
-  // Group by month
   const byMonth={};
   completed.forEach(inst=>{
     const ym=inst.date.slice(0,7);
@@ -1562,36 +1590,27 @@ function renderAdminClass(){
     const insts=byMonth[ym];
     const[y,m]=ym.split('-').map(Number);
     const label=new Date(y,m-1,1).toLocaleString('default',{month:'long',year:'numeric'});
-    const totalAtt=insts.reduce((s,i)=>s+getAttendance(i.id).length,0);
-    html+=`<div class="month-section">
-      <div class="month-hdr" onclick="toggleMonthSection('ms-${ym}','msa-${ym}')">
-        <span>${label}</span>
-        <span style="font-size:11px;font-weight:600;color:var(--txm)">${insts.length} class${insts.length!==1?'es':''} · ${totalAtt} present <span id="msa-${ym}">▼</span></span>
-      </div>
-      <div class="month-body" id="ms-${ym}">`;
+    html+=`<div class="card" style="margin-bottom:14px;overflow:hidden">
+      <div class="card-hdr">${label} <span style="font-weight:500;font-size:11px;color:var(--txm)">${insts.length} class${insts.length!==1?'es':''}</span></div>
+      <div class="card-body" style="padding:0">`;
     insts.forEach(inst=>{
       const rawColor=getBlockColor(inst);const color=rawColor&&rawColor!==''?rawColor:'#3b82f6';
       const cn=coachNames(inst.coach_ids);
       const att=getAttendance(inst.id);
-      html+=`<div class="class-record">
-        <div class="class-rec-hdr" onclick="toggleClassRecord('cr-${inst.id}','cra-${inst.id}')">
-          <div style="width:10px;height:10px;border-radius:50%;background:${esc(color)};flex-shrink:0;border:1px solid rgba(0,0,0,.1)"></div>
-          <div style="flex:1;min-width:0">
-            <div style="font-weight:700;font-size:12px">${esc(inst.venue_text||'(No venue)')}${inst.court_no?' · Ct '+esc(inst.court_no):''}</div>
-            <div style="font-size:11px;color:var(--txm)">${inst.date} · ${fmt12(inst.start_time)}–${fmt12(inst.end_time)}${cn?' · '+esc(cn):''}</div>
-            ${inst.class_type||inst.standard?`<div style="font-size:10px;color:var(--txf)">${esc([inst.class_type,inst.standard].filter(Boolean).join(' · '))}</div>`:''}
-          </div>
-          ${att.length?`<span class="att-badge has-att">${att.length}</span>`:'<span class="att-badge">No att.</span>'}
-          <span id="cra-${inst.id}" style="color:var(--txf);font-size:12px;margin-left:4px">▶</span>
+      const d=new Date(inst.date+'T00:00');
+      const dateLabel=`${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}`;
+      html+=`<div class="cr-row" onclick="toggleClassRecord('cr-${inst.id}','cra-${inst.id}')">
+        <div class="cr-date" style="border-left:3px solid ${esc(color)}">${dateLabel}</div>
+        <div class="cr-info">
+          <div class="cr-title">${esc(inst.venue_text||'(No venue)')}${inst.court_no?' · Ct '+esc(inst.court_no):''}</div>
+          <div class="cr-sub">${fmt12(inst.start_time)}–${fmt12(inst.end_time)}${cn?' · '+esc(cn):''}${inst.class_type?' · '+esc(inst.class_type):''}</div>
         </div>
-        <div class="class-rec-body" id="cr-${inst.id}">
-          ${att.length?`
-            <div style="font-size:12px;font-weight:700;margin-bottom:8px;color:var(--txm)">${att.length} attending</div>
-            <div class="att-chips">
-              ${att.map(a=>`<span class="att-chip present">${esc(a.name)}</span>`).join('')}
-            </div>`
-          :'<div style="font-size:12px;color:var(--txf)">No attendance recorded for this class.</div>'}
-        </div>
+        <span class="att-badge${att.length?' has-att':''}" style="flex-shrink:0">${att.length||'—'}</span>
+        <span id="cra-${inst.id}" style="color:var(--txf);font-size:12px;flex-shrink:0">▶</span>
+      </div>
+      <div class="class-rec-body" id="cr-${inst.id}">
+        ${att.length?`<div class="att-chips" style="padding:8px 14px 10px">${att.map(a=>`<span class="att-chip present">${esc(a.name)}</span>`).join('')}</div>`
+        :'<div style="font-size:12px;color:var(--txf);padding:8px 14px 10px">No attendance recorded.</div>'}
       </div>`;
     });
     html+=`</div></div>`;
@@ -1634,21 +1653,18 @@ function getCourtDate(b){return b.court_date||b.date||'';}
 function getBookerOrder(){try{return JSON.parse(localStorage.getItem('booker-order')||'[]')}catch{return[]}}
 function saveBookerOrder(o){localStorage.setItem('booker-order',JSON.stringify(o))}
 
-// ── MONTHLY TABS ──────────────────────────────────────────────
-function renderBRMonthTabs(){
+// ── BOOKING RECORDS MONTH DROPDOWN ────────────────────────────
+function renderBRMonthDropdown(){
   const now=new Date();
-  // Collect months that have data + last 4 months always
   const monthsWithData=new Set(Object.values(brBookings).filter(Boolean).map(b=>getPaymentDate(b).slice(0,7)).filter(Boolean));
   for(let i=3;i>=0;i--){const d=new Date(now.getFullYear(),now.getMonth()-i,1);monthsWithData.add(`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`);}
-  const sorted=[...monthsWithData].sort();
-  const tabs=document.getElementById('br-month-tabs');
-  tabs.innerHTML=sorted.map(ym=>{
+  const sorted=[...monthsWithData].sort().reverse();
+  const sel=document.getElementById('br-month-sel');if(!sel)return;
+  sel.innerHTML=sorted.map(ym=>{
     const[y,m]=ym.split('-').map(Number);
-    const label=new Date(y,m-1,1).toLocaleString('default',{month:'short',year:'numeric'});
-    return`<div class="br-month-tab${ym===brSelectedMonth?' active':''}" onclick="brSelectMonth('${ym}')">${label}</div>`;
+    const label=new Date(y,m-1,1).toLocaleString('default',{month:'long',year:'numeric'});
+    return`<option value="${ym}"${ym===brSelectedMonth?' selected':''}>${label}</option>`;
   }).join('');
-  // Scroll active tab into view
-  setTimeout(()=>tabs.querySelector('.active')?.scrollIntoView({block:'nearest',inline:'center'}),50);
 }
 
 function brSelectMonth(ym){
@@ -1658,7 +1674,7 @@ function brSelectMonth(ym){
 
 // ── BOOKING RECORDS ───────────────────────────────────────────
 function renderBookingRecords(){
-  renderBRMonthTabs();
+  renderBRMonthDropdown();
   const[y,m]=brSelectedMonth.split('-').map(Number);
   const lbl=new Date(y,m-1,1).toLocaleString('default',{month:'long',year:'numeric'});
   document.getElementById('br-month-lbl').textContent=lbl;
