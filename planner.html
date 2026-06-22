@@ -2449,7 +2449,7 @@ function renderReceipts(){
           <div class="rcpt-info">
             <div class="rcpt-venue">${esc(b.venue||'—')}</div>
             <div class="rcpt-meta">
-              ${b.time||'—'} &nbsp;·&nbsp; ${esc(b.booker||'—')}${(()=>{const coach=getBookerCoach(b.booker);return coach?` <span style="color:#10b981;font-weight:700">(${esc(coach.name)})</span>`:''})()}  &nbsp;·&nbsp;
+              ${b.time||'—'} &nbsp;·&nbsp; ${esc(b.booker||'—')}${(()=>{const coach=getBookerCoach(b.booker);return coach?'<span style="color:#10b981;font-weight:700">('+esc(coach.name)+')</span>':''})()}  &nbsp;·&nbsp;
               <span class="${b.venue_type==='school'?'br-badge-sc':'br-badge-sh'}">${b.venue_type==='school'?'School':'Sports Hall'}</span>
               &nbsp;·&nbsp; ${b.slots||1} hr${(b.slots||1)>1?'s':''}
               ${b.court_date&&b.court_date!==dt?`<br>Court date: ${b.court_date}`:''}
