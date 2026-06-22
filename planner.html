@@ -687,7 +687,13 @@ async function fetchFirebaseData(){
       const r=await fetch(`${FIREBASE_URL}/${k}.json`);
       if(r.ok){
         const data=await r.json();
-        syncCache[k]=(k==='combo-colors')?Object.assign({},data||{}):Array.isArray(data)?Object.values(data).filter(Boolean):(Array.isArray(data)?data:[]);
+        if(k==='combo-colors'){
+          syncCache[k]=Object.assign({},data||{});
+        }else if(data&&typeof data==='object'){
+          syncCache[k]=Array.isArray(data)?data:Object.values(data).filter(Boolean);
+        }else{
+          syncCache[k]=[];
+        }
       }
     }
     return true;
@@ -743,7 +749,8 @@ async function syncLoop(){
   S.set('instances',[]);
   S.set('sessions',[]);
   S.set('combo-colors',{});
-  fetchFirebaseData().then(()=>{syncLoop();});
+  S.set('booker_coach_map',{});
+  fetchFirebaseData().then(()=>{setTimeout(()=>{syncLoop();},500);});
 })();
 
 const getCoaches=()=>S.get('coaches');
