@@ -620,6 +620,18 @@ table.sched td.tslot.cell-target{background:rgba(37,99,235,.22)!important;outlin
   </div>
 </div>
 
+<!-- CONFIRM DELETE MODAL -->
+<div class="overlay" id="confirm-modal" onclick="if(event.target===this)closeConfirm()">
+  <div class="modal">
+    <h2 id="confirm-title">Confirm Delete</h2>
+    <div id="confirm-body" style="margin-bottom:16px;color:var(--txm)"></div>
+    <div class="mact">
+      <button class="btn btn-p" onclick="confirmDelete()">🗑️ Delete</button>
+      <button class="btn btn-o" onclick="closeConfirm()">Cancel</button>
+    </div>
+  </div>
+</div>
+
 <!-- RECEIPT IMAGE MODAL -->
 <div class="overlay" id="img-modal" onclick="if(event.target===this)closeImgModal()">
   <div class="img-modal-inner">
@@ -2309,6 +2321,44 @@ function closeImgModal(){
   document.getElementById('img-modal-body').innerHTML='';
 }
 
+// ── RECEIPT DELETE ────────────────────────────────────────────
+let deleteReceiptKey=null;
+function promptDeleteReceipt(key,venue,incentive){
+  deleteReceiptKey=key;
+  const confirmBody=document.getElementById('confirm-body');
+  confirmBody.innerHTML=`
+    <div style="margin-bottom:10px">
+      <div style="font-weight:700;font-size:13px">${esc(venue)}</div>
+      <div style="font-size:12px;margin-top:4px">Incentive: <span style="color:var(--green);font-weight:700">$${incentive.toFixed(2)}</span></div>
+    </div>
+    <div style="font-size:12px;line-height:1.5">
+      This will delete:<br>
+      • The receipt image<br>
+      • The booking record (affects Courts view)<br>
+      • The incentive payment
+    </div>
+  `;
+  document.getElementById('confirm-modal').classList.add('open');
+}
+function confirmDelete(){
+  if(!deleteReceiptKey)return;
+  const key=deleteReceiptKey;
+  closeConfirm();
+  Promise.all([
+    fetch(`${FIREBASE_URL}/bookings/${key}.json`,{method:'DELETE'}),
+    fetch(`${FIREBASE_URL}/booking_images/${key}.json`,{method:'DELETE'})
+  ]).then(()=>{
+    delete brBookings[key];
+    renderReceipts();
+    renderCourts();
+    renderBookingRecords();
+  }).catch(e=>console.error('Delete receipt error:',e));
+}
+function closeConfirm(){
+  deleteReceiptKey=null;
+  document.getElementById('confirm-modal').classList.remove('open');
+}
+
 // ── RECEIPTS ──────────────────────────────────────────────────
 function renderReceipts(){
   const list=document.getElementById('receipts-list');if(!list)return;
@@ -2349,7 +2399,10 @@ function renderReceipts(){
               ${b.court_date&&b.court_date!==dt?`<br>Court date: ${b.court_date}`:''}
             </div>
           </div>
-          <div class="rcpt-incentive">$${(b.incentive||0).toFixed(2)}</div>
+          <div style="display:flex;gap:8px;align-items:center">
+            <div class="rcpt-incentive">$${(b.incentive||0).toFixed(2)}</div>
+            <button onclick="promptDeleteReceipt('${b._key}','${esc(b.venue||'—')}',${b.incentive||0})" style="background:none;border:1px solid var(--bdr);color:#ef4444;border-radius:6px;padding:3px 8px;font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap">🗑️ Delete</button>
+          </div>
         </div>`).join('')}
         <div class="rcpt-day-total">Day total: $${dayTotal.toFixed(2)}</div>
       </div>
