@@ -1795,6 +1795,8 @@ function renderDashboard(){
   const weekEnd=new Date(today.getFullYear(),today.getMonth(),today.getDate()+7);
   const weekSessions=allInsts.filter(i=>i.date>=todayStr&&i.date<=ds(weekEnd)).length;
   const cautionCount=allInsts.filter(i=>i.date>=todayStr&&(!i.coach_ids||i.coach_ids.length===0)).length;
+  // Courts with no lesson (upcoming)
+  const noLessonCourts=Object.values(brBookings).filter(b=>b&&b.no_lesson&&getCourtDate(b)>=todayStr).sort((a,b)=>getCourtDate(a).localeCompare(getCourtDate(b)));
   // Session cards
   let cardsHtml='';
   if(!todaySessions.length){
@@ -1857,6 +1859,22 @@ function renderDashboard(){
       <div class="dash-stat"><div class="dash-stat-val">${weekSessions}</div><div class="dash-stat-lbl">This Week</div></div>
       <div class="dash-stat"><div class="dash-stat-val" style="color:${cautionCount>0?'#d97706':'var(--txm)'}">${cautionCount>0?'⚠️ ':''}${cautionCount}</div><div class="dash-stat-lbl">No Coach</div></div>
     </div>
+    ${noLessonCourts.length?`
+    <div class="dash-sec" style="color:#ef4444">❌ Courts Not Used for Lesson</div>
+    <div class="card" style="margin-bottom:16px;border-color:#fecaca">
+      <div class="card-body" style="padding:0">
+        ${noLessonCourts.map(b=>{
+          const d=new Date(getCourtDate(b)+'T00:00:00');
+          return`<div style="display:flex;align-items:center;gap:12px;padding:12px 16px;border-bottom:1px solid var(--bdr)">
+            <div style="font-size:20px">❌</div>
+            <div>
+              <div style="font-weight:700;font-size:13px">${esc(b.venue||'—')} · Ct ${esc(b.court||'?')}</div>
+              <div style="font-size:12px;color:var(--txm);margin-top:2px">${DAYS[d.getDay()]} ${d.getDate()} ${MONTHS[d.getMonth()]} · ${b.time||'—'}</div>
+            </div>
+          </div>`;
+        }).join('')}
+      </div>
+    </div>`:''}
     <div class="dash-sec">Today's Schedule — ${DAYS_FULL[today.getDay()]}</div>
     ${cardsHtml}
     ${upHtml}
@@ -2267,14 +2285,14 @@ function renderBookingRecords(){
   order=order.filter(n=>allBookers.includes(n));
   saveBookerOrder(order);
 
-  // Incentive summary
+  // Due summary (court_cost + $10 bonus per slot)
   const totals={};order.forEach(n=>totals[n]=0);
-  all.forEach(b=>{if(b.booker)totals[b.booker]=(totals[b.booker]||0)+(b.incentive||0);});
+  all.forEach(b=>{if(b.booker)totals[b.booker]=(totals[b.booker]||0)+(b.due??b.incentive??0);});
   document.getElementById('br-summary').innerHTML=order.filter(n=>totals[n]>0||all.some(b=>b.booker===n)).map(n=>`
     <div class="br-card">
       <div class="br-card-name">${esc(n)}</div>
       <div class="br-card-amt">$${(totals[n]||0).toFixed(2)}</div>
-      <div class="br-card-lbl">incentive</div>
+      <div class="br-card-lbl">due</div>
     </div>`).join('')||'<div class="empty">No payments this month</div>';
 
   renderBROrderList(order);
@@ -2290,7 +2308,7 @@ function renderBookingRecords(){
       <td>${b.time||''}</td>
       <td>${esc(b.booker||'')}</td>
       <td><span class="${b.venue_type==='school'?'br-badge-sc':'br-badge-sh'}">${b.venue_type==='school'?'School':'S.Hall'}</span></td>
-      <td style="font-weight:700;color:var(--green)">$${(b.incentive||0).toFixed(2)}</td>
+      <td style="font-weight:700;color:var(--green)">$${(b.due??b.incentive??0).toFixed(2)}</td>
       <td><button class="btn btn-red btn-sm" onclick="deleteBooking('${b._key}')">✕</button></td>
     </tr>`).join('')
     :'<tr><td colspan="9" style="padding:20px;text-align:center;color:var(--txf)">No payments recorded this month</td></tr>';
@@ -2366,7 +2384,12 @@ function showCourtDay(ds,updateGrid=true){
         <div style="flex:1">
           <div style="font-weight:700;font-size:13px">${esc(b.venue||'')}</div>
           <div style="color:var(--txm);font-size:12px;margin-top:2px">${b.time||''}${b.source==='activesg'?' · <span style="color:#d97706;font-weight:700">ActiveSG</span>':` · ${esc(b.booker||'')} · <span class="${b.venue_type==='school'?'br-badge-sc':'br-badge-sh'}">${b.venue_type==='school'?'School':'Sports Hall'}</span>`}</div>
-          ${b.source!=='activesg'?`<button onclick="viewReceiptImage('${b._key}')" style="margin-top:6px;background:none;border:1px solid var(--bdr);border-radius:6px;padding:3px 10px;font-size:11px;font-weight:700;cursor:pointer;color:var(--tx)">📷 View Receipt</button>`:''}
+          <div style="display:flex;gap:6px;margin-top:6px;flex-wrap:wrap">
+            ${b.source!=='activesg'?`<button onclick="viewReceiptImage('${b._key}')" style="background:none;border:1px solid var(--bdr);border-radius:6px;padding:3px 10px;font-size:11px;font-weight:700;cursor:pointer;color:var(--tx)">📷 Receipt</button>`:''}
+            <button onclick="markNoLesson('${b._key}',${!b.no_lesson})" style="background:none;border:1px solid ${b.no_lesson?'#ef4444':'var(--bdr)'};border-radius:6px;padding:3px 10px;font-size:11px;font-weight:700;cursor:pointer;color:${b.no_lesson?'#ef4444':'var(--tx)'}">
+              ${b.no_lesson?'❌ No Lesson':'Mark No Lesson'}
+            </button>
+          </div>
         </div>
       </div>`).join('')}
     </div>
@@ -2389,6 +2412,15 @@ function viewReceiptImage(key){
 function closeImgModal(){
   document.getElementById('img-modal').classList.remove('open');
   document.getElementById('img-modal-body').innerHTML='';
+}
+
+function markNoLesson(key,val){
+  fetch(`${FIREBASE_URL}/bookings/${key}/no_lesson.json`,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(val)})
+    .then(()=>{
+      if(brBookings[key])brBookings[key].no_lesson=val;
+      showCourtDay(courtsSelectedDate,false);
+      if(currentView==='dashboard')renderDashboard();
+    });
 }
 
 // ── BOOKERS ───────────────────────────────────────────────────
@@ -2464,13 +2496,13 @@ function promptDeleteReceipt(key,venue,incentive){
   confirmBody.innerHTML=`
     <div style="margin-bottom:10px">
       <div style="font-weight:700;font-size:13px">${esc(venue)}</div>
-      <div style="font-size:12px;margin-top:4px">Incentive: <span style="color:var(--green);font-weight:700">$${incentive.toFixed(2)}</span></div>
+      <div style="font-size:12px;margin-top:4px">Due: <span style="color:var(--green);font-weight:700">$${incentive.toFixed(2)}</span></div>
     </div>
     <div style="font-size:12px;line-height:1.5">
       This will delete:<br>
       • The receipt image<br>
       • The booking record (affects Courts view)<br>
-      • The incentive payment
+      • The due payment
     </div>
   `;
   document.getElementById('confirm-modal').classList.add('open');
@@ -2513,7 +2545,7 @@ function renderReceipts(){
   let grandTotal=0;
   const sections=dates.map(dt=>{
     const items=byDate[dt].sort((a,b)=>(a.time||'').localeCompare(b.time||''));
-    const dayTotal=items.reduce((s,b)=>s+(b.incentive||0),0);
+    const dayTotal=items.reduce((s,b)=>s+(b.due??b.incentive??0),0);
     grandTotal+=dayTotal;
     let dateLabel=dt;
     if(dt!=='Unknown'){
@@ -2534,9 +2566,9 @@ function renderReceipts(){
               ${b.court_date&&b.court_date!==dt?`<br>Court date: ${b.court_date}`:''}
             </div>
           </div>
-          <div style="display:flex;gap:8px;align-items:center">
-            <div class="rcpt-incentive">$${(b.incentive||0).toFixed(2)}</div>
-            <button onclick="promptDeleteReceipt('${b._key}','${esc(b.venue||'—')}',${b.incentive||0})" style="background:none;border:1px solid var(--bdr);color:#ef4444;border-radius:6px;padding:3px 8px;font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap">🗑️ Delete</button>
+          <div style="display:flex;gap:8px;align-items:center;flex-direction:column;align-items:flex-end">
+            <div class="rcpt-incentive">$${(b.due??b.incentive??0).toFixed(2)}<span style="font-size:10px;font-weight:400;color:var(--txm);display:block;text-align:right">${b.court_cost!=null?'Court $'+b.court_cost.toFixed(2)+' + $10 bonus':'due'}</span></div>
+            <button onclick="promptDeleteReceipt('${b._key}','${esc(b.venue||'—')}',${b.due??b.incentive??0})" style="background:none;border:1px solid var(--bdr);color:#ef4444;border-radius:6px;padding:3px 8px;font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap">🗑️ Delete</button>
           </div>
         </div>`).join('')}
         <div class="rcpt-day-total">Day total: $${dayTotal.toFixed(2)}</div>
