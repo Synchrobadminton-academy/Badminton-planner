@@ -346,6 +346,7 @@ table.sched td.tslot.cell-target{background:rgba(37,99,235,.22)!important;outlin
       <div class="tab-item" data-view="tracker" onclick="showView('tracker')"><span class="tab-icon">📊</span>Tracker</div>
       <div class="tab-item" data-view="analytics" onclick="showView('analytics')"><span class="tab-icon">📈</span>Analytics</div>
       <div class="tab-item" data-view="coaches" onclick="showView('coaches')"><span class="tab-icon">⚙️</span>Calendar Settings</div>
+      <div class="tab-item" data-view="bookers" onclick="showView('bookers')"><span class="tab-icon">💼</span>Bookers</div>
 <div class="tab-item" data-view="bookings" onclick="showView('bookings')"><span class="tab-icon">🗓</span>Booking Records</div>
       <div class="tab-item" data-view="receipts" onclick="showView('receipts')"><span class="tab-icon">🧾</span>Receipts</div>
     </div>
@@ -514,6 +515,20 @@ table.sched td.tslot.cell-target{background:rgba(37,99,235,.22)!important;outlin
   </div>
 </div>
 
+<!-- BOOKERS -->
+<div class="view" id="view-bookers">
+  <div class="page-hdr"><h1 class="page-title">Booker Settings</h1></div>
+  <div class="card">
+    <div class="card-hdr">Assign Bookers to Coaches</div>
+    <div class="card-body">
+      <div style="color:var(--txm);font-size:12px;margin-bottom:14px">
+        Unassigned bookers are treated as independent. Assign them to a coach to track earnings under that coach's team.
+      </div>
+      <div id="bookers-list"></div>
+    </div>
+  </div>
+</div>
+
 <!-- BOOKINGS (blank) -->
 <div class="view" id="view-bookings">
   <div class="main-inner">
@@ -662,9 +677,9 @@ function toggleTheme(){
 
 // ── FIREBASE REALTIME SYNC ────────────────────────────────────
 const FIREBASE_URL='https://synchroadmin-133f3-default-rtdb.asia-southeast1.firebasedatabase.app';
-const syncCache={coaches:[],venues:[],instances:[],sessions:[],standards:[],['class-types']:[],['combo-colors']:{}};
+const syncCache={coaches:[],venues:[],instances:[],sessions:[],standards:[],['class-types']:[],['combo-colors']:{},['booker_coach_map']:{}}};
 let syncInProgress=false;
-const syncKeys=['coaches','venues','instances','sessions','standards','class-types','combo-colors'];
+const syncKeys=['coaches','venues','instances','sessions','standards','class-types','combo-colors','booker_coach_map'];
 
 async function fetchFirebaseData(){
   try{
@@ -877,6 +892,7 @@ function showView(v){
   if(v==='bookings')loadBookingsFromFirebase();
   if(v==='courts'){renderCourts();loadBookingsFromFirebase();}
   if(v==='receipts'){renderReceipts();loadBookingsFromFirebase();}
+  if(v==='bookers'){loadBookingsFromFirebase();renderBookers();}
   if(v==='analytics')renderAnalytics();
 }
 
@@ -2321,6 +2337,46 @@ function closeImgModal(){
   document.getElementById('img-modal-body').innerHTML='';
 }
 
+// ── BOOKERS ───────────────────────────────────────────────────
+function renderBookers(){
+  const list=document.getElementById('bookers-list');if(!list)return;
+  const bookerMap=S.get('booker_coach_map');
+  const allBookers=new Set(Object.values(brBookings).filter(b=>b&&b.source!=='activesg').map(b=>b.booker).filter(Boolean));
+  const coaches=getCoaches();
+  if(!allBookers.size){
+    list.innerHTML='<div class="empty" style="color:var(--txm);font-size:12px;padding:14px">No bookers found in receipts yet.</div>';
+    return;
+  }
+  list.innerHTML=Array.from(allBookers).sort().map(booker=>{
+    const coachId=bookerMap[booker];
+    const coach=coachId?coaches.find(c=>c.id===coachId):null;
+    return`<div style="display:flex;gap:12px;align-items:center;padding:12px;border:1px solid var(--bdr);border-radius:8px;margin-bottom:8px">
+      <div style="flex:1">
+        <div style="font-weight:700;font-size:13px">${esc(booker)}</div>
+        <div style="font-size:11px;color:var(--txm);margin-top:2px">${coach?`Assigned to: <span style="font-weight:700">${esc(coach.name)}</span>`:'Unassigned'}</div>
+      </div>
+      <select onchange="assignBooker('${booker.replace(/'/g,"\\'")}',(this.value||null)|0)" style="padding:6px;font-size:12px;border:1px solid var(--bdr);border-radius:6px;background:var(--surf)">
+        <option value="">Unassigned</option>
+        ${coaches.map(c=>`<option value="${c.id}"${coachId===c.id?' selected':''} style="color:var(--tx)">${esc(c.name)}</option>`).join('')}
+      </select>
+    </div>`;
+  }).join('');
+}
+function assignBooker(bookerName,coachId){
+  const map=S.get('booker_coach_map');
+  if(coachId){map[bookerName]=coachId;}
+  else{delete map[bookerName];}
+  S.set('booker_coach_map',map);
+  renderBookers();
+}
+function getBookerCoach(bookerName){
+  const map=S.get('booker_coach_map');
+  const coachId=map[bookerName];
+  if(!coachId)return null;
+  const coach=getCoaches().find(c=>c.id===coachId);
+  return coach||null;
+}
+
 // ── RECEIPT DELETE ────────────────────────────────────────────
 let deleteReceiptKey=null;
 function promptDeleteReceipt(key,venue,incentive){
@@ -2393,7 +2449,7 @@ function renderReceipts(){
           <div class="rcpt-info">
             <div class="rcpt-venue">${esc(b.venue||'—')}</div>
             <div class="rcpt-meta">
-              ${b.time||'—'} &nbsp;·&nbsp; ${esc(b.booker||'—')} &nbsp;·&nbsp;
+              ${b.time||'—'} &nbsp;·&nbsp; ${esc(b.booker||'—')}${(()=>{const coach=getBookerCoach(b.booker);return coach?` <span style="color:#10b981;font-weight:700">(${esc(coach.name)})</span>`:''})()}  &nbsp;·&nbsp;
               <span class="${b.venue_type==='school'?'br-badge-sc':'br-badge-sh'}">${b.venue_type==='school'?'School':'Sports Hall'}</span>
               &nbsp;·&nbsp; ${b.slots||1} hr${(b.slots||1)>1?'s':''}
               ${b.court_date&&b.court_date!==dt?`<br>Court date: ${b.court_date}`:''}
