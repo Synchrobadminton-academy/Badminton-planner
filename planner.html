@@ -311,7 +311,14 @@ table.sched td.tslot.cell-target{background:rgba(37,99,235,.22)!important;outlin
   <button class="ham-btn" onclick="toggleSidebar()" title="Toggle sidebar">☰</button>
   <img id="nav-logo" onclick="showView('dashboard')" style="height:32px;border-radius:6px;background:#fff;padding:2px 5px;cursor:pointer;display:block" alt="Synchro Badminton Academy">
   <button class="theme-btn ml" id="theme-btn" onclick="toggleTheme()">🌙</button>
+  <div style="margin-left:auto;font-size:12px;color:var(--txm);display:flex;gap:6px;align-items:center">
+    <div id="sync-status" style="width:8px;height:8px;border-radius:50%;background:#10b981;animation:pulse 2s infinite"></div>
+    <span id="sync-label">Synced</span>
+  </div>
 </nav>
+<style>
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.5}}
+</style>
 
 <div class="app-layout">
 
@@ -641,28 +648,75 @@ function toggleTheme(){
   else{document.documentElement.setAttribute('data-dark','');document.getElementById('theme-btn').textContent='☀️';localStorage.setItem('cmp_theme','dark')}
 }
 
-// ── STORAGE ───────────────────────────────────────────────────
+// ── FIREBASE REALTIME SYNC ────────────────────────────────────
+const FIREBASE_URL='https://synchroadmin-133f3-default-rtdb.asia-southeast1.firebasedatabase.app';
+const syncCache={coaches:[],venues:[],instances:[],sessions:[],standards:[],['class-types']:[],['combo-colors']:{}};
+let syncInProgress=false;
+const syncKeys=['coaches','venues','instances','sessions','standards','class-types','combo-colors'];
+
+async function fetchFirebaseData(){
+  try{
+    for(const k of syncKeys){
+      const r=await fetch(`${FIREBASE_URL}/${k}.json`);
+      if(r.ok){
+        const data=await r.json();
+        syncCache[k]=(k==='combo-colors')?Object.assign({},data||{}):Array.isArray(data)?Object.values(data).filter(Boolean):(Array.isArray(data)?data:[]);
+      }
+    }
+    return true;
+  }catch(e){console.error('fetchFirebaseData error:',e);return false;}
+}
+
+async function pushToFirebase(key,value){
+  try{
+    await fetch(`${FIREBASE_URL}/${key}.json`,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(value)});
+  }catch(e){console.error('pushToFirebase error for',key,e);}
+}
+
 const S={
-  get(k){try{return JSON.parse(localStorage.getItem(k)||'[]')}catch{return[]}},
-  set(k,v){localStorage.setItem(k,JSON.stringify(v))},
+  get(k){return JSON.parse(JSON.stringify(syncCache[k]||[]))},
+  set(k,v){
+    syncCache[k]=(k==='combo-colors')?Object.assign({},v||{}):Array.isArray(v)?v:[];
+    pushToFirebase(k,syncCache[k]);
+  },
   nextId(a){return a.length?Math.max(...a.map(i=>i.id))+1:1}
 };
-(function init(){
-  if(!localStorage.getItem('cmp_v3')){
-    S.set('coaches',[]);
-    S.set('venues',['Bukit Canberra SH','Bishan Clubhouse','Woodland SH','Sembawang Pri','Yishun SH','Arena Sport Hall']);
-    S.set('sessions',[]);S.set('instances',[]);S.set('combo-colors',{});
-    localStorage.setItem('cmp_v3','1');
+
+// Sync loop: poll Firebase every 1.5 seconds
+async function syncLoop(){
+  if(syncInProgress)return;
+  syncInProgress=true;
+  const statusEl=document.getElementById('sync-status');
+  const labelEl=document.getElementById('sync-label');
+  if(statusEl){statusEl.style.background='#f59e0b';}
+  if(labelEl){labelEl.textContent='Syncing…';}
+  try{
+    await fetchFirebaseData();
+    if(currentView==='dashboard')renderDashboard();
+    else if(currentView==='schedule')renderSched();
+    else if(currentView==='coaches')renderCoaches();
+    else if(currentView==='admin')renderAdmin();
+    else if(currentView==='courts')renderCourts();
+  }finally{
+    syncInProgress=false;
+    if(statusEl){statusEl.style.background='#10b981';}
+    if(labelEl){labelEl.textContent='Synced';}
   }
-  // Migrate class-types from string[] to {id,name,cat}[]
-  (function(){
-    const raw=localStorage.getItem('class-types');
-    const defaults=[{id:1,name:'ActiveSG',cat:'activesg'},{id:2,name:'Synchro',cat:'group'},{id:3,name:'Rise & Rally Adult',cat:'group'},{id:4,name:'Private Group',cat:'private'}];
-    if(!raw){S.set('class-types',defaults);return;}
-    try{const p=JSON.parse(raw);if(Array.isArray(p)&&p.length&&typeof p[0]==='string'){S.set('class-types',p.map((n,i)=>({id:i+1,name:n,cat:n.toLowerCase().includes('activesg')?'activesg':n.toLowerCase().includes('private')?'private':'group'})));}}catch(e){}
-  })();
-  if(!localStorage.getItem('standards'))S.set('standards',['Basic','Advance','Mix','Adult','All']);
-  const cc=localStorage.getItem('combo-colors');if(!cc||cc==='[]')S.set('combo-colors',{});
+  setTimeout(syncLoop,1500);
+}
+
+// ── STORAGE ───────────────────────────────────────────────────
+(function init(){
+  const raw=localStorage.getItem('class-types');
+  const defaults=[{id:1,name:'ActiveSG',cat:'activesg'},{id:2,name:'Synchro',cat:'group'},{id:3,name:'Rise & Rally Adult',cat:'group'},{id:4,name:'Private Group',cat:'private'}];
+  S.set('class-types',raw?JSON.parse(raw):defaults);
+  S.set('standards',['Basic','Advance','Mix','Adult','All']);
+  S.set('coaches',[]);
+  S.set('venues',['Bukit Canberra SH','Bishan Clubhouse','Woodland SH','Sembawang Pri','Yishun SH','Arena Sport Hall']);
+  S.set('instances',[]);
+  S.set('sessions',[]);
+  S.set('combo-colors',{});
+  fetchFirebaseData().then(()=>{syncLoop();});
 })();
 
 const getCoaches=()=>S.get('coaches');
@@ -695,12 +749,33 @@ function updateInst(id,data){
   S.set('instances',l);
 }
 
-// Attendance storage
+// Attendance storage (Firebase)
+const attCache={};
 function getAttendance(instId){
-  try{return JSON.parse(localStorage.getItem('att_'+instId)||'[]')}catch{return[]}
+  return JSON.parse(JSON.stringify(attCache[instId]||[]));
 }
-function saveAttendance(instId,list){localStorage.setItem('att_'+instId,JSON.stringify(list))}
+function saveAttendance(instId,list){
+  attCache[instId]=(Array.isArray(list)?list:[]);
+  fetch(`${FIREBASE_URL}/attendance/${instId}.json`,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(attCache[instId])}).catch(e=>console.error('saveAttendance error:',e));
+}
 function attNextId(list){return list.length?Math.max(...list.map(i=>i.id))+1:1}
+
+// Sync attendance from Firebase periodically
+async function syncAttendance(){
+  try{
+    const r=await fetch(`${FIREBASE_URL}/attendance.json`);
+    if(r.ok){
+      const data=await r.json();
+      if(data){
+        for(const[instId,att]of Object.entries(data)){
+          if(att)attCache[instId]=Array.isArray(att)?att:Object.values(att).filter(Boolean);
+        }
+      }
+    }
+  }catch(e){console.error('syncAttendance error:',e);}
+  setTimeout(syncAttendance,2000);
+}
+syncAttendance();
 
 // ── HELPERS ───────────────────────────────────────────────────
 const DAYS=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
@@ -2017,7 +2092,6 @@ function addAtt(instId){
 
 
 // ── BOOKING RECORDS & COURTS ──────────────────────────────────
-const FIREBASE_URL='https://synchroadmin-133f3-default-rtdb.asia-southeast1.firebasedatabase.app';
 let brBookings={};
 let brSelectedMonth=new Date().toISOString().slice(0,7);
 let courtsSelectedDate=null;
