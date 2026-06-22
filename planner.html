@@ -240,6 +240,16 @@ table.sched td.tslot.cell-target{background:rgba(37,99,235,.22)!important;outlin
 .blank-view .blank-title{font-size:15px;font-weight:700;color:var(--txm)}
 .blank-view .blank-sub{font-size:12px;color:var(--txf)}
 
+/* Bookers */
+.booker-hub{display:flex;flex-direction:column;align-items:center;gap:16px;padding:20px;background:var(--surf2);border-radius:12px;margin-bottom:16px}
+.booker-center{width:80px;height:80px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:700;color:#fff;font-size:13px;text-align:center;line-height:1.2;box-shadow:0 4px 12px rgba(0,0,0,.15)}
+.booker-bubble{width:60px;height:60px;border-radius:50%;background:var(--surf);border:2px solid var(--bdr);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;text-align:center;cursor:pointer;transition:all .2s;white-space:normal;padding:4px;position:relative;overflow:hidden}
+.booker-bubble:hover{transform:scale(1.1);box-shadow:0 4px 12px rgba(0,0,0,.2)}
+.booker-bubble.unassigned{background:rgba(100,116,139,.1);border-color:var(--txm)}
+.booker-circle{display:flex;flex-wrap:wrap;gap:12px;justify-content:center;max-width:500px}
+.booker-remove{position:absolute;top:-8px;right:-8px;width:22px;height:22px;background:#ef4444;color:#fff;border:none;border-radius:50%;font-size:13px;cursor:pointer;display:none;align-items:center;justify-content:center;font-weight:700}
+.booker-bubble:hover .booker-remove{display:flex}
+
 /* Mobile */
 @media(max-width:768px){
   .sidebar{position:fixed;top:50px;left:0;bottom:0;z-index:160;transform:translateX(calc(-1 * var(--sb-w)));transition:transform .25s}
@@ -517,14 +527,12 @@ table.sched td.tslot.cell-target{background:rgba(37,99,235,.22)!important;outlin
 
 <!-- BOOKERS -->
 <div class="view" id="view-bookers">
-  <div class="page-hdr"><h1 class="page-title">Booker Settings</h1></div>
+  <div class="page-hdr"><h1 class="page-title">Booker Teams</h1></div>
+  <div id="bookers-teams"></div>
   <div class="card">
-    <div class="card-hdr">Assign Bookers to Coaches</div>
+    <div class="card-hdr">Unassigned Bookers</div>
     <div class="card-body">
-      <div style="color:var(--txm);font-size:12px;margin-bottom:14px">
-        Unassigned bookers are treated as independent. Assign them to a coach to track earnings under that coach's team.
-      </div>
-      <div id="bookers-list"></div>
+      <div id="bookers-unassigned" style="display:flex;flex-wrap:wrap;gap:8px"></div>
     </div>
   </div>
 </div>
@@ -2346,28 +2354,53 @@ function closeImgModal(){
 
 // ── BOOKERS ───────────────────────────────────────────────────
 function renderBookers(){
-  const list=document.getElementById('bookers-list');if(!list)return;
+  const teamEl=document.getElementById('bookers-teams');
+  const unassignedEl=document.getElementById('bookers-unassigned');
+  if(!teamEl||!unassignedEl)return;
+
   const bookerMap=S.get('booker_coach_map');
   const allBookers=new Set(Object.values(brBookings).filter(b=>b&&b.source!=='activesg').map(b=>b.booker).filter(Boolean));
   const coaches=getCoaches();
+
   if(!allBookers.size){
-    list.innerHTML='<div class="empty" style="color:var(--txm);font-size:12px;padding:14px">No bookers found in receipts yet.</div>';
+    teamEl.innerHTML='<div class="card"><div class="card-body"><div class="empty" style="color:var(--txm);font-size:12px">No bookers found in receipts yet.</div></div></div>';
+    unassignedEl.innerHTML='';
     return;
   }
-  list.innerHTML=Array.from(allBookers).sort().map(booker=>{
+
+  const assignedByCoach={};
+  coaches.forEach(c=>{assignedByCoach[c.id]=[];});
+  const unassigned=[];
+
+  allBookers.forEach(booker=>{
     const coachId=bookerMap[booker];
-    const coach=coachId?coaches.find(c=>c.id===coachId):null;
-    return`<div style="display:flex;gap:12px;align-items:center;padding:12px;border:1px solid var(--bdr);border-radius:8px;margin-bottom:8px">
-      <div style="flex:1">
-        <div style="font-weight:700;font-size:13px">${esc(booker)}</div>
-        <div style="font-size:11px;color:var(--txm);margin-top:2px">${coach?`Assigned to: <span style="font-weight:700">${esc(coach.name)}</span>`:'Unassigned'}</div>
+    if(coachId&&assignedByCoach[coachId]){
+      assignedByCoach[coachId].push(booker);
+    }else{
+      unassigned.push(booker);
+    }
+  });
+
+  teamEl.innerHTML=coaches.filter(c=>assignedByCoach[c.id].length>0).map(coach=>{
+    const coachColor=coach.color||'#3b82f6';
+    return`<div class="booker-hub">
+      <div class="booker-center" style="background:${coachColor};" title="Coach: ${esc(coach.name)}">${esc(coach.name)}</div>
+      <div class="booker-circle">
+        ${assignedByCoach[coach.id].sort().map(booker=>`<div class="booker-bubble" title="${esc(booker)}">
+          ${esc(booker)}
+          <button class="booker-remove" onclick="assignBooker('${booker.replace(/'/g,"\\'")}',(null))">✕</button>
+        </div>`).join('')}
       </div>
-      <select onchange="assignBooker('${booker.replace(/'/g,"\\'")}',(this.value||null)|0)" style="padding:6px;font-size:12px;border:1px solid var(--bdr);border-radius:6px;background:var(--surf)">
-        <option value="">Unassigned</option>
-        ${coaches.map(c=>`<option value="${c.id}"${coachId===c.id?' selected':''} style="color:var(--tx)">${esc(c.name)}</option>`).join('')}
-      </select>
     </div>`;
   }).join('');
+
+  unassignedEl.innerHTML=unassigned.sort().map(booker=>`<div class="booker-bubble unassigned" title="Click to assign">
+    ${esc(booker)}
+    <select onchange="assignBooker('${booker.replace(/'/g,"\\'")}',(this.value||null)|0)" style="position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%">
+      <option value="">Assign to coach...</option>
+      ${getCoaches().map(c=>`<option value="${c.id}">${esc(c.name)}</option>`).join('')}
+    </select>
+  </div>`).join('')||'<div style="color:var(--txm);font-size:12px">All bookers assigned!</div>';
 }
 function assignBooker(bookerName,coachId){
   const map=S.get('booker_coach_map');
