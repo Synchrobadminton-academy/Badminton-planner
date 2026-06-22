@@ -100,7 +100,8 @@ table.sched td.tslot.cell-target{background:rgba(37,99,235,.22)!important;outlin
 #clip-bar{position:fixed;bottom:14px;left:50%;transform:translateX(-50%);background:#0f172a;color:#fff;padding:8px 16px;border-radius:24px;font-size:12px;font-weight:600;display:none;align-items:center;gap:10px;z-index:400;box-shadow:0 4px 20px rgba(0,0,0,.3);white-space:nowrap}
 #clip-bar button{background:rgba(255,255,255,.15);border:1px solid rgba(255,255,255,.3);color:#fff;padding:2px 10px;border-radius:12px;cursor:pointer;font-size:11px}
 .sblock.selected{outline:3px solid #fff;box-shadow:0 0 0 4px var(--blue),0 4px 12px rgba(0,0,0,.25)!important}
-.cal-chip{font-size:10px;padding:3px 6px;border-radius:4px;border:1px solid rgba(0,0,0,.18);margin-bottom:3px;line-height:1.4;cursor:grab;user-select:none}
+.block-warn{position:absolute;top:2px;right:3px;font-size:10px;line-height:1;pointer-events:none;z-index:2}
+.cal-chip{font-size:10px;padding:3px 6px;border-radius:4px;border:1px solid rgba(0,0,0,.18);margin-bottom:3px;line-height:1.4;cursor:grab;user-select:none;position:relative}
 .cal-chip:active{cursor:grabbing}
 .cal-chip-venue{font-weight:800}
 .cal-chip-sub{opacity:.88;font-size:9.5px}
@@ -144,6 +145,8 @@ table.sched td.tslot.cell-target{background:rgba(37,99,235,.22)!important;outlin
 .overlay.open{display:flex}
 .modal{background:var(--surf);border-radius:12px;padding:20px;width:100%;max-width:430px;box-shadow:0 20px 60px rgba(0,0,0,.3);max-height:93vh;overflow-y:auto}
 .modal h2{font-size:14px;font-weight:800;margin-bottom:14px}
+.img-modal-inner{background:var(--surf);border-radius:12px;padding:16px;width:100%;max-width:560px;max-height:93vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,.3)}
+.img-modal-inner img{max-width:100%;border-radius:8px;display:block;margin:0 auto}
 .mact{display:flex;gap:8px;margin-top:14px}
 .two-col{display:grid;grid-template-columns:1fr 1fr;gap:16px;align-items:start}
 .cchk-wrap{display:flex;flex-wrap:wrap;gap:5px}
@@ -203,7 +206,7 @@ table.sched td.tslot.cell-target{background:rgba(37,99,235,.22)!important;outlin
 .dash-greeting{font-size:12px;font-weight:600;opacity:.82;margin-bottom:4px;letter-spacing:.02em}
 .dash-date{font-size:16px;font-weight:800;line-height:1.2}
 .dash-day{font-size:12px;opacity:.75;margin-top:2px}
-.dash-stats{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:16px}
+.dash-stats{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:16px}
 .dash-stat{background:var(--surf);border:1px solid var(--bdr);border-radius:12px;padding:14px 10px;text-align:center}
 .dash-stat-val{font-size:26px;font-weight:900;color:#0B5FD8;line-height:1.1}
 .dash-stat-lbl{font-size:10px;font-weight:700;color:var(--txm);text-transform:uppercase;letter-spacing:.05em;margin-top:3px}
@@ -229,7 +232,7 @@ table.sched td.tslot.cell-target{background:rgba(37,99,235,.22)!important;outlin
 .dash-up-time{font-size:11px;font-weight:800;color:var(--txm);width:58px;flex-shrink:0}
 .dash-up-venue{font-size:12px;font-weight:700;flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .dash-up-type{font-size:10px;padding:1px 7px;border-radius:99px;background:rgba(11,95,216,.1);color:#0B5FD8;font-weight:700;flex-shrink:0}
-@media(max-width:640px){.dash-stats{grid-template-columns:repeat(3,1fr)}.dash-stat-val{font-size:20px}.dash-date{font-size:13px}.dash-logo-box img{height:40px}.dash-hero{padding:14px 16px}}
+@media(max-width:640px){.dash-stats{grid-template-columns:repeat(2,1fr)}.dash-stat-val{font-size:20px}.dash-date{font-size:13px}.dash-logo-box img{height:40px}.dash-hero{padding:14px 16px}}
 
 /* Blank views */
 .blank-view{display:flex;flex-direction:column;align-items:center;justify-content:center;min-height:300px;gap:10px;color:var(--txm)}
@@ -610,6 +613,17 @@ table.sched td.tslot.cell-target{background:rgba(37,99,235,.22)!important;outlin
   </div>
 </div>
 
+<!-- RECEIPT IMAGE MODAL -->
+<div class="overlay" id="img-modal" onclick="if(event.target===this)closeImgModal()">
+  <div class="img-modal-inner">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px">
+      <div style="font-size:13px;font-weight:800">Receipt</div>
+      <button class="btn btn-o btn-sm" onclick="closeImgModal()">✕ Close</button>
+    </div>
+    <div id="img-modal-body" style="min-height:80px;display:flex;align-items:center;justify-content:center"></div>
+  </div>
+</div>
+
 <!-- CLIPBOARD BAR -->
 <div id="clip-bar">📋 Session copied — drag any slot to paste &nbsp;<button onclick="clearClip()">Clear</button></div>
 
@@ -913,6 +927,7 @@ function renderWeek(){
       div.dataset.instId=String(inst.id);
       div.style.cssText=`background:${blockBg};color:${tc};border:${blockBorder};left:calc(${lp}% + 1px);width:calc(${wp}% - 2px);height:${hpx}px`;
       div.innerHTML=`
+        ${(!inst.coach_ids||inst.coach_ids.length===0)?'<div class="block-warn">⚠️</div>':''}
         ${inst.venue_text?`<div class="sb-venue">${esc(inst.venue_text)}</div>`:'<div class="sb-venue" style="opacity:.4">—</div>'}
         <div class="sb-time">${fmt12(inst.start_time)} – ${fmt12(inst.end_time)}</div>
         ${inst.class_type||inst.standard?`<div class="sb-row">${esc([inst.class_type,inst.standard].filter(Boolean).join(', '))}</div>`:''}
@@ -1108,7 +1123,9 @@ function renderMonth(){
         const noColor2=!color||color==='';const chipBg=noColor2?'rgba(0,0,0,0.05)':color;
         const chipBorder=noColor2?'2px dashed var(--bdr)':color==='#ffffff'?'1px solid #d1d5db':'1px solid rgba(0,0,0,.18)';
         const chipTc=noColor2?'var(--tx)':tc;
+        const noCoach=!inst.coach_ids||inst.coach_ids.length===0;
         return`<div class="cal-chip" data-inst-id="${inst.id}" style="background:${chipBg};color:${chipTc};border:${chipBorder}">
+          ${noCoach?'<div class="block-warn">⚠️</div>':''}
           <div class="cal-chip-venue">${esc(inst.venue_text||'')}${inst.court_no?' · Ct '+esc(inst.court_no):''}</div>
           ${inst.class_type||inst.standard?`<div class="cal-chip-sub">${esc([inst.class_type,inst.standard].filter(Boolean).join(' · '))}</div>`:''}
           <div class="cal-chip-sub">${fmt12(inst.start_time)}–${fmt12(inst.end_time)}${cn?' · '+esc(cn):''}</div>
@@ -1620,6 +1637,7 @@ function renderDashboard(){
   const todayAtt=todaySessions.reduce((s,i)=>s+getAttendance(i.id).length,0);
   const weekEnd=new Date(today.getFullYear(),today.getMonth(),today.getDate()+7);
   const weekSessions=allInsts.filter(i=>i.date>=todayStr&&i.date<=ds(weekEnd)).length;
+  const cautionCount=allInsts.filter(i=>i.date>=todayStr&&(!i.coach_ids||i.coach_ids.length===0)).length;
   // Session cards
   let cardsHtml='';
   if(!todaySessions.length){
@@ -1680,6 +1698,7 @@ function renderDashboard(){
       <div class="dash-stat"><div class="dash-stat-val">${todaySessions.length}</div><div class="dash-stat-lbl">Today's Classes</div></div>
       <div class="dash-stat"><div class="dash-stat-val">${todayAtt}</div><div class="dash-stat-lbl">Students Today</div></div>
       <div class="dash-stat"><div class="dash-stat-val">${weekSessions}</div><div class="dash-stat-lbl">This Week</div></div>
+      <div class="dash-stat"><div class="dash-stat-val" style="color:${cautionCount>0?'#d97706':'var(--txm)'}">${cautionCount>0?'⚠️ ':''}${cautionCount}</div><div class="dash-stat-lbl">No Coach</div></div>
     </div>
     <div class="dash-sec">Today's Schedule — ${DAYS_FULL[today.getDay()]}</div>
     ${cardsHtml}
@@ -2013,6 +2032,43 @@ async function loadBookingsFromFirebase(){
   }catch(e){console.error('Firebase error:',e);}
 }
 
+async function importBotSessions(){
+  try{
+    const res=await fetch(`${FIREBASE_URL}/bot_sessions.json`);
+    if(!res.ok)return;
+    const data=await res.json();
+    if(!data)return;
+    const entries=Object.entries(data).filter(([,s])=>s&&!s.imported);
+    if(!entries.length)return;
+    let count=0;
+    for(const[key,session]of entries){
+      const sess=saveSession({
+        date:session.date,start_time:session.start_time,end_time:session.end_time,
+        venue_text:session.venue_text||'',court_no:session.court_no||'',
+        class_type:session.class_type||'ActiveSG',standard:session.standard||'',
+        coach_ids:session.coach_ids||[],color:session.color||'#f59e0b',
+        notes:session.notes||'',status:session.status||'scheduled',
+        recurring:0,day_of_week:null
+      });
+      try{
+        const attRes=await fetch(`${FIREBASE_URL}/bot_attendance/${key}.json`);
+        if(attRes.ok){const attData=await attRes.json();
+          if(attData&&Array.isArray(attData))saveAttendance(sess.id,attData.map((s,i)=>({id:sess.id*1000+i,name:s.name,present:s.present})));
+        }
+      }catch(e){}
+      await fetch(`${FIREBASE_URL}/bot_sessions/${key}/imported.json`,{method:'PUT',headers:{'Content-Type':'application/json'},body:'true'});
+      count++;
+    }
+    if(count>0){
+      const t=document.createElement('div');
+      t.style.cssText='position:fixed;bottom:70px;left:50%;transform:translateX(-50%);background:#0f172a;color:#fff;padding:8px 18px;border-radius:24px;font-size:13px;font-weight:600;z-index:500;box-shadow:0 4px 20px rgba(0,0,0,.3)';
+      t.textContent=`🤖 ${count} session${count>1?'s':''} imported from SynchroBadBot`;
+      document.body.appendChild(t);setTimeout(()=>t.remove(),4000);
+      renderSched();renderMonth();
+    }
+  }catch(err){console.error('importBotSessions:',err);}
+}
+
 // Helper: get payment date (falls back to created_at or date for old records)
 function getPaymentDate(b){return b.payment_date||b.created_at?.slice(0,10)||b.date||'';}
 function getCourtDate(b){return b.court_date||b.date||'';}
@@ -2047,8 +2103,8 @@ function renderBookingRecords(){
   document.getElementById('br-month-lbl').textContent=lbl;
   document.getElementById('br-month-lbl2').textContent=lbl;
 
-  // Filter by payment month
-  const all=Object.entries(brBookings).filter(([,b])=>b&&getPaymentDate(b).slice(0,7)===brSelectedMonth).map(([k,b])=>({...b,_key:k}));
+  // Filter by payment month (exclude ActiveSG entries — those are not court-booker receipts)
+  const all=Object.entries(brBookings).filter(([,b])=>b&&b.source!=='activesg'&&getPaymentDate(b).slice(0,7)===brSelectedMonth).map(([k,b])=>({...b,_key:k}));
   const allBookers=[...new Set(Object.values(brBookings).filter(Boolean).map(b=>b.booker).filter(Boolean))];
   let order=getBookerOrder();
   allBookers.forEach(n=>{if(!order.includes(n))order.push(n);});
@@ -2138,7 +2194,7 @@ function renderCourts(){
 function showCourtDay(ds,updateGrid=true){
   courtsSelectedDate=ds;
   if(updateGrid)renderCourts();
-  const allB=Object.values(brBookings).filter(Boolean).filter(b=>getCourtDate(b)===ds);
+  const allB=Object.entries(brBookings).filter(([,b])=>b&&getCourtDate(b)===ds).map(([k,b])=>({...b,_key:k}));
   const d=new Date(ds+'T00:00:00');
   const detail=document.getElementById('courts-detail');
   if(!allB.length){
@@ -2151,19 +2207,38 @@ function showCourtDay(ds,updateGrid=true){
     <div class="card-body" style="padding:0">
       ${sorted.map(b=>`<div class="court-booking-item" style="padding:14px 16px">
         <div class="court-num">Ct ${esc(b.court||'?')}</div>
-        <div>
+        <div style="flex:1">
           <div style="font-weight:700;font-size:13px">${esc(b.venue||'')}</div>
-          <div style="color:var(--txm);font-size:12px;margin-top:2px">${b.time||''} · ${esc(b.booker||'')} · <span class="${b.venue_type==='school'?'br-badge-sc':'br-badge-sh'}">${b.venue_type==='school'?'School':'Sports Hall'}</span></div>
+          <div style="color:var(--txm);font-size:12px;margin-top:2px">${b.time||''}${b.source==='activesg'?' · <span style="color:#d97706;font-weight:700">ActiveSG</span>':` · ${esc(b.booker||'')} · <span class="${b.venue_type==='school'?'br-badge-sc':'br-badge-sh'}">${b.venue_type==='school'?'School':'Sports Hall'}</span>`}</div>
+          ${b.source!=='activesg'?`<button onclick="viewReceiptImage('${b._key}')" style="margin-top:6px;background:none;border:1px solid var(--bdr);border-radius:6px;padding:3px 10px;font-size:11px;font-weight:700;cursor:pointer;color:var(--tx)">📷 View Receipt</button>`:''}
         </div>
       </div>`).join('')}
     </div>
   </div>`;
 }
 
+function viewReceiptImage(key){
+  const modal=document.getElementById('img-modal');
+  const body=document.getElementById('img-modal-body');
+  modal.classList.add('open');
+  body.innerHTML='<div style="color:var(--txm);font-size:13px;padding:20px">Loading…</div>';
+  fetch(`${FIREBASE_URL}/booking_images/${key}.json`)
+    .then(r=>r.json())
+    .then(img=>{
+      if(!img||!img.data){body.innerHTML='<div style="color:var(--txm);font-size:13px;padding:20px">Image not available.</div>';return;}
+      body.innerHTML=`<img src="data:${img.type||'image/jpeg'};base64,${img.data}" alt="Receipt">`;
+    })
+    .catch(()=>{body.innerHTML='<div style="color:var(--txm);font-size:13px;padding:20px">Failed to load image.</div>';});
+}
+function closeImgModal(){
+  document.getElementById('img-modal').classList.remove('open');
+  document.getElementById('img-modal-body').innerHTML='';
+}
+
 // ── RECEIPTS ──────────────────────────────────────────────────
 function renderReceipts(){
   const list=document.getElementById('receipts-list');if(!list)return;
-  const all=Object.entries(brBookings).filter(([,b])=>b).map(([k,b])=>({...b,_key:k}));
+  const all=Object.entries(brBookings).filter(([,b])=>b&&b.source!=='activesg').map(([k,b])=>({...b,_key:k}));
   if(!all.length){
     list.innerHTML='<div class="empty" style="padding:40px 0">No receipts yet.</div>';
     return;
@@ -2225,6 +2300,7 @@ scheduleAutoRefresh();
 applyFolderState('coaches');
 applyFolderState('admin');
 showView('dashboard');
+importBotSessions();
 </script>
 </body>
 </html>
