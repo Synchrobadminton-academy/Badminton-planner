@@ -2249,8 +2249,8 @@ async function importBotSessions(){
 // Helper: get payment date (falls back to created_at or date for old records)
 function getPaymentDate(b){return b.payment_date||b.created_at?.slice(0,10)||b.date||'';}
 function getCourtDate(b){return b.court_date||b.date||'';}
-// SG public holidays (actual + in-lieu dates)
-const SG_PH=new Set(['2025-01-01','2025-01-29','2025-01-30','2025-04-18','2025-05-01','2025-05-12','2025-06-06','2025-08-09','2025-08-11','2025-10-20','2025-12-25','2026-01-01','2026-02-17','2026-02-18','2026-04-03','2026-05-01','2026-05-31','2026-06-01','2026-06-16','2026-08-09','2026-08-10','2026-10-28','2026-12-25']);
+// SG public holidays (actual dates only, in-lieu dates are not peak)
+const SG_PH=new Set(['2025-01-01','2025-01-29','2025-01-30','2025-04-18','2025-05-01','2025-05-12','2025-06-06','2025-08-09','2025-10-20','2025-12-25','2026-01-01','2026-02-17','2026-02-18','2026-04-03','2026-05-01','2026-05-31','2026-06-16','2026-08-09','2026-10-28','2026-12-25']);
 function parseStartHour(timeStr){
   const m=(timeStr||'').match(/(\d{1,2})(?::(\d{2}))?\s*(am|pm)?/i);
   if(!m)return null;
