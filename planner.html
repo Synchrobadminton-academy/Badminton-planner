@@ -2269,14 +2269,15 @@ async function importReceiptSessions(){
         // Default: 2-hour block, time unknown
         times={start:'09:00',end:'11:00'};
       }
-      const sess=saveSession({
-        date:courtDate,start_time:times.start,end_time:times.end,
+      const instData={
+        coach_ids:[],color:'#f59e0b',
         venue_text:b.venue||'',court_no:b.court||'',
         class_type:'Training',standard:'',
-        coach_ids:[],color:'#f59e0b',
-        notes:`Court ${b.court||''} · ${b.booker||''}`.trim().replace(/·\s*$/,''),
-        status:'scheduled',recurring:0,day_of_week:null
-      });
+        start_time:times.start,end_time:times.end,
+        notes:`Court ${b.court||''} · ${b.booker||''}`.trim().replace(/·\s*$/,'')
+      };
+      const sess=saveSession({...instData,date:courtDate,status:'scheduled',recurring:0,day_of_week:null});
+      addOneOff(sess.id,instData,courtDate);
       console.log('importReceiptSessions: created session',sess.id,'for booking',key,'on',courtDate);
       await fetch(`${FIREBASE_URL}/bookings/${key}/session_id.json`,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(sess.id)});
       if(brBookings[key])brBookings[key].session_id=sess.id;
@@ -2300,14 +2301,16 @@ async function importBotSessions(){
     if(!entries.length)return;
     let count=0;
     for(const[key,session]of entries){
-      const sess=saveSession({
-        date:normalizeCourtDate(session.date)||session.date,start_time:session.start_time,end_time:session.end_time,
+      const botDate=normalizeCourtDate(session.date)||session.date;
+      const botData={
+        start_time:session.start_time,end_time:session.end_time,
         venue_text:session.venue_text||'',court_no:session.court_no||'',
         class_type:session.class_type||'ActiveSG',standard:session.standard||'',
         coach_ids:session.coach_ids||[],color:session.color||'#f59e0b',
-        notes:session.notes||'',status:session.status||'scheduled',
-        recurring:0,day_of_week:null
-      });
+        notes:session.notes||''
+      };
+      const sess=saveSession({...botData,date:botDate,status:session.status||'scheduled',recurring:0,day_of_week:null});
+      addOneOff(sess.id,botData,botDate);
       try{
         const attRes=await fetch(`${FIREBASE_URL}/bot_attendance/${key}.json`);
         if(attRes.ok){const attData=await attRes.json();
