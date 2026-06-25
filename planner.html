@@ -2240,35 +2240,20 @@ function parseTimeRange(timeStr){
 async function importReceiptSessions(){
   try{
     const res=await fetch(`${FIREBASE_URL}/bookings.json`);
-    if(!res.ok){console.warn('importReceiptSessions: bookings fetch failed',res.status);return;}
+    if(!res.ok)return;
     const data=await res.json()||{};
-    const all=Object.entries(data).filter(([,b])=>b);
-    // Accept non-activesg bookings where session_id is missing OR session no longer exists in Firebase
-    const existingSessionIds=new Set(S.get('sessions').map(s=>s.id));
-    const pending=all.filter(([,b])=>b.source!=='activesg'&&(!b.session_id||!existingSessionIds.has(b.session_id)));
-    console.log(`importReceiptSessions: ${all.length} total bookings, ${pending.length} pending session creation`);
-    pending.forEach(([k,b])=>console.log(' pending:',k,{source:b.source,date:b.court_date||b.date,time:b.time,venue:b.venue}));
-    if(!pending.length){
-      const dates=all.slice(0,3).map(([,b])=>normalizeCourtDate(b.court_date||b.date||'')||'no-date').join(', ');
-      const toast=document.createElement('div');
-      toast.style.cssText='position:fixed;bottom:70px;left:50%;transform:translateX(-50%);background:#1e293b;color:#94a3b8;padding:8px 18px;border-radius:24px;font-size:12px;z-index:500;max-width:90vw;text-align:center';
-      toast.textContent=`📋 ${all.length} bookings — all linked. Dates: ${dates}`;
-      document.body.appendChild(toast);setTimeout(()=>toast.remove(),8000);
-      return;
-    }
-    let count=0,skipped=0;
-    for(const[key,b]of pending){
-      // Prefer court_date (actual play date) over date/payment_date (receipt date)
-      const rawDate=b.court_date||(b.date!==b.payment_date?b.date:'')||b.payment_date||'';
+    const all=Object.entries(data).filter(([,b])=>b&&b.source!=='activesg');
+    if(!all.length)return;
+    // Check which bookings already have a calendar INSTANCE (not just a session record)
+    const existingInstSessIds=new Set(getInsts().map(i=>i.session_id));
+    const existingSessions=S.get('sessions');
+    let count=0;
+    for(const[key,b]of all){
+      const rawDate=b.court_date||b.date||b.payment_date||'';
       const courtDate=normalizeCourtDate(rawDate);
-      if(!courtDate){console.warn('importReceiptSessions: no date for',key,rawDate);skipped++;continue;}
-      // Parse time; fall back to slots-based default if unparseable
+      if(!courtDate)continue;
       let times=parseTimeRange(b.time);
-      if(!times){
-        console.warn('importReceiptSessions: unparseable time for',key,b.time);
-        // Default: 2-hour block, time unknown
-        times={start:'09:00',end:'11:00'};
-      }
+      if(!times)times={start:'09:00',end:'11:00'};
       const instData={
         coach_ids:[],color:'#f59e0b',
         venue_text:b.venue||'',court_no:b.court||'',
@@ -2276,17 +2261,21 @@ async function importReceiptSessions(){
         start_time:times.start,end_time:times.end,
         notes:`Court ${b.court||''} · ${b.booker||''}`.trim().replace(/·\s*$/,'')
       };
-      const sess=saveSession({...instData,date:courtDate,status:'scheduled',recurring:0,day_of_week:null});
-      addOneOff(sess.id,instData,courtDate);
-      console.log('importReceiptSessions: created session',sess.id,'for booking',key,'on',courtDate);
-      await fetch(`${FIREBASE_URL}/bookings/${key}/session_id.json`,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(sess.id)});
-      if(brBookings[key])brBookings[key].session_id=sess.id;
-      count++;
+      // Find or create the session record
+      let sessId=b.session_id;
+      const sessExists=sessId&&existingSessions.find(s=>s.id===sessId);
+      if(!sessExists){
+        const sess=saveSession({...instData,date:courtDate,status:'scheduled',recurring:0,day_of_week:null});
+        sessId=sess.id;
+        fetch(`${FIREBASE_URL}/bookings/${key}/session_id.json`,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(sessId)});
+        if(brBookings[key])brBookings[key].session_id=sessId;
+      }
+      // Always create instance if missing
+      if(!existingInstSessIds.has(sessId)){
+        addOneOff(sessId,instData,courtDate);
+        count++;
+      }
     }
-    const t=document.createElement('div');
-    t.style.cssText='position:fixed;bottom:70px;left:50%;transform:translateX(-50%);background:#0f172a;color:#fff;padding:8px 18px;border-radius:24px;font-size:13px;font-weight:600;z-index:500;box-shadow:0 4px 20px rgba(0,0,0,.3)';
-    t.textContent=count>0?`📅 ${count} session${count>1?'s':''} added from court receipts`:`⚠️ ${skipped} booking${skipped!==1?'s':''} skipped (missing date/time)`;
-    document.body.appendChild(t);setTimeout(()=>t.remove(),5000);
     if(count>0){renderSched();renderMonth();}
   }catch(err){console.error('importReceiptSessions:',err);}
 }
@@ -2320,13 +2309,7 @@ async function importBotSessions(){
       await fetch(`${FIREBASE_URL}/bot_sessions/${key}/imported.json`,{method:'PUT',headers:{'Content-Type':'application/json'},body:'true'});
       count++;
     }
-    if(count>0){
-      const t=document.createElement('div');
-      t.style.cssText='position:fixed;bottom:70px;left:50%;transform:translateX(-50%);background:#0f172a;color:#fff;padding:8px 18px;border-radius:24px;font-size:13px;font-weight:600;z-index:500;box-shadow:0 4px 20px rgba(0,0,0,.3)';
-      t.textContent=`🤖 ${count} session${count>1?'s':''} imported from SynchroBadBot`;
-      document.body.appendChild(t);setTimeout(()=>t.remove(),4000);
-      renderSched();renderMonth();
-    }
+    if(count>0){renderSched();renderMonth();}
   }catch(err){console.error('importBotSessions:',err);}
 }
 
