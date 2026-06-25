@@ -2240,16 +2240,32 @@ function parseTimeRange(timeStr){
 async function importReceiptSessions(){
   try{
     const res=await fetch(`${FIREBASE_URL}/bookings.json`);
-    if(!res.ok)return;
+    if(!res.ok){console.warn('importReceiptSessions: bookings fetch failed',res.status);return;}
     const data=await res.json()||{};
-    const pending=Object.entries(data).filter(([,b])=>b&&b.source==='receipt'&&!b.session_id);
-    if(!pending.length)return;
-    let count=0;
+    const all=Object.entries(data).filter(([,b])=>b);
+    // Accept any booking that isn't activesg and doesn't have a session yet
+    const pending=all.filter(([,b])=>b.source!=='activesg'&&!b.session_id);
+    console.log(`importReceiptSessions: ${all.length} total bookings, ${pending.length} pending session creation`);
+    pending.forEach(([k,b])=>console.log(' pending:',k,{source:b.source,date:b.court_date||b.date,time:b.time,venue:b.venue}));
+    if(!pending.length){
+      const toast=document.createElement('div');
+      toast.style.cssText='position:fixed;bottom:70px;left:50%;transform:translateX(-50%);background:#1e293b;color:#94a3b8;padding:8px 18px;border-radius:24px;font-size:12px;z-index:500';
+      toast.textContent=`📋 ${all.length} bookings found, ${all.filter(([,b])=>b.session_id).length} already have sessions`;
+      document.body.appendChild(toast);setTimeout(()=>toast.remove(),5000);
+      return;
+    }
+    let count=0,skipped=0;
     for(const[key,b]of pending){
-      const courtDate=normalizeCourtDate(b.court_date||b.date||'');
-      if(!courtDate)continue;
-      const times=parseTimeRange(b.time);
-      if(!times)continue;
+      const rawDate=b.court_date||b.date||b.payment_date||'';
+      const courtDate=normalizeCourtDate(rawDate);
+      if(!courtDate){console.warn('importReceiptSessions: no date for',key,rawDate);skipped++;continue;}
+      // Parse time; fall back to slots-based default if unparseable
+      let times=parseTimeRange(b.time);
+      if(!times){
+        console.warn('importReceiptSessions: unparseable time for',key,b.time);
+        // Default: 2-hour block, time unknown
+        times={start:'09:00',end:'11:00'};
+      }
       const sess=saveSession({
         date:courtDate,start_time:times.start,end_time:times.end,
         venue_text:b.venue||'',court_no:b.court||'',
@@ -2258,17 +2274,16 @@ async function importReceiptSessions(){
         notes:`Court ${b.court||''} · ${b.booker||''}`.trim().replace(/·\s*$/,''),
         status:'scheduled',recurring:0,day_of_week:null
       });
+      console.log('importReceiptSessions: created session',sess.id,'for booking',key,'on',courtDate);
       await fetch(`${FIREBASE_URL}/bookings/${key}/session_id.json`,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(sess.id)});
       if(brBookings[key])brBookings[key].session_id=sess.id;
       count++;
     }
-    if(count>0){
-      const t=document.createElement('div');
-      t.style.cssText='position:fixed;bottom:70px;left:50%;transform:translateX(-50%);background:#0f172a;color:#fff;padding:8px 18px;border-radius:24px;font-size:13px;font-weight:600;z-index:500;box-shadow:0 4px 20px rgba(0,0,0,.3)';
-      t.textContent=`📅 ${count} session${count>1?'s':''} added from court receipts`;
-      document.body.appendChild(t);setTimeout(()=>t.remove(),4000);
-      renderSched();renderMonth();
-    }
+    const t=document.createElement('div');
+    t.style.cssText='position:fixed;bottom:70px;left:50%;transform:translateX(-50%);background:#0f172a;color:#fff;padding:8px 18px;border-radius:24px;font-size:13px;font-weight:600;z-index:500;box-shadow:0 4px 20px rgba(0,0,0,.3)';
+    t.textContent=count>0?`📅 ${count} session${count>1?'s':''} added from court receipts`:`⚠️ ${skipped} booking${skipped!==1?'s':''} skipped (missing date/time)`;
+    document.body.appendChild(t);setTimeout(()=>t.remove(),5000);
+    if(count>0){renderSched();renderMonth();}
   }catch(err){console.error('importReceiptSessions:',err);}
 }
 
