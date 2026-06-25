@@ -2249,24 +2249,33 @@ async function importBotSessions(){
 // Helper: get payment date (falls back to created_at or date for old records)
 function getPaymentDate(b){return b.payment_date||b.created_at?.slice(0,10)||b.date||'';}
 function getCourtDate(b){return b.court_date||b.date||'';}
-function calcCourtRate(dateStr,timeStr){
-  if(!dateStr)return 7.40;
-  const d=new Date(dateStr+'T00:00:00');
-  if(d.getDay()===0||d.getDay()===6)return 7.40;
+// SG public holidays (actual + in-lieu dates)
+const SG_PH=new Set(['2025-01-01','2025-01-29','2025-01-30','2025-04-18','2025-05-01','2025-05-12','2025-06-06','2025-08-09','2025-08-11','2025-10-20','2025-12-25','2026-01-01','2026-02-17','2026-02-18','2026-04-03','2026-05-01','2026-05-31','2026-06-01','2026-06-16','2026-08-09','2026-08-10','2026-10-28','2026-12-25']);
+function parseStartHour(timeStr){
   const m=(timeStr||'').match(/(\d{1,2})(?::(\d{2}))?\s*(am|pm)?/i);
-  if(!m)return 7.40;
+  if(!m)return null;
   let h=parseInt(m[1]);
   const ap=(m[3]||'').toLowerCase();
   if(ap==='pm'&&h!==12)h+=12;
   else if(ap==='am'&&h===12)h=0;
-  else if(!ap&&h<8)h+=12;
-  return h<18?3.50:7.40;
+  else if(!ap&&h<8)h+=12; // treat 1-7 without marker as PM
+  return h;
 }
+function isPeak(dateStr,timeStr){
+  if(!dateStr)return true;
+  const d=new Date(dateStr+'T00:00:00');
+  if(d.getDay()===0||d.getDay()===6)return true; // weekend
+  if(SG_PH.has(dateStr))return true; // public holiday
+  const h=parseStartHour(timeStr);
+  return h===null||h>=18; // weekday 6pm+ = peak
+}
+function calcCourtRate(dateStr,timeStr){return isPeak(dateStr,timeStr)?7.40:3.50;}
 function getCourtCost(b){
   if(b.court_cost!=null&&b.court_cost>0)return b.court_cost;
   return calcCourtRate(b.court_date||b.date,b.time)*(b.slots||1);
 }
-function calcDue(b){return getCourtCost(b)+10*(b.slots||1);}
+function getIncentiveRate(b){return b.venue_type==='school'?5.00:2.50;}
+function calcDue(b){return getCourtCost(b)+getIncentiveRate(b)*(b.slots||1);}
 
 function getBookerOrder(){try{return JSON.parse(localStorage.getItem('booker-order')||'[]')}catch{return[]}}
 function saveBookerOrder(o){localStorage.setItem('booker-order',JSON.stringify(o))}
