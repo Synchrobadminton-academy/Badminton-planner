@@ -2255,6 +2255,46 @@ function parseTimeRange(timeStr){
   return{start:to24(m[1],m[2],startAp),end:to24(m[4],m[5],endAp)};
 }
 
+// Parse booking time: handles "4pm-6pm", "4pm and 5pm" (multi-slot), "4pm" + slots count
+function parseBookingTime(timeStr,slots){
+  if(!timeStr)return null;
+  // Try explicit range first (e.g. "4pm - 6pm")
+  const range=parseTimeRange(timeStr);
+  if(range)return range;
+  // Extract every H[am/pm] mention in the string
+  const re=/(\d{1,2})(?::(\d{2}))?\s*(am|pm)/gi;
+  const hours=[];
+  let m;
+  while((m=re.exec(timeStr))!==null){
+    let h=parseInt(m[1]),mins=parseInt(m[2]||0);
+    const ap=m[3].toLowerCase();
+    if(ap==='pm'&&h!==12)h+=12;
+    else if(ap==='am'&&h===12)h=0;
+    hours.push({h,mins});
+  }
+  if(hours.length>=2){
+    // e.g. "4pm and 5pm" → start=4:00 end=last+1hr
+    const s=hours[0];
+    const e=hours[hours.length-1];
+    const endH=e.h+1;
+    return{
+      start:`${String(s.h).padStart(2,'0')}:${String(s.mins).padStart(2,'0')}`,
+      end:`${String(endH).padStart(2,'0')}:${String(e.mins).padStart(2,'0')}`
+    };
+  }
+  if(hours.length===1){
+    // Single time + slots count → e.g. "4pm" slots=2 → 4:00–6:00
+    const s=hours[0];
+    const dur=slots||1;
+    const endH=s.h+dur;
+    return{
+      start:`${String(s.h).padStart(2,'0')}:${String(s.mins).padStart(2,'0')}`,
+      end:`${String(endH).padStart(2,'0')}:${String(s.mins).padStart(2,'0')}`
+    };
+  }
+  return null;
+}
+
 async function importReceiptSessions(){
   try{
     const res=await fetch(`${FIREBASE_URL}/bookings.json`);
@@ -2268,8 +2308,8 @@ async function importReceiptSessions(){
       const rawDate=b.court_date||b.date||b.payment_date||'';
       const courtDate=normalizeCourtDate(rawDate);
       if(!courtDate)continue;
-      let times=parseTimeRange(b.time);
-      if(!times)times={start:'09:00',end:'11:00'};
+      let times=parseBookingTime(b.time,b.slots);
+      if(!times)times={start:'09:00',end:'10:00'};
       const instData={
         coach_ids:[],color:'#f59e0b',
         venue_text:b.venue||'',court_no:b.court||'',
@@ -2292,9 +2332,11 @@ async function importReceiptSessions(){
         // No instance yet — create one
         addOneOff(sessId,instData,courtDate);
         count++;
-      } else if(existingInst.date!==courtDate){
-        // Instance exists but has wrong date (e.g. 2024 instead of 2026) — fix it
-        const fixed=curInsts.map(i=>i.session_id===sessId?{...i,date:courtDate}:i);
+      } else if(existingInst.date!==courtDate||existingInst.start_time!==instData.start_time||existingInst.end_time!==instData.end_time){
+        // Instance has wrong date or wrong time — fix in place
+        const fixed=curInsts.map(i=>i.session_id===sessId
+          ?{...i,date:courtDate,start_time:instData.start_time,end_time:instData.end_time,hours:compHrs(instData.start_time,instData.end_time)}
+          :i);
         S.set('instances',fixed);
         count++;
       }
