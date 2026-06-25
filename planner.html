@@ -780,7 +780,7 @@ async function syncLoop(){
     if(labelEl){labelEl.textContent='Synced';}
   }
   const nowTs=Date.now();
-  if(nowTs-lastBotImport>15000){lastBotImport=nowTs;importBotSessions();}
+  if(nowTs-lastBotImport>15000){lastBotImport=nowTs;importBotSessions();importReceiptSessions();}
   setTimeout(syncLoop,1500);
 }
 
@@ -2209,6 +2209,57 @@ async function loadBookingsFromFirebase(){
   }catch(e){console.error('Firebase error:',e);}
 }
 
+function parseTimeRange(timeStr){
+  if(!timeStr)return null;
+  const m=(timeStr||'').match(/(\d{1,2})(?::(\d{2}))?\s*(am|pm)?\s*[-–to]+\s*(\d{1,2})(?::(\d{2}))?\s*(am|pm)?/i);
+  if(!m)return null;
+  function to24(h,min,ap){
+    let hour=parseInt(h),mins=parseInt(min||0);
+    const a=(ap||'').toLowerCase();
+    if(a==='pm'&&hour!==12)hour+=12;
+    else if(a==='am'&&hour===12)hour=0;
+    else if(!a&&hour<8)hour+=12;
+    return`${String(hour).padStart(2,'0')}:${String(mins).padStart(2,'0')}`;
+  }
+  const startAp=m[3]||'';const endAp=m[6]||startAp;
+  return{start:to24(m[1],m[2],startAp),end:to24(m[4],m[5],endAp)};
+}
+
+async function importReceiptSessions(){
+  try{
+    const res=await fetch(`${FIREBASE_URL}/bookings.json`);
+    if(!res.ok)return;
+    const data=await res.json()||{};
+    const pending=Object.entries(data).filter(([,b])=>b&&b.source==='receipt'&&!b.session_id);
+    if(!pending.length)return;
+    let count=0;
+    for(const[key,b]of pending){
+      const courtDate=normalizeCourtDate(b.court_date||b.date||'');
+      if(!courtDate)continue;
+      const times=parseTimeRange(b.time);
+      if(!times)continue;
+      const sess=saveSession({
+        date:courtDate,start_time:times.start,end_time:times.end,
+        venue_text:b.venue||'',court_no:b.court||'',
+        class_type:'Training',standard:'',
+        coach_ids:[],color:'#f59e0b',
+        notes:`Court ${b.court||''} · ${b.booker||''}`.trim().replace(/·\s*$/,''),
+        status:'scheduled',recurring:0,day_of_week:null
+      });
+      await fetch(`${FIREBASE_URL}/bookings/${key}/session_id.json`,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(sess.id)});
+      if(brBookings[key])brBookings[key].session_id=sess.id;
+      count++;
+    }
+    if(count>0){
+      const t=document.createElement('div');
+      t.style.cssText='position:fixed;bottom:70px;left:50%;transform:translateX(-50%);background:#0f172a;color:#fff;padding:8px 18px;border-radius:24px;font-size:13px;font-weight:600;z-index:500;box-shadow:0 4px 20px rgba(0,0,0,.3)';
+      t.textContent=`📅 ${count} session${count>1?'s':''} added from court receipts`;
+      document.body.appendChild(t);setTimeout(()=>t.remove(),4000);
+      renderSched();renderMonth();
+    }
+  }catch(err){console.error('importReceiptSessions:',err);}
+}
+
 async function importBotSessions(){
   try{
     const res=await fetch(`${FIREBASE_URL}/bot_sessions.json`);
@@ -2220,7 +2271,7 @@ async function importBotSessions(){
     let count=0;
     for(const[key,session]of entries){
       const sess=saveSession({
-        date:session.date,start_time:session.start_time,end_time:session.end_time,
+        date:normalizeCourtDate(session.date)||session.date,start_time:session.start_time,end_time:session.end_time,
         venue_text:session.venue_text||'',court_no:session.court_no||'',
         class_type:session.class_type||'ActiveSG',standard:session.standard||'',
         coach_ids:session.coach_ids||[],color:session.color||'#f59e0b',
@@ -2670,7 +2721,7 @@ scheduleAutoRefresh();
 applyFolderState('coaches');
 applyFolderState('admin');
 showView('dashboard');
-importBotSessions();
+importBotSessions();importReceiptSessions();
 </script>
 </body>
 </html>
