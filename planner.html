@@ -599,8 +599,8 @@ function checkPw(){
       <div class="card-hdr">All Payments — <span id="br-month-lbl2"></span></div>
       <div style="overflow-x:auto">
         <table class="br-table">
-          <thead><tr><th>Payment Date</th><th>Court Date</th><th>Venue</th><th>Court</th><th>Time</th><th>Booker</th><th>Type</th><th>Incentive</th><th></th></tr></thead>
-          <tbody id="br-tbody"><tr><td colspan="9" style="padding:20px;text-align:center;color:var(--txf)">Loading…</td></tr></tbody>
+          <thead><tr><th>Payment Date</th><th>Court Date</th><th>Venue</th><th>Court</th><th>Time</th><th>Booker</th><th>Type</th><th>Court Cost</th><th>Due</th><th></th></tr></thead>
+          <tbody id="br-tbody"><tr><td colspan="10" style="padding:20px;text-align:center;color:var(--txf)">Loading…</td></tr></tbody>
         </table>
       </div>
     </div>
@@ -2308,10 +2308,11 @@ function renderBookingRecords(){
       <td>${b.time||''}</td>
       <td>${esc(b.booker||'')}</td>
       <td><span class="${b.venue_type==='school'?'br-badge-sc':'br-badge-sh'}">${b.venue_type==='school'?'School':'S.Hall'}</span></td>
+      <td style="color:var(--txm)">${b.court_cost!=null?'$'+Number(b.court_cost).toFixed(2):'—'}</td>
       <td style="font-weight:700;color:var(--green)">$${(b.due??b.incentive??0).toFixed(2)}</td>
       <td><button class="btn btn-red btn-sm" onclick="deleteBooking('${b._key}')">✕</button></td>
     </tr>`).join('')
-    :'<tr><td colspan="9" style="padding:20px;text-align:center;color:var(--txf)">No payments recorded this month</td></tr>';
+    :'<tr><td colspan="10" style="padding:20px;text-align:center;color:var(--txf)">No payments recorded this month</td></tr>';
 }
 
 function renderBROrderList(order){
