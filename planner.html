@@ -2271,7 +2271,6 @@ function isPeak(dateStr,timeStr){
 }
 function calcCourtRate(dateStr,timeStr){return isPeak(dateStr,timeStr)?7.40:3.50;}
 function getCourtCost(b){
-  if(b.court_cost!=null&&b.court_cost>0)return b.court_cost;
   return calcCourtRate(b.court_date||b.date,b.time)*(b.slots||1);
 }
 function getIncentiveRate(b){return b.venue_type==='school'?5.00:2.50;}
