@@ -758,7 +758,7 @@ const S={
   nextId(a){return a.length?Math.max(...a.map(i=>i.id))+1:1}
 };
 
-/let lastBotImport=0;
+let lastBotImport=0;
 // Sync loop: poll Firebase every 1.5 seconds
 async function syncLoop(){
   if(syncInProgress)return;
