@@ -2248,7 +2248,26 @@ async function importBotSessions(){
 
 // Helper: get payment date (falls back to created_at or date for old records)
 function getPaymentDate(b){return b.payment_date||b.created_at?.slice(0,10)||b.date||'';}
-function getCourtDate(b){return b.court_date||b.date||'';}
+function normalizeCourtDate(dateStr){
+  if(!dateStr)return dateStr;
+  const parts=dateStr.split('-');
+  if(parts.length!==3)return dateStr;
+  const storedYear=parseInt(parts[0]);
+  const month=parseInt(parts[1]);
+  const day=parseInt(parts[2]);
+  const today=new Date();today.setHours(0,0,0,0);
+  const thisYear=today.getFullYear();
+  // Trust dates from last year onwards (allows historical records)
+  if(storedYear>=thisYear-1)return dateStr;
+  // Year is clearly stale — re-anchor to whichever year puts it within 0-60 days from today
+  for(const yr of [thisYear,thisYear+1]){
+    const candidate=new Date(yr,month-1,day);
+    const daysAhead=(candidate-today)/86400000;
+    if(daysAhead>=-3&&daysAhead<=60)return`${yr}-${parts[1]}-${parts[2]}`;
+  }
+  return`${thisYear}-${parts[1]}-${parts[2]}`;
+}
+function getCourtDate(b){return normalizeCourtDate(b.court_date||b.date||'');}
 // SG public holidays (actual dates only, in-lieu dates are not peak)
 const SG_PH=new Set(['2025-01-01','2025-01-29','2025-01-30','2025-04-18','2025-05-01','2025-05-12','2025-06-06','2025-08-09','2025-10-20','2025-12-25','2026-01-01','2026-02-17','2026-02-18','2026-04-03','2026-05-01','2026-05-31','2026-06-16','2026-08-09','2026-10-28','2026-12-25']);
 function parseStartHour(timeStr){
@@ -2271,7 +2290,7 @@ function isPeak(dateStr,timeStr){
 }
 function calcCourtRate(dateStr,timeStr){return isPeak(dateStr,timeStr)?7.40:3.50;}
 function getCourtCost(b){
-  return calcCourtRate(b.court_date||b.date,b.time)*(b.slots||1);
+  return calcCourtRate(getCourtDate(b),b.time)*(b.slots||1);
 }
 function getIncentiveRate(b){return b.venue_type==='school'?5.00:2.50;}
 function calcDue(b){return getCourtCost(b)+getIncentiveRate(b)*(b.slots||1);}
