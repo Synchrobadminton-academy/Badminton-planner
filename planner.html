@@ -114,15 +114,16 @@ table.sched td.tslot.cell-target{background:rgba(37,99,235,.22)!important;outlin
 .cal-dow-row{display:grid;grid-template-columns:repeat(7,1fr);border-bottom:2px solid var(--bdr)}
 .cal-dow{text-align:center;padding:6px 3px;font-size:11px;font-weight:800;color:var(--txm);background:var(--surf2);text-transform:uppercase;letter-spacing:.04em}
 .cal-grid{display:grid;grid-template-columns:repeat(7,1fr)}
-.cal-cell{min-height:280px;border-right:1px solid var(--bdr);border-bottom:1px solid var(--bdr);padding:6px;transition:background .1s;position:relative}
+.cal-cell{min-height:160px;border-right:1px solid var(--bdr);border-bottom:1px solid var(--bdr);padding:6px;transition:background .1s;position:relative}
 .cal-cell:hover{background:var(--hov)}
 .cal-cell:not(.other){cursor:pointer}
 .cal-cell.other{opacity:.28;cursor:default}
 .cal-cell.today .cal-num{background:var(--blue);color:#fff;border-radius:50%}
-.cal-num{font-size:11px;font-weight:800;width:22px;height:22px;display:flex;align-items:center;justify-content:center;margin-bottom:3px}
-.cal-chip{font-size:10px;padding:2px 5px;border-radius:3px;border:1px solid rgba(0,0,0,.18);margin-bottom:2px;line-height:1.35}
-.cal-chip-venue{font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.cal-chip-sub{opacity:.88;font-size:9.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cal-num{font-size:11px;font-weight:800;width:22px;height:22px;display:flex;align-items:center;justify-content:center;margin-bottom:4px}
+.cal-chip{font-size:11px;padding:5px 7px;border-radius:5px;border:1px solid rgba(0,0,0,.18);margin-bottom:4px;line-height:1.45;cursor:grab;user-select:none;position:relative}
+.cal-chip:active{cursor:grabbing}
+.cal-chip-venue{font-weight:800;font-size:11.5px}
+.cal-chip-sub{opacity:.9;font-size:10.5px;margin-top:1px}
 .dtable{width:100%;border-collapse:collapse;font-size:12px}
 .dtable th{text-align:left;padding:9px 14px;background:var(--surf2);border-bottom:1px solid var(--bdr);font-weight:700;color:var(--txm);font-size:11px;text-transform:uppercase;letter-spacing:.04em}
 .dtable td{padding:9px 14px;border-bottom:1px solid var(--bdr);vertical-align:middle}
@@ -264,15 +265,17 @@ table.sched td.tslot.cell-target{background:rgba(37,99,235,.22)!important;outlin
   .tab-item{padding:11px 14px 11px 32px}
 }
 @media(max-width:640px){
-  .cal-cell{min-height:72px;padding:2px 3px}
+  .cal-cell{min-height:90px;padding:3px 4px}
   .cal-num{width:18px;height:18px;font-size:10px;margin-bottom:2px}
-  .cal-chip{padding:1px 3px;font-size:8px;margin-bottom:1px;border-radius:2px}
-  .cal-chip-sub{display:none}
+  .cal-chip{padding:3px 5px;font-size:9px;margin-bottom:2px;border-radius:3px}
+  .cal-chip-venue{font-size:9px}
+  .cal-chip-sub{font-size:8.5px}
+  .cal-chip-sub.chip-coach{display:none}
   .tgrid{grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:8px}
   .tc-hrs{font-size:22px}.tc-name{font-size:12px}
   .two-col{grid-template-columns:1fr}.form-row{grid-template-columns:1fr}
 }
-@media(min-width:641px)and(max-width:900px){.cal-cell{min-height:140px;padding:4px}.cal-chip-sub{font-size:8.5px}}
+@media(min-width:641px)and(max-width:900px){.cal-cell{min-height:130px;padding:4px}.cal-chip{font-size:10px;padding:4px 6px}.cal-chip-venue{font-size:10px}.cal-chip-sub{font-size:9.5px}}
 @media(max-width:500px){.overlay{align-items:flex-end;padding:0}.modal{border-radius:20px 20px 0 0;max-height:96vh;padding:16px 14px}}
 #clip-bar{max-width:calc(100vw - 28px);flex-wrap:wrap;justify-content:center}
 /* Courts day grid */
@@ -1312,10 +1315,10 @@ function renderMonth(){
         const noCoach=!inst.coach_ids||inst.coach_ids.length===0;
         return`<div class="cal-chip" data-inst-id="${inst.id}" style="background:${chipBg};color:${chipTc};border:${chipBorder}">
           ${noCoach?'<div class="block-warn">⚠️</div>':''}
-          <div class="cal-chip-venue">${esc(inst.venue_text||'')}${inst.court_no?' · Ct '+esc(inst.court_no):''}</div>
-          ${inst.class_type||inst.standard?`<div class="cal-chip-sub">${esc([inst.class_type,inst.standard].filter(Boolean).join(' · '))}</div>`:''}
-          <div class="cal-chip-sub">${fmt12(inst.start_time)}–${fmt12(inst.end_time)}${cn?' · '+esc(cn):''}</div>
-          ${inst.notes?`<div class="cal-chip-sub" style="font-style:italic">${esc(inst.notes)}</div>`:''}
+          <div class="cal-chip-venue">${esc(inst.venue_text||'—')}</div>
+          <div class="cal-chip-sub">${fmt12(inst.start_time)}–${fmt12(inst.end_time)}</div>
+          ${inst.court_no?`<div class="cal-chip-sub">Court ${esc(inst.court_no)}</div>`:''}
+          <div class="cal-chip-sub chip-coach">${cn?esc(cn):'<span style="opacity:.55;font-style:italic">No coach</span>'}</div>
         </div>`;
       }).join('')}
     </div>`;
