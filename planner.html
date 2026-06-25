@@ -394,6 +394,7 @@ function checkPw(){
       <div class="tab-item" data-view="bookers" onclick="showView('bookers')"><span class="tab-icon">💼</span>Bookers</div>
 <div class="tab-item" data-view="bookings" onclick="showView('bookings')"><span class="tab-icon">🗓</span>Booking Records</div>
       <div class="tab-item" data-view="receipts" onclick="showView('receipts')"><span class="tab-icon">🧾</span>Receipts</div>
+      <div class="tab-item" data-view="debug" onclick="showView('debug')"><span class="tab-icon">🔧</span>Debug</div>
     </div>
   </div>
 </aside>
@@ -407,6 +408,17 @@ function checkPw(){
 
 <!-- DASHBOARD -->
 <div class="view active" id="view-dashboard"><div class="main-inner dash-wrap"></div></div>
+
+<!-- DEBUG -->
+<div class="view" id="view-debug">
+  <div class="card"><div class="card-hdr">Data Diagnostics</div><div class="card-body" id="debug-body" style="font-size:12px;line-height:1.8"></div></div>
+  <div class="card"><div class="card-hdr">Actions</div><div class="card-body" style="display:flex;gap:8px;flex-wrap:wrap">
+    <button class="btn btn-p" onclick="debugRebuild()">Force Rebuild Sessions from Receipts</button>
+    <button class="btn btn-o" onclick="renderDebug()">Refresh</button>
+  </div></div>
+  <div class="card"><div class="card-hdr">Instances on Calendar</div><div class="card-body" id="debug-insts" style="font-size:11px;line-height:1.8;font-family:monospace;word-break:break-all"></div></div>
+  <div class="card"><div class="card-hdr">Bookings (non-ActiveSG)</div><div class="card-body" id="debug-bookings" style="font-size:11px;line-height:1.8;font-family:monospace;word-break:break-all"></div></div>
+</div>
 
 <!-- SCHEDULE -->
 <div class="view" id="view-schedule">
@@ -724,9 +736,12 @@ const syncCache={coaches:[],venues:[],instances:[],sessions:[],standards:[],['cl
 let syncInProgress=false;
 const syncKeys=['coaches','venues','instances','sessions','standards','class-types','combo-colors','booker_coach_map'];
 
+const pendingWrites=new Set();
+
 async function fetchFirebaseData(){
   try{
     for(const k of syncKeys){
+      if(pendingWrites.has(k))continue;
       const r=await fetch(`${FIREBASE_URL}/${k}.json`);
       if(r.ok){
         const data=await r.json();
@@ -744,9 +759,11 @@ async function fetchFirebaseData(){
 }
 
 async function pushToFirebase(key,value){
+  pendingWrites.add(key);
   try{
     await fetch(`${FIREBASE_URL}/${key}.json`,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(value)});
   }catch(e){console.error('pushToFirebase error for',key,e);}
+  finally{pendingWrites.delete(key);}
 }
 
 const S={
@@ -772,8 +789,8 @@ async function syncLoop(){
     if(currentView==='dashboard')renderDashboard();
     else if(currentView==='schedule')renderSched();
     else if(currentView==='coaches')renderCoaches();
-    else if(currentView==='admin')renderAdmin();
     else if(currentView==='courts')renderCourts();
+    else if(currentView==='debug')renderDebug();
   }finally{
     syncInProgress=false;
     if(statusEl){statusEl.style.background='#10b981';}
@@ -959,6 +976,7 @@ function showView(v){
   if(v==='receipts'){renderReceipts();loadBookingsFromFirebase();}
   if(v==='bookers'){loadBookingsFromFirebase();renderBookers();}
   if(v==='analytics')renderAnalytics();
+  if(v==='debug')renderDebug();
 }
 
 // ── SCHED TOGGLE ──────────────────────────────────────────────
@@ -2244,8 +2262,6 @@ async function importReceiptSessions(){
     const data=await res.json()||{};
     const all=Object.entries(data).filter(([,b])=>b&&b.source!=='activesg');
     if(!all.length)return;
-    // Check which bookings already have a calendar INSTANCE (not just a session record)
-    const existingInstSessIds=new Set(getInsts().map(i=>i.session_id));
     const existingSessions=S.get('sessions');
     let count=0;
     for(const[key,b]of all){
@@ -2261,7 +2277,6 @@ async function importReceiptSessions(){
         start_time:times.start,end_time:times.end,
         notes:`Court ${b.court||''} · ${b.booker||''}`.trim().replace(/·\s*$/,'')
       };
-      // Find or create the session record
       let sessId=b.session_id;
       const sessExists=sessId&&existingSessions.find(s=>s.id===sessId);
       if(!sessExists){
@@ -2270,9 +2285,17 @@ async function importReceiptSessions(){
         fetch(`${FIREBASE_URL}/bookings/${key}/session_id.json`,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(sessId)});
         if(brBookings[key])brBookings[key].session_id=sessId;
       }
-      // Always create instance if missing
-      if(!existingInstSessIds.has(sessId)){
+      // Re-read instances fresh each iteration so we see updates from prior iterations
+      const curInsts=getInsts();
+      const existingInst=curInsts.find(i=>i.session_id===sessId);
+      if(!existingInst){
+        // No instance yet — create one
         addOneOff(sessId,instData,courtDate);
+        count++;
+      } else if(existingInst.date!==courtDate){
+        // Instance exists but has wrong date (e.g. 2024 instead of 2026) — fix it
+        const fixed=curInsts.map(i=>i.session_id===sessId?{...i,date:courtDate}:i);
+        S.set('instances',fixed);
         count++;
       }
     }
@@ -2311,6 +2334,51 @@ async function importBotSessions(){
     }
     if(count>0){renderSched();renderMonth();}
   }catch(err){console.error('importBotSessions:',err);}
+}
+
+function renderAdmin(){}
+
+function renderDebug(){
+  const insts=getInsts();
+  const sessions=S.get('sessions');
+  const bookings=Object.entries(brBookings).filter(([,b])=>b&&b.source!=='activesg');
+  const el=document.getElementById('debug-body');
+  if(!el)return;
+  el.innerHTML=`
+    <b>Sessions in Firebase:</b> ${sessions.length}<br>
+    <b>Instances on calendar:</b> ${insts.length}<br>
+    <b>Non-ActiveSG bookings:</b> ${bookings.length}<br>
+    <b>Pending Firebase writes:</b> ${[...pendingWrites].join(', ')||'none'}<br>
+  `;
+  const instsEl=document.getElementById('debug-insts');
+  if(instsEl)instsEl.innerHTML=insts.length?insts.map(i=>`<div>id=${i.id} sess=${i.session_id} date=${i.date} venue=${esc(i.venue_text||'')} ${i.start_time}–${i.end_time}</div>`).join(''):'<em>No instances</em>';
+  const bkEl=document.getElementById('debug-bookings');
+  if(bkEl)bkEl.innerHTML=bookings.length?bookings.map(([k,b])=>{
+    const cd=normalizeCourtDate(b.court_date||b.date||b.payment_date||'');
+    return`<div>key=${k} raw_date="${b.court_date||b.date||''}" → norm="${cd}" time="${b.time||''}" sess_id=${b.session_id||'none'} source=${b.source||'none'}</div>`;
+  }).join(''):'<em>No non-ActiveSG bookings found</em>';
+}
+
+async function debugRebuild(){
+  const el=document.getElementById('debug-body');
+  if(el)el.innerHTML='<em>Rebuilding…</em>';
+  // Clear existing receipt-sourced instances (those whose session_id matches a booking's session_id)
+  const bookings=Object.entries(brBookings).filter(([,b])=>b&&b.source!=='activesg');
+  const bookingSessIds=new Set(bookings.map(([,b])=>b.session_id).filter(Boolean));
+  let insts=getInsts().filter(i=>!bookingSessIds.has(i.session_id));
+  let sessions=S.get('sessions').filter(s=>!bookingSessIds.has(s.id));
+  S.set('instances',insts);
+  S.set('sessions',sessions);
+  // Clear session_id from bookings in Firebase so they get re-imported
+  for(const[key,b]of bookings){
+    if(b.session_id){
+      await fetch(`${FIREBASE_URL}/bookings/${key}/session_id.json`,{method:'DELETE'});
+      if(brBookings[key])delete brBookings[key].session_id;
+    }
+  }
+  await new Promise(r=>setTimeout(r,1000));
+  await importReceiptSessions();
+  renderDebug();
 }
 
 // Helper: get payment date (falls back to created_at or date for old records)
