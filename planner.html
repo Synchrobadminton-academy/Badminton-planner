@@ -2243,8 +2243,9 @@ async function importReceiptSessions(){
     if(!res.ok){console.warn('importReceiptSessions: bookings fetch failed',res.status);return;}
     const data=await res.json()||{};
     const all=Object.entries(data).filter(([,b])=>b);
-    // Accept any booking that isn't activesg and doesn't have a session yet
-    const pending=all.filter(([,b])=>b.source!=='activesg'&&!b.session_id);
+    // Accept non-activesg bookings where session_id is missing OR session no longer exists in Firebase
+    const existingSessionIds=new Set(S.get('sessions').map(s=>s.id));
+    const pending=all.filter(([,b])=>b.source!=='activesg'&&(!b.session_id||!existingSessionIds.has(b.session_id)));
     console.log(`importReceiptSessions: ${all.length} total bookings, ${pending.length} pending session creation`);
     pending.forEach(([k,b])=>console.log(' pending:',k,{source:b.source,date:b.court_date||b.date,time:b.time,venue:b.venue}));
     if(!pending.length){
