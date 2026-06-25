@@ -2249,15 +2249,17 @@ async function importReceiptSessions(){
     console.log(`importReceiptSessions: ${all.length} total bookings, ${pending.length} pending session creation`);
     pending.forEach(([k,b])=>console.log(' pending:',k,{source:b.source,date:b.court_date||b.date,time:b.time,venue:b.venue}));
     if(!pending.length){
+      const dates=all.slice(0,3).map(([,b])=>normalizeCourtDate(b.court_date||b.date||'')||'no-date').join(', ');
       const toast=document.createElement('div');
-      toast.style.cssText='position:fixed;bottom:70px;left:50%;transform:translateX(-50%);background:#1e293b;color:#94a3b8;padding:8px 18px;border-radius:24px;font-size:12px;z-index:500';
-      toast.textContent=`📋 ${all.length} bookings found, ${all.filter(([,b])=>b.session_id).length} already have sessions`;
-      document.body.appendChild(toast);setTimeout(()=>toast.remove(),5000);
+      toast.style.cssText='position:fixed;bottom:70px;left:50%;transform:translateX(-50%);background:#1e293b;color:#94a3b8;padding:8px 18px;border-radius:24px;font-size:12px;z-index:500;max-width:90vw;text-align:center';
+      toast.textContent=`📋 ${all.length} bookings — all linked. Dates: ${dates}`;
+      document.body.appendChild(toast);setTimeout(()=>toast.remove(),8000);
       return;
     }
     let count=0,skipped=0;
     for(const[key,b]of pending){
-      const rawDate=b.court_date||b.date||b.payment_date||'';
+      // Prefer court_date (actual play date) over date/payment_date (receipt date)
+      const rawDate=b.court_date||(b.date!==b.payment_date?b.date:'')||b.payment_date||'';
       const courtDate=normalizeCourtDate(rawDate);
       if(!courtDate){console.warn('importReceiptSessions: no date for',key,rawDate);skipped++;continue;}
       // Parse time; fall back to slots-based default if unparseable
@@ -2328,23 +2330,34 @@ async function importBotSessions(){
 // Helper: get payment date (falls back to created_at or date for old records)
 function getPaymentDate(b){return b.payment_date||b.created_at?.slice(0,10)||b.date||'';}
 function normalizeCourtDate(dateStr){
-  if(!dateStr)return dateStr;
-  const parts=dateStr.split('-');
-  if(parts.length!==3)return dateStr;
-  const storedYear=parseInt(parts[0]);
-  const month=parseInt(parts[1]);
-  const day=parseInt(parts[2]);
+  if(!dateStr)return'';
+  const str=String(dateStr).trim();
+  const MN={jan:1,feb:2,mar:3,apr:4,may:5,jun:6,jul:7,aug:8,sep:9,oct:10,nov:11,dec:12};
+  let day,month,storedYear=null;
+  // YYYY-MM-DD
+  const m1=str.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if(m1){storedYear=parseInt(m1[1]);month=parseInt(m1[2]);day=parseInt(m1[3]);}
+  // DD MMM [YYYY]  e.g. "05 Jul 2024"
+  if(!day){const m2=str.match(/^(\d{1,2})\s+([A-Za-z]{3,})(?:\s+(\d{4}))?/);
+    if(m2){day=parseInt(m2[1]);month=MN[m2[2].slice(0,3).toLowerCase()];if(m2[3])storedYear=parseInt(m2[3]);}}
+  // MMM DD [YYYY]  e.g. "Jul 5 2024"
+  if(!day){const m3=str.match(/^([A-Za-z]{3,})\s+(\d{1,2})(?:\s+(\d{4}))?/);
+    if(m3){month=MN[m3[1].slice(0,3).toLowerCase()];day=parseInt(m3[2]);if(m3[3])storedYear=parseInt(m3[3]);}}
+  // DD/MM[/YYYY] or DD-MM[-YYYY]
+  if(!day){const m4=str.match(/^(\d{1,2})[\/\-](\d{1,2})(?:[\/\-](\d{2,4}))?$/);
+    if(m4){day=parseInt(m4[1]);month=parseInt(m4[2]);if(m4[3])storedYear=m4[3].length===2?2000+parseInt(m4[3]):parseInt(m4[3]);}}
+  if(!day||!month||month<1||month>12||day<1||day>31)return'';
   const today=new Date();today.setHours(0,0,0,0);
   const thisYear=today.getFullYear();
-  // Trust dates from last year onwards (allows historical records)
-  if(storedYear>=thisYear-1)return dateStr;
-  // Year is clearly stale — re-anchor to whichever year puts it within 0-60 days from today
-  for(const yr of [thisYear,thisYear+1]){
-    const candidate=new Date(yr,month-1,day);
-    const daysAhead=(candidate-today)/86400000;
-    if(daysAhead>=-3&&daysAhead<=60)return`${yr}-${parts[1]}-${parts[2]}`;
+  const pad=n=>String(n).padStart(2,'0');
+  // Trust year if recent enough
+  if(storedYear&&storedYear>=thisYear-1)return`${storedYear}-${pad(month)}-${pad(day)}`;
+  // Re-anchor stale/missing year to keep date within -3 to +60 days from today
+  for(const yr of[thisYear,thisYear+1]){
+    const daysAhead=(new Date(yr,month-1,day)-today)/86400000;
+    if(daysAhead>=-3&&daysAhead<=60)return`${yr}-${pad(month)}-${pad(day)}`;
   }
-  return`${thisYear}-${parts[1]}-${parts[2]}`;
+  return`${thisYear}-${pad(month)}-${pad(day)}`;
 }
 function getCourtDate(b){return normalizeCourtDate(b.court_date||b.date||'');}
 // SG public holidays (actual dates only, in-lieu dates are not peak)
