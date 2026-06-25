@@ -2258,28 +2258,39 @@ function parseTimeRange(timeStr){
   return{start:to24(m[1],m[2],startAp),end:to24(m[4],m[5],endAp)};
 }
 
-// Parse booking time: uses slots count to determine block duration
-// "4pm - 5pm" slots=2 → 4:00–6:00; "4pm and 5pm" slots=2 → 4:00–6:00; "4pm" slots=2 → 4:00–6:00
+// Parse booking time: infers duration from time-mention count or slots field
+// "4pm and 5pm" → 2 mentions → 4:00–6:00 (count drives duration, no slots needed)
+// "4pm - 5pm" slots=2 → 4:00–6:00 (explicit range start + slots)
+// "4pm" slots=2 → 4:00–6:00 (single mention + slots)
 function parseBookingTime(timeStr,slots){
   if(!timeStr)return null;
-  const dur=slots||1;
-  function pad(n){return String(n).padStart(2,'0');}
-  // Get start time: try explicit range first, fall back to first time mention
+  const dur=Math.max(1,parseInt(slots)||1);  // parseInt: guard against string "2"
+  function pad(n){return String(Math.floor(n)).padStart(2,'0');}
+  // Try explicit range format first ("4pm - 6pm", "16:00 - 18:00")
   const range=parseTimeRange(timeStr);
   if(range){
-    // Always use start from the range; extend end by slots from that start
     const[sh,sm]=range.start.split(':').map(Number);
     return{start:range.start,end:`${pad(sh+dur)}:${pad(sm)}`};
   }
-  // Extract first AM/PM time mention (e.g. "4pm", "5pm and 6pm" → 5pm as start? No, first)
-  const re=/(\d{1,2})(?::(\d{2}))?\s*(am|pm)/i;
-  const m=re.exec(timeStr);
-  if(m){
+  // Extract ALL am/pm time mentions ("4pm and 5pm" → [{h:16},{h:17}])
+  const re=/(\d{1,2})(?::(\d{2}))?\s*(am|pm)/gi;
+  const times=[];let m;
+  while((m=re.exec(timeStr))!==null){
     let h=parseInt(m[1]),mins=parseInt(m[2]||0);
     const ap=m[3].toLowerCase();
     if(ap==='pm'&&h!==12)h+=12;
     else if(ap==='am'&&h===12)h=0;
-    return{start:`${pad(h)}:${pad(mins)}`,end:`${pad(h+dur)}:${pad(mins)}`};
+    times.push({h,mins});
+  }
+  if(times.length>=2){
+    // Multiple times listed: duration = how many times are mentioned
+    // "4pm and 5pm" = 2 slots → start 4pm, end 4+2=6pm
+    const s=times[0];
+    return{start:`${pad(s.h)}:${pad(s.mins)}`,end:`${pad(s.h+times.length)}:${pad(s.mins)}`};
+  }
+  if(times.length===1){
+    const s=times[0];
+    return{start:`${pad(s.h)}:${pad(s.mins)}`,end:`${pad(s.h+dur)}:${pad(s.mins)}`};
   }
   return null;
 }
@@ -2386,7 +2397,11 @@ function renderDebug(){
   const bkEl=document.getElementById('debug-bookings');
   if(bkEl)bkEl.innerHTML=bookings.length?bookings.map(([k,b])=>{
     const cd=normalizeCourtDate(b.court_date||b.date||b.payment_date||'');
-    return`<div>key=${k} raw_date="${b.court_date||b.date||''}" → norm="${cd}" time="${b.time||''}" sess_id=${b.session_id||'none'} source=${b.source||'none'}</div>`;
+    const parsed=parseBookingTime(b.time,b.slots);
+    return`<div style="margin-bottom:6px;padding-bottom:6px;border-bottom:1px solid var(--bdr)">
+      <b>${k}</b> &nbsp; date: ${cd} &nbsp; slots: ${b.slots??'(not set)'} &nbsp; source: ${b.source||'none'}<br>
+      time field: "${b.time||''}" &nbsp; → &nbsp; parsed: ${parsed?parsed.start+'–'+parsed.end:'(failed)'} &nbsp; sess_id: ${b.session_id||'none'}
+    </div>`;
   }).join(''):'<em>No non-ActiveSG bookings found</em>';
 }
 
