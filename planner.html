@@ -2255,42 +2255,28 @@ function parseTimeRange(timeStr){
   return{start:to24(m[1],m[2],startAp),end:to24(m[4],m[5],endAp)};
 }
 
-// Parse booking time: handles "4pm-6pm", "4pm and 5pm" (multi-slot), "4pm" + slots count
+// Parse booking time: uses slots count to determine block duration
+// "4pm - 5pm" slots=2 → 4:00–6:00; "4pm and 5pm" slots=2 → 4:00–6:00; "4pm" slots=2 → 4:00–6:00
 function parseBookingTime(timeStr,slots){
   if(!timeStr)return null;
-  // Try explicit range first (e.g. "4pm - 6pm")
+  const dur=slots||1;
+  function pad(n){return String(n).padStart(2,'0');}
+  // Get start time: try explicit range first, fall back to first time mention
   const range=parseTimeRange(timeStr);
-  if(range)return range;
-  // Extract every H[am/pm] mention in the string
-  const re=/(\d{1,2})(?::(\d{2}))?\s*(am|pm)/gi;
-  const hours=[];
-  let m;
-  while((m=re.exec(timeStr))!==null){
+  if(range){
+    // Always use start from the range; extend end by slots from that start
+    const[sh,sm]=range.start.split(':').map(Number);
+    return{start:range.start,end:`${pad(sh+dur)}:${pad(sm)}`};
+  }
+  // Extract first AM/PM time mention (e.g. "4pm", "5pm and 6pm" → 5pm as start? No, first)
+  const re=/(\d{1,2})(?::(\d{2}))?\s*(am|pm)/i;
+  const m=re.exec(timeStr);
+  if(m){
     let h=parseInt(m[1]),mins=parseInt(m[2]||0);
     const ap=m[3].toLowerCase();
     if(ap==='pm'&&h!==12)h+=12;
     else if(ap==='am'&&h===12)h=0;
-    hours.push({h,mins});
-  }
-  if(hours.length>=2){
-    // e.g. "4pm and 5pm" → start=4:00 end=last+1hr
-    const s=hours[0];
-    const e=hours[hours.length-1];
-    const endH=e.h+1;
-    return{
-      start:`${String(s.h).padStart(2,'0')}:${String(s.mins).padStart(2,'0')}`,
-      end:`${String(endH).padStart(2,'0')}:${String(e.mins).padStart(2,'0')}`
-    };
-  }
-  if(hours.length===1){
-    // Single time + slots count → e.g. "4pm" slots=2 → 4:00–6:00
-    const s=hours[0];
-    const dur=slots||1;
-    const endH=s.h+dur;
-    return{
-      start:`${String(s.h).padStart(2,'0')}:${String(s.mins).padStart(2,'0')}`,
-      end:`${String(endH).padStart(2,'0')}:${String(s.mins).padStart(2,'0')}`
-    };
+    return{start:`${pad(h)}:${pad(mins)}`,end:`${pad(h+dur)}:${pad(mins)}`};
   }
   return null;
 }
