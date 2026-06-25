@@ -787,16 +787,28 @@ async function syncLoop(){
 // ── STORAGE ───────────────────────────────────────────────────
 (function init(){
   const raw=localStorage.getItem('class-types');
-  const defaults=[{id:1,name:'ActiveSG',cat:'activesg'},{id:2,name:'Synchro',cat:'group'},{id:3,name:'Rise & Rally Adult',cat:'group'},{id:4,name:'Private Group',cat:'private'}];
-  S.set('class-types',raw?JSON.parse(raw):defaults);
-  S.set('standards',['Basic','Advance','Mix','Adult','All']);
-  S.set('coaches',[]);
-  S.set('venues',['Bukit Canberra SH','Bishan Clubhouse','Woodland SH','Sembawang Pri','Yishun SH','Arena Sport Hall']);
-  S.set('instances',[]);
-  S.set('sessions',[]);
-  S.set('combo-colors',{});
-  S.set('booker_coach_map',{});
-  fetchFirebaseData().then(()=>{setTimeout(()=>{syncLoop();},500);});
+  const defaultTypes=[{id:1,name:'ActiveSG',cat:'activesg'},{id:2,name:'Synchro',cat:'group'},{id:3,name:'Rise & Rally Adult',cat:'group'},{id:4,name:'Private Group',cat:'private'}];
+  const defaultVenues=['Bukit Canberra SH','Bishan Clubhouse','Woodland SH','Sembawang Pri','Yishun SH','Arena Sport Hall'];
+  const defaultStandards=['Basic','Advance','Mix','Adult','All'];
+  // Set local cache defaults WITHOUT pushing to Firebase (avoids wiping real data on every load)
+  syncCache['class-types']=raw?JSON.parse(raw):defaultTypes;
+  syncCache['standards']=defaultStandards;
+  syncCache['coaches']=[];
+  syncCache['venues']=defaultVenues;
+  syncCache['instances']=[];
+  syncCache['sessions']=[];
+  syncCache['combo-colors']={};
+  syncCache['booker_coach_map']={};
+  // Fetch real Firebase data first, then start sync and imports
+  fetchFirebaseData().then(()=>{
+    // Push config defaults only on first use (when Firebase has nothing)
+    if(!syncCache['class-types']?.length)S.set('class-types',defaultTypes);
+    if(!syncCache['standards']?.length)S.set('standards',defaultStandards);
+    if(!syncCache['venues']?.length)S.set('venues',defaultVenues);
+    setTimeout(()=>{syncLoop();},500);
+    importBotSessions();
+    importReceiptSessions();
+  });
 })();
 
 const getCoaches=()=>S.get('coaches');
@@ -2721,7 +2733,6 @@ scheduleAutoRefresh();
 applyFolderState('coaches');
 applyFolderState('admin');
 showView('dashboard');
-importBotSessions();importReceiptSessions();
 </script>
 </body>
 </html>
