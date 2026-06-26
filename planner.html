@@ -4,6 +4,8 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>🏸 Coach Manpower Planner</title>
+<script src="https://www.gstatic.com/firebasejs/10.14.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.14.0/firebase-auth-compat.js"></script>
 <style>
 :root{
   --bg:#f9fafb;--surf:#fff;--surf2:#f3f4f6;--bdr:#d1d5db;
@@ -320,38 +322,75 @@ table.sched td.tslot.cell-target{background:rgba(37,99,235,.22)!important;outlin
 </head>
 <body>
 
-<!-- PASSWORD GATE -->
-<div id="pw-gate" style="display:none;position:fixed;inset:0;background:#0f172a;z-index:9999;align-items:center;justify-content:center;flex-direction:column;gap:20px">
+<!-- AUTH GATE -->
+<div id="auth-gate" style="display:flex;position:fixed;inset:0;background:#0f172a;z-index:9999;align-items:center;justify-content:center;flex-direction:column;gap:16px">
   <img id="pw-logo" style="height:64px;border-radius:10px;background:#fff;padding:6px 10px;margin-bottom:8px" alt="Synchro">
   <div style="color:#fff;font-size:20px;font-weight:800;letter-spacing:.01em">Coach Planner</div>
-  <div style="color:#94a3b8;font-size:13px;margin-top:-8px">Enter password to continue</div>
-  <div style="display:flex;flex-direction:column;gap:10px;width:260px">
-    <input id="pw-input" type="password" placeholder="Password" autocomplete="current-password"
-      style="padding:12px 14px;border-radius:10px;border:1.5px solid #334155;background:#1e293b;color:#fff;font-size:15px;outline:none;text-align:center;letter-spacing:.1em"
-      onkeydown="if(event.key==='Enter')checkPw()">
-    <div id="pw-err" style="color:#ef4444;font-size:12px;text-align:center;min-height:16px"></div>
-    <button onclick="checkPw()" style="padding:12px;border-radius:10px;background:#3b82f6;color:#fff;border:none;font-size:15px;font-weight:700;cursor:pointer">Enter</button>
+  <div style="color:#94a3b8;font-size:13px;margin-top:-8px">Sign in to continue</div>
+  <div style="display:flex;flex-direction:column;gap:10px;width:280px">
+    <input id="auth-email" type="email" placeholder="Email" autocomplete="email"
+      style="padding:12px 14px;border-radius:10px;border:1.5px solid #334155;background:#1e293b;color:#fff;font-size:15px;outline:none"
+      onkeydown="if(event.key==='Enter')document.getElementById('auth-pw').focus()">
+    <input id="auth-pw" type="password" placeholder="Password" autocomplete="current-password"
+      style="padding:12px 14px;border-radius:10px;border:1.5px solid #334155;background:#1e293b;color:#fff;font-size:15px;outline:none;letter-spacing:.08em"
+      onkeydown="if(event.key==='Enter')doLogin()">
+    <div id="auth-err" style="color:#ef4444;font-size:12px;text-align:center;min-height:16px"></div>
+    <button id="auth-btn" onclick="doLogin()" style="padding:12px;border-radius:10px;background:#3b82f6;color:#fff;border:none;font-size:15px;font-weight:700;cursor:pointer">Sign In</button>
   </div>
 </div>
 
 <script>
-const PW='synchro123';
-(function(){
-  const gate=document.getElementById('pw-gate');
-  if(localStorage.getItem('cmp_auth')===PW){gate.style.display='none';}
-  else{gate.style.display='flex';}
-})();
-function checkPw(){
-  const inp=document.getElementById('pw-input');
-  const err=document.getElementById('pw-err');
-  if(inp.value===PW){
-    localStorage.setItem('cmp_auth',PW);
-    document.getElementById('pw-gate').style.display='none';
-  }else{
-    err.textContent='Incorrect password. Try again.';
-    inp.value='';inp.focus();
-    setTimeout(()=>err.textContent='',2000);
+// ── FIREBASE AUTH ─────────────────────────────────────────────────
+// Setup steps (one-time, in Firebase Console):
+//   1. Project Settings → General → Your apps → Add Web App → copy apiKey below
+//   2. Authentication → Sign-in method → Enable "Email/Password"
+//   3. Authentication → Users → Add user (add each team member's email + password)
+//   4. Realtime Database → Rules → set to:
+//      { "rules": { ".read": "auth != null", ".write": "auth != null" } }
+const _fbConfig = {
+  apiKey: "PASTE_YOUR_FIREBASE_API_KEY_HERE",
+  authDomain: "synchroadmin-133f3.firebaseapp.com",
+  projectId: "synchroadmin-133f3",
+  databaseURL: "https://synchroadmin-133f3-default-rtdb.asia-southeast1.firebasedatabase.app"
+};
+firebase.initializeApp(_fbConfig);
+const _fbAuth = firebase.auth();
+
+let idToken = '';
+let _appStarted = false;
+
+_fbAuth.onAuthStateChanged(async user => {
+  if (user) {
+    idToken = await user.getIdToken();
+    // Refresh token every 55 min (tokens expire after 60 min)
+    setInterval(async () => { idToken = await user.getIdToken(true); }, 55 * 60 * 1000);
+    document.getElementById('auth-gate').style.display = 'none';
+    const emailEl = document.getElementById('nav-user-email');
+    if (emailEl) emailEl.textContent = user.email;
+    if (!_appStarted) { _appStarted = true; startApp(); }
+  } else {
+    idToken = '';
+    document.getElementById('auth-gate').style.display = 'flex';
   }
+});
+
+function doLogin() {
+  const email = document.getElementById('auth-email').value.trim();
+  const pw = document.getElementById('auth-pw').value;
+  const err = document.getElementById('auth-err');
+  const btn = document.getElementById('auth-btn');
+  if (!email || !pw) { err.textContent = 'Enter email and password.'; return; }
+  err.textContent = '';
+  btn.textContent = 'Signing in…'; btn.disabled = true;
+  _fbAuth.signInWithEmailAndPassword(email, pw).catch(e => {
+    err.textContent = (e.code === 'auth/invalid-credential' || e.code === 'auth/wrong-password' || e.code === 'auth/user-not-found')
+      ? 'Incorrect email or password.' : e.message;
+    btn.textContent = 'Sign In'; btn.disabled = false;
+  });
+}
+
+function doLogout() {
+  _fbAuth.signOut();
 }
 </script>
 
@@ -359,9 +398,11 @@ function checkPw(){
   <button class="ham-btn" onclick="toggleSidebar()" title="Toggle sidebar">☰</button>
   <img id="nav-logo" onclick="showView('dashboard')" style="height:32px;border-radius:6px;background:#fff;padding:2px 5px;cursor:pointer;display:block" alt="Synchro Badminton Academy">
   <button class="theme-btn ml" id="theme-btn" onclick="toggleTheme()">🌙</button>
-  <div style="margin-left:auto;font-size:12px;color:var(--txm);display:flex;gap:6px;align-items:center">
+  <div style="margin-left:auto;font-size:12px;color:var(--txm);display:flex;gap:8px;align-items:center">
     <div id="sync-status" style="width:8px;height:8px;border-radius:50%;background:#10b981;animation:pulse 2s infinite"></div>
     <span id="sync-label">Synced</span>
+    <span id="nav-user-email" style="max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;opacity:.7"></span>
+    <button onclick="doLogout()" style="padding:3px 9px;border-radius:6px;border:1px solid var(--bdr);background:var(--surf);color:var(--txm);font-size:11px;font-weight:600;cursor:pointer">Sign out</button>
   </div>
 </nav>
 <style>
@@ -735,6 +776,18 @@ function toggleTheme(){
 
 // ── FIREBASE REALTIME SYNC ────────────────────────────────────
 const FIREBASE_URL='https://synchroadmin-133f3-default-rtdb.asia-southeast1.firebasedatabase.app';
+
+// Inject Firebase auth token into every REST call automatically
+(function(){
+  const _orig = window.fetch.bind(window);
+  window.fetch = function(url, opts) {
+    if (typeof url === 'string' && url.startsWith(FIREBASE_URL) && idToken) {
+      url += (url.includes('?') ? '&' : '?') + 'auth=' + idToken;
+    }
+    return _orig(url, opts);
+  };
+})();
+
 const syncCache={coaches:[],venues:[],instances:[],sessions:[],standards:[],['class-types']:[],['combo-colors']:{},['booker_coach_map']:{}};
 let syncInProgress=false;
 const syncKeys=['coaches','venues','instances','sessions','standards','class-types','combo-colors','booker_coach_map'];
@@ -805,7 +858,7 @@ async function syncLoop(){
 }
 
 // ── STORAGE ───────────────────────────────────────────────────
-(function init(){
+function startApp(){
   const raw=localStorage.getItem('class-types');
   const defaultTypes=[{id:1,name:'ActiveSG',cat:'activesg'},{id:2,name:'Synchro',cat:'group'},{id:3,name:'Rise & Rally Adult',cat:'group'},{id:4,name:'Private Group',cat:'private'}];
   const defaultVenues=['Bukit Canberra SH','Bishan Clubhouse','Woodland SH','Sembawang Pri','Yishun SH','Arena Sport Hall'];
@@ -829,7 +882,7 @@ async function syncLoop(){
     importBotSessions();
     importReceiptSessions();
   });
-})();
+}
 
 const getCoaches=()=>S.get('coaches');
 const getVenues=()=>S.get('venues');
