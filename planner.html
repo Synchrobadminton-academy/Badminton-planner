@@ -2636,6 +2636,11 @@ function showCourtDay(ds,updateGrid=true){
         ${b.source!=='activesg'?`<div id="rcpt-img-wrap-${b._key}" style="margin-top:10px">
           <div id="rcpt-img-loading-${b._key}" style="font-size:11px;color:var(--txm)">Loading receipt…</div>
           <img id="rcpt-thumb-${b._key}" style="display:none;max-width:100%;border-radius:8px;margin-top:6px;cursor:pointer;max-height:280px;object-fit:contain;border:1px solid var(--bdr)" onclick="viewReceiptImage('${b._key}')" alt="Receipt">
+          <div id="rcpt-upload-wrap-${b._key}" style="margin-top:6px;display:none">
+            <input type="file" id="rcpt-file-${b._key}" accept="image/*" capture="environment" style="display:none" onchange="uploadReceiptImage('${b._key}',this)">
+            <button onclick="document.getElementById('rcpt-file-${b._key}').click()" style="background:none;border:1px solid var(--bdr);border-radius:6px;padding:4px 12px;font-size:11px;font-weight:700;cursor:pointer;color:var(--tx)">📷 Upload Receipt</button>
+            <span id="rcpt-upload-status-${b._key}" style="font-size:11px;color:var(--txm);margin-left:8px"></span>
+          </div>
         </div>`:''}
       </div>`).join('')}
     </div>
@@ -2669,16 +2674,46 @@ function loadCourtImages(bookings){
         if(src){
           img.src=src;
           img.style.display='block';
-        }else{
-          const wrap=document.getElementById('rcpt-img-wrap-'+b._key);
-          if(wrap)wrap.innerHTML='<div style="font-size:11px;color:var(--txf);padding:4px 0">No receipt image stored</div>';
         }
+        // Always show upload button (replace or add receipt)
+        const uploadWrap=document.getElementById('rcpt-upload-wrap-'+b._key);
+        if(uploadWrap)uploadWrap.style.display='block';
       })
       .catch(()=>{
-        const wrap=document.getElementById('rcpt-img-wrap-'+b._key);
-        if(wrap)wrap.innerHTML='<div style="font-size:11px;color:var(--txf);padding:4px 0">Could not load image</div>';
+        if(loading)loading.remove();
+        const uploadWrap=document.getElementById('rcpt-upload-wrap-'+b._key);
+        if(uploadWrap)uploadWrap.style.display='block';
       });
   });
+}
+
+function uploadReceiptImage(key,input){
+  const file=input.files[0];
+  if(!file)return;
+  const statusEl=document.getElementById('rcpt-upload-status-'+key);
+  if(statusEl)statusEl.textContent='Uploading…';
+  const reader=new FileReader();
+  reader.onload=function(e){
+    const dataUrl=e.target.result;  // "data:image/jpeg;base64,..."
+    const comma=dataUrl.indexOf(',');
+    const mime=dataUrl.slice(5,dataUrl.indexOf(';'));
+    const b64=dataUrl.slice(comma+1);
+    fetch(`${FIREBASE_URL}/booking_images/${key}.json`,{
+      method:'PUT',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({data:b64,mime_type:mime})
+    }).then(r=>{
+      if(!r.ok)throw new Error('Upload failed');
+      if(statusEl)statusEl.textContent='Saved!';
+      // Show the image inline immediately
+      const img=document.getElementById('rcpt-thumb-'+key);
+      if(img){img.src=dataUrl;img.style.display='block';}
+      setTimeout(()=>{if(statusEl)statusEl.textContent='';},3000);
+    }).catch(()=>{
+      if(statusEl)statusEl.textContent='Upload failed';
+    });
+  };
+  reader.readAsDataURL(file);
 }
 
 function viewReceiptImage(key){
