@@ -114,15 +114,16 @@ table.sched td.tslot.cell-target{background:rgba(37,99,235,.22)!important;outlin
 .cal-dow-row{display:grid;grid-template-columns:repeat(7,1fr);border-bottom:2px solid var(--bdr)}
 .cal-dow{text-align:center;padding:6px 3px;font-size:11px;font-weight:800;color:var(--txm);background:var(--surf2);text-transform:uppercase;letter-spacing:.04em}
 .cal-grid{display:grid;grid-template-columns:repeat(7,1fr)}
-.cal-cell{min-height:280px;border-right:1px solid var(--bdr);border-bottom:1px solid var(--bdr);padding:6px;transition:background .1s;position:relative}
+.cal-cell{min-height:160px;border-right:1px solid var(--bdr);border-bottom:1px solid var(--bdr);padding:6px;transition:background .1s;position:relative}
 .cal-cell:hover{background:var(--hov)}
 .cal-cell:not(.other){cursor:pointer}
 .cal-cell.other{opacity:.28;cursor:default}
 .cal-cell.today .cal-num{background:var(--blue);color:#fff;border-radius:50%}
-.cal-num{font-size:11px;font-weight:800;width:22px;height:22px;display:flex;align-items:center;justify-content:center;margin-bottom:3px}
-.cal-chip{font-size:10px;padding:2px 5px;border-radius:3px;border:1px solid rgba(0,0,0,.18);margin-bottom:2px;line-height:1.35}
-.cal-chip-venue{font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.cal-chip-sub{opacity:.88;font-size:9.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cal-num{font-size:11px;font-weight:800;width:22px;height:22px;display:flex;align-items:center;justify-content:center;margin-bottom:4px}
+.cal-chip{font-size:11px;padding:5px 7px;border-radius:5px;border:1px solid rgba(0,0,0,.18);margin-bottom:4px;line-height:1.45;cursor:grab;user-select:none;position:relative}
+.cal-chip:active{cursor:grabbing}
+.cal-chip-venue{font-weight:800;font-size:11.5px}
+.cal-chip-sub{opacity:.9;font-size:10.5px;margin-top:1px}
 .dtable{width:100%;border-collapse:collapse;font-size:12px}
 .dtable th{text-align:left;padding:9px 14px;background:var(--surf2);border-bottom:1px solid var(--bdr);font-weight:700;color:var(--txm);font-size:11px;text-transform:uppercase;letter-spacing:.04em}
 .dtable td{padding:9px 14px;border-bottom:1px solid var(--bdr);vertical-align:middle}
@@ -264,15 +265,17 @@ table.sched td.tslot.cell-target{background:rgba(37,99,235,.22)!important;outlin
   .tab-item{padding:11px 14px 11px 32px}
 }
 @media(max-width:640px){
-  .cal-cell{min-height:72px;padding:2px 3px}
-  .cal-num{width:18px;height:18px;font-size:10px;margin-bottom:2px}
-  .cal-chip{padding:1px 3px;font-size:8px;margin-bottom:1px;border-radius:2px}
-  .cal-chip-sub{display:none}
+  .cal-cell{min-height:160px;padding:4px 3px}
+  .cal-dow{font-size:10px;padding:5px 2px}
+  .cal-num{width:20px;height:20px;font-size:11px;margin-bottom:3px}
+  .cal-chip{padding:4px 5px;font-size:10px;margin-bottom:3px;border-radius:4px;line-height:1.5}
+  .cal-chip-venue{font-size:10.5px}
+  .cal-chip-sub{font-size:9.5px;opacity:.92}
   .tgrid{grid-template-columns:repeat(auto-fill,minmax(120px,1fr));gap:8px}
   .tc-hrs{font-size:22px}.tc-name{font-size:12px}
   .two-col{grid-template-columns:1fr}.form-row{grid-template-columns:1fr}
 }
-@media(min-width:641px)and(max-width:900px){.cal-cell{min-height:140px;padding:4px}.cal-chip-sub{font-size:8.5px}}
+@media(min-width:641px)and(max-width:900px){.cal-cell{min-height:130px;padding:4px}.cal-chip{font-size:10.5px;padding:4px 6px}.cal-chip-venue{font-size:11px}.cal-chip-sub{font-size:10px}}
 @media(max-width:500px){.overlay{align-items:flex-end;padding:0}.modal{border-radius:20px 20px 0 0;max-height:96vh;padding:16px 14px}}
 #clip-bar{max-width:calc(100vw - 28px);flex-wrap:wrap;justify-content:center}
 /* Courts day grid */
@@ -394,6 +397,7 @@ function checkPw(){
       <div class="tab-item" data-view="bookers" onclick="showView('bookers')"><span class="tab-icon">💼</span>Bookers</div>
 <div class="tab-item" data-view="bookings" onclick="showView('bookings')"><span class="tab-icon">🗓</span>Booking Records</div>
       <div class="tab-item" data-view="receipts" onclick="showView('receipts')"><span class="tab-icon">🧾</span>Receipts</div>
+      <div class="tab-item" data-view="debug" onclick="showView('debug')"><span class="tab-icon">🔧</span>Debug</div>
     </div>
   </div>
 </aside>
@@ -407,6 +411,17 @@ function checkPw(){
 
 <!-- DASHBOARD -->
 <div class="view active" id="view-dashboard"><div class="main-inner dash-wrap"></div></div>
+
+<!-- DEBUG -->
+<div class="view" id="view-debug">
+  <div class="card"><div class="card-hdr">Data Diagnostics</div><div class="card-body" id="debug-body" style="font-size:12px;line-height:1.8"></div></div>
+  <div class="card"><div class="card-hdr">Actions</div><div class="card-body" style="display:flex;gap:8px;flex-wrap:wrap">
+    <button class="btn btn-p" onclick="debugRebuild()">Force Rebuild Sessions from Receipts</button>
+    <button class="btn btn-o" onclick="renderDebug()">Refresh</button>
+  </div></div>
+  <div class="card"><div class="card-hdr">Instances on Calendar</div><div class="card-body" id="debug-insts" style="font-size:11px;line-height:1.8;font-family:monospace;word-break:break-all"></div></div>
+  <div class="card"><div class="card-hdr">Bookings (non-ActiveSG)</div><div class="card-body" id="debug-bookings" style="font-size:11px;line-height:1.8;font-family:monospace;word-break:break-all"></div></div>
+</div>
 
 <!-- SCHEDULE -->
 <div class="view" id="view-schedule">
@@ -724,9 +739,12 @@ const syncCache={coaches:[],venues:[],instances:[],sessions:[],standards:[],['cl
 let syncInProgress=false;
 const syncKeys=['coaches','venues','instances','sessions','standards','class-types','combo-colors','booker_coach_map'];
 
+const pendingWrites=new Set();
+
 async function fetchFirebaseData(){
   try{
     for(const k of syncKeys){
+      if(pendingWrites.has(k))continue;
       const r=await fetch(`${FIREBASE_URL}/${k}.json`);
       if(r.ok){
         const data=await r.json();
@@ -744,9 +762,11 @@ async function fetchFirebaseData(){
 }
 
 async function pushToFirebase(key,value){
+  pendingWrites.add(key);
   try{
     await fetch(`${FIREBASE_URL}/${key}.json`,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(value)});
   }catch(e){console.error('pushToFirebase error for',key,e);}
+  finally{pendingWrites.delete(key);}
 }
 
 const S={
@@ -772,8 +792,8 @@ async function syncLoop(){
     if(currentView==='dashboard')renderDashboard();
     else if(currentView==='schedule')renderSched();
     else if(currentView==='coaches')renderCoaches();
-    else if(currentView==='admin')renderAdmin();
     else if(currentView==='courts')renderCourts();
+    else if(currentView==='debug')renderDebug();
   }finally{
     syncInProgress=false;
     if(statusEl){statusEl.style.background='#10b981';}
@@ -959,6 +979,7 @@ function showView(v){
   if(v==='receipts'){renderReceipts();loadBookingsFromFirebase();}
   if(v==='bookers'){loadBookingsFromFirebase();renderBookers();}
   if(v==='analytics')renderAnalytics();
+  if(v==='debug')renderDebug();
 }
 
 // ── SCHED TOGGLE ──────────────────────────────────────────────
@@ -1294,10 +1315,10 @@ function renderMonth(){
         const noCoach=!inst.coach_ids||inst.coach_ids.length===0;
         return`<div class="cal-chip" data-inst-id="${inst.id}" style="background:${chipBg};color:${chipTc};border:${chipBorder}">
           ${noCoach?'<div class="block-warn">⚠️</div>':''}
-          <div class="cal-chip-venue">${esc(inst.venue_text||'')}${inst.court_no?' · Ct '+esc(inst.court_no):''}</div>
-          ${inst.class_type||inst.standard?`<div class="cal-chip-sub">${esc([inst.class_type,inst.standard].filter(Boolean).join(' · '))}</div>`:''}
-          <div class="cal-chip-sub">${fmt12(inst.start_time)}–${fmt12(inst.end_time)}${cn?' · '+esc(cn):''}</div>
-          ${inst.notes?`<div class="cal-chip-sub" style="font-style:italic">${esc(inst.notes)}</div>`:''}
+          <div class="cal-chip-venue">${esc(inst.venue_text||'—')}</div>
+          <div class="cal-chip-sub">${fmt12(inst.start_time)}–${fmt12(inst.end_time)}</div>
+          ${inst.court_no?`<div class="cal-chip-sub">Court ${esc(inst.court_no)}</div>`:''}
+          <div class="cal-chip-sub chip-coach">${cn?esc(cn):'<span style="opacity:.55;font-style:italic">No coach</span>'}</div>
         </div>`;
       }).join('')}
     </div>`;
@@ -2237,6 +2258,43 @@ function parseTimeRange(timeStr){
   return{start:to24(m[1],m[2],startAp),end:to24(m[4],m[5],endAp)};
 }
 
+// Parse booking time: infers duration from time-mention count or slots field
+// "4pm and 5pm" → 2 mentions → 4:00–6:00 (count drives duration, no slots needed)
+// "4pm - 5pm" slots=2 → 4:00–6:00 (explicit range start + slots)
+// "4pm" slots=2 → 4:00–6:00 (single mention + slots)
+function parseBookingTime(timeStr,slots){
+  if(!timeStr)return null;
+  const dur=Math.max(1,parseInt(slots)||1);  // parseInt: guard against string "2"
+  function pad(n){return String(Math.floor(n)).padStart(2,'0');}
+  // Try explicit range format first ("4pm - 6pm", "16:00 - 18:00")
+  const range=parseTimeRange(timeStr);
+  if(range){
+    const[sh,sm]=range.start.split(':').map(Number);
+    return{start:range.start,end:`${pad(sh+dur)}:${pad(sm)}`};
+  }
+  // Extract ALL am/pm time mentions ("4pm and 5pm" → [{h:16},{h:17}])
+  const re=/(\d{1,2})(?::(\d{2}))?\s*(am|pm)/gi;
+  const times=[];let m;
+  while((m=re.exec(timeStr))!==null){
+    let h=parseInt(m[1]),mins=parseInt(m[2]||0);
+    const ap=m[3].toLowerCase();
+    if(ap==='pm'&&h!==12)h+=12;
+    else if(ap==='am'&&h===12)h=0;
+    times.push({h,mins});
+  }
+  if(times.length>=2){
+    // Multiple times listed: duration = how many times are mentioned
+    // "4pm and 5pm" = 2 slots → start 4pm, end 4+2=6pm
+    const s=times[0];
+    return{start:`${pad(s.h)}:${pad(s.mins)}`,end:`${pad(s.h+times.length)}:${pad(s.mins)}`};
+  }
+  if(times.length===1){
+    const s=times[0];
+    return{start:`${pad(s.h)}:${pad(s.mins)}`,end:`${pad(s.h+dur)}:${pad(s.mins)}`};
+  }
+  return null;
+}
+
 async function importReceiptSessions(){
   try{
     const res=await fetch(`${FIREBASE_URL}/bookings.json`);
@@ -2244,16 +2302,14 @@ async function importReceiptSessions(){
     const data=await res.json()||{};
     const all=Object.entries(data).filter(([,b])=>b&&b.source!=='activesg');
     if(!all.length)return;
-    // Check which bookings already have a calendar INSTANCE (not just a session record)
-    const existingInstSessIds=new Set(getInsts().map(i=>i.session_id));
     const existingSessions=S.get('sessions');
     let count=0;
     for(const[key,b]of all){
       const rawDate=b.court_date||b.date||b.payment_date||'';
       const courtDate=normalizeCourtDate(rawDate);
       if(!courtDate)continue;
-      let times=parseTimeRange(b.time);
-      if(!times)times={start:'09:00',end:'11:00'};
+      let times=parseBookingTime(b.time,b.slots);
+      if(!times)times={start:'09:00',end:'10:00'};
       const instData={
         coach_ids:[],color:'#f59e0b',
         venue_text:b.venue||'',court_no:b.court||'',
@@ -2261,7 +2317,6 @@ async function importReceiptSessions(){
         start_time:times.start,end_time:times.end,
         notes:`Court ${b.court||''} · ${b.booker||''}`.trim().replace(/·\s*$/,'')
       };
-      // Find or create the session record
       let sessId=b.session_id;
       const sessExists=sessId&&existingSessions.find(s=>s.id===sessId);
       if(!sessExists){
@@ -2270,9 +2325,19 @@ async function importReceiptSessions(){
         fetch(`${FIREBASE_URL}/bookings/${key}/session_id.json`,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(sessId)});
         if(brBookings[key])brBookings[key].session_id=sessId;
       }
-      // Always create instance if missing
-      if(!existingInstSessIds.has(sessId)){
+      // Re-read instances fresh each iteration so we see updates from prior iterations
+      const curInsts=getInsts();
+      const existingInst=curInsts.find(i=>i.session_id===sessId);
+      if(!existingInst){
+        // No instance yet — create one
         addOneOff(sessId,instData,courtDate);
+        count++;
+      } else if(existingInst.date!==courtDate||existingInst.start_time!==instData.start_time||existingInst.end_time!==instData.end_time){
+        // Instance has wrong date or wrong time — fix in place
+        const fixed=curInsts.map(i=>i.session_id===sessId
+          ?{...i,date:courtDate,start_time:instData.start_time,end_time:instData.end_time,hours:compHrs(instData.start_time,instData.end_time)}
+          :i);
+        S.set('instances',fixed);
         count++;
       }
     }
@@ -2311,6 +2376,55 @@ async function importBotSessions(){
     }
     if(count>0){renderSched();renderMonth();}
   }catch(err){console.error('importBotSessions:',err);}
+}
+
+function renderAdmin(){}
+
+function renderDebug(){
+  const insts=getInsts();
+  const sessions=S.get('sessions');
+  const bookings=Object.entries(brBookings).filter(([,b])=>b&&b.source!=='activesg');
+  const el=document.getElementById('debug-body');
+  if(!el)return;
+  el.innerHTML=`
+    <b>Sessions in Firebase:</b> ${sessions.length}<br>
+    <b>Instances on calendar:</b> ${insts.length}<br>
+    <b>Non-ActiveSG bookings:</b> ${bookings.length}<br>
+    <b>Pending Firebase writes:</b> ${[...pendingWrites].join(', ')||'none'}<br>
+  `;
+  const instsEl=document.getElementById('debug-insts');
+  if(instsEl)instsEl.innerHTML=insts.length?insts.map(i=>`<div>id=${i.id} sess=${i.session_id} date=${i.date} venue=${esc(i.venue_text||'')} ${i.start_time}–${i.end_time}</div>`).join(''):'<em>No instances</em>';
+  const bkEl=document.getElementById('debug-bookings');
+  if(bkEl)bkEl.innerHTML=bookings.length?bookings.map(([k,b])=>{
+    const cd=normalizeCourtDate(b.court_date||b.date||b.payment_date||'');
+    const parsed=parseBookingTime(b.time,b.slots);
+    return`<div style="margin-bottom:6px;padding-bottom:6px;border-bottom:1px solid var(--bdr)">
+      <b>${k}</b> &nbsp; date: ${cd} &nbsp; slots: ${b.slots??'(not set)'} &nbsp; source: ${b.source||'none'}<br>
+      time field: "${b.time||''}" &nbsp; → &nbsp; parsed: ${parsed?parsed.start+'–'+parsed.end:'(failed)'} &nbsp; sess_id: ${b.session_id||'none'}
+    </div>`;
+  }).join(''):'<em>No non-ActiveSG bookings found</em>';
+}
+
+async function debugRebuild(){
+  const el=document.getElementById('debug-body');
+  if(el)el.innerHTML='<em>Rebuilding…</em>';
+  // Clear existing receipt-sourced instances (those whose session_id matches a booking's session_id)
+  const bookings=Object.entries(brBookings).filter(([,b])=>b&&b.source!=='activesg');
+  const bookingSessIds=new Set(bookings.map(([,b])=>b.session_id).filter(Boolean));
+  let insts=getInsts().filter(i=>!bookingSessIds.has(i.session_id));
+  let sessions=S.get('sessions').filter(s=>!bookingSessIds.has(s.id));
+  S.set('instances',insts);
+  S.set('sessions',sessions);
+  // Clear session_id from bookings in Firebase so they get re-imported
+  for(const[key,b]of bookings){
+    if(b.session_id){
+      await fetch(`${FIREBASE_URL}/bookings/${key}/session_id.json`,{method:'DELETE'});
+      if(brBookings[key])delete brBookings[key].session_id;
+    }
+  }
+  await new Promise(r=>setTimeout(r,1000));
+  await importReceiptSessions();
+  renderDebug();
 }
 
 // Helper: get payment date (falls back to created_at or date for old records)
