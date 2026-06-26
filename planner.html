@@ -282,8 +282,8 @@ table.sched td.tslot.cell-target{background:rgba(37,99,235,.22)!important;outlin
 .courts-day-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(110px,1fr));gap:10px;margin-bottom:4px}
 .court-day-card{border:2px solid var(--bdr);border-radius:10px;padding:12px 10px;text-align:center;cursor:pointer;transition:all .15s;background:var(--surf)}
 .court-day-card:hover{border-color:var(--blue);background:var(--bluebg)}
-.court-day-card.active{border-color:var(--blue);background:var(--bluebg)}
-.court-day-card.today{border-color:var(--green)}
+.court-day-card.active{border-color:var(--blue);background:var(--bluebg);box-shadow:0 0 0 2px var(--blue)}
+.court-day-card.today .court-day-num{color:var(--green)}
 .court-day-name{font-size:11px;font-weight:800;color:var(--txm);text-transform:uppercase;letter-spacing:.05em}
 .court-day-num{font-size:22px;font-weight:900;margin:4px 0}
 .court-day-month{font-size:11px;color:var(--txm);margin-bottom:6px}
@@ -2643,6 +2643,18 @@ function showCourtDay(ds,updateGrid=true){
   loadCourtImages(sorted);
 }
 
+function extractImgSrc(data){
+  // Handle: object with data field, or raw base64 string
+  if(!data)return null;
+  if(typeof data==='string'&&data.length>20){
+    return'data:image/jpeg;base64,'+data;
+  }
+  const b64=data.data||data.image||data.base64||null;
+  if(!b64)return null;
+  const mime=data.mime_type||data.type||'image/jpeg';
+  return`data:${mime};base64,${b64}`;
+}
+
 function loadCourtImages(bookings){
   bookings.forEach(b=>{
     if(b.source==='activesg')return;
@@ -2653,17 +2665,18 @@ function loadCourtImages(bookings){
       .then(r=>r.json())
       .then(data=>{
         if(loading)loading.remove();
-        if(data&&data.data){
-          img.src='data:'+(data.mime_type||'image/jpeg')+';base64,'+data.data;
+        const src=extractImgSrc(data);
+        if(src){
+          img.src=src;
           img.style.display='block';
         }else{
           const wrap=document.getElementById('rcpt-img-wrap-'+b._key);
-          if(wrap)wrap.innerHTML='<div style="font-size:11px;color:var(--txf);padding:4px 0">No receipt image</div>';
+          if(wrap)wrap.innerHTML='<div style="font-size:11px;color:var(--txf);padding:4px 0">No receipt image stored</div>';
         }
       })
       .catch(()=>{
         const wrap=document.getElementById('rcpt-img-wrap-'+b._key);
-        if(wrap)wrap.innerHTML='<div style="font-size:11px;color:var(--txf);padding:4px 0">No receipt image</div>';
+        if(wrap)wrap.innerHTML='<div style="font-size:11px;color:var(--txf);padding:4px 0">Could not load image</div>';
       });
   });
 }
@@ -2675,9 +2688,10 @@ function viewReceiptImage(key){
   body.innerHTML='<div style="color:var(--txm);font-size:13px;padding:20px">Loading…</div>';
   fetch(`${FIREBASE_URL}/booking_images/${key}.json`)
     .then(r=>r.json())
-    .then(img=>{
-      if(!img||!img.data){body.innerHTML='<div style="color:var(--txm);font-size:13px;padding:20px">Image not available.</div>';return;}
-      body.innerHTML=`<img src="data:${img.type||'image/jpeg'};base64,${img.data}" alt="Receipt">`;
+    .then(data=>{
+      const src=extractImgSrc(data);
+      if(!src){body.innerHTML='<div style="color:var(--txm);font-size:13px;padding:20px">Image not available.</div>';return;}
+      body.innerHTML=`<img src="${src}" alt="Receipt" style="max-width:100%;border-radius:8px">`;
     })
     .catch(()=>{body.innerHTML='<div style="color:var(--txm);font-size:13px;padding:20px">Failed to load image.</div>';});
 }
