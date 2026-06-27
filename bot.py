@@ -46,7 +46,7 @@ ALLOWED_TOPICS = set(
 
 claude = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
 
-OCR_PROMPT = """Extract badminton programme details from receipt. Return ONLY valid JSON:
+OCR_PROMPT = """Extract badminton programme details from receipt + message context. Return ONLY valid JSON:
 
 {
   "date": "YYYY-MM-DD (single date) OR null if recurring",
@@ -54,7 +54,7 @@ OCR_PROMPT = """Extract badminton programme details from receipt. Return ONLY va
   "end_date": "YYYY-MM-DD OR null if single date",
   "start_time": "HH:MM (24-hour format)",
   "end_time": "HH:MM (24-hour format)",
-  "venue_text": "venue name",
+  "venue_text": "exact court location from message or receipt",
   "court_no": "court number(s)",
   "class_type": "ActiveSG",
   "coach_ids": [],
@@ -62,6 +62,7 @@ OCR_PROMPT = """Extract badminton programme details from receipt. Return ONLY va
 }
 
 Rules:
+- venue_text: Use court location from message caption FIRST, fall back to receipt
 - If receipt shows date range: set start_date and end_date, leave date null
 - If single date: set date only
 - If year missing, use 2026
@@ -70,9 +71,13 @@ Rules:
 """
 
 
-def extract_booking_from_image(image_bytes: bytes, mime_type: str = "image/jpeg") -> dict | None:
+def extract_booking_from_image(image_bytes: bytes, mime_type: str = "image/jpeg", caption: str = "") -> dict | None:
     b64 = base64.b64encode(image_bytes).decode("utf-8")
     try:
+        prompt = OCR_PROMPT
+        if caption:
+            prompt += f"\n\nAdditional context from message:\n{caption}"
+
         response = claude.messages.create(
             model="claude-haiku-4-5-20251001",
             max_tokens=512,
@@ -88,7 +93,7 @@ def extract_booking_from_image(image_bytes: bytes, mime_type: str = "image/jpeg"
                                 "data": b64,
                             },
                         },
-                        {"type": "text", "text": OCR_PROMPT},
+                        {"type": "text", "text": prompt},
                     ],
                 }
             ],
@@ -171,13 +176,17 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
             log.info("❌ Ignoring — topic %s not in ALLOWED_TOPICS", topic_id)
             return
 
+    # Get message caption/text (contains court location and other details)
+    caption = msg.caption or msg.text or ""
+    log.info("Message caption: %s", caption)
+
     # Download the highest-resolution version of the photo
     photo = msg.photo[-1]
     tg_file = await context.bot.get_file(photo.file_id)
     image_bytes = bytes(await tg_file.download_as_bytearray())
 
-    # OCR
-    booking = extract_booking_from_image(image_bytes)
+    # OCR with caption context
+    booking = extract_booking_from_image(image_bytes, caption=caption)
     if not booking:
         log.warning("Could not extract booking from photo sent by %s", sender)
         return
