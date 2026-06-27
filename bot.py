@@ -4,7 +4,7 @@ Badminton receipt bot — reads court booking photos sent to a Telegram group,
 OCRs them with Claude, and saves the booking + image to Firebase.
 
 Requirements:
-    pip install python-telegram-bot anthropic requests
+    pip install pyTelegramBotAPI anthropic requests
 
 Environment variables (set in .env or your server):
     TELEGRAM_BOT_TOKEN   — from @BotFather
@@ -13,7 +13,6 @@ Environment variables (set in .env or your server):
     ALLOWED_CHAT_ID      — Telegram group chat ID (optional, restricts to one group)
 """
 
-import asyncio
 import base64
 import json
 import logging
@@ -22,8 +21,8 @@ import re
 
 import anthropic
 import requests
-from telegram import Update
-from telegram.ext import ApplicationBuilder, ContextTypes, MessageHandler, filters
+import telebot
+from telebot import types
 
 logging.basicConfig(
     format="%(asctime)s [%(levelname)s] %(message)s",
@@ -45,6 +44,7 @@ ALLOWED_TOPICS = set(
 ) if os.environ.get("ALLOWED_TOPICS") else None
 
 claude = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
+bot = telebot.TeleBot(TELEGRAM_BOT_TOKEN)
 
 OCR_PROMPT = """Extract badminton programme details from receipt + message context. Return ONLY valid JSON:
 
@@ -155,19 +155,17 @@ def save_image_to_firebase(key: str, image_bytes: bytes, mime_type: str = "image
         return False
 
 
-async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    chat_id = str(update.effective_chat.id)
+@bot.message_handler(content_types=['photo'])
+def handle_photo(message: types.Message) -> None:
+    chat_id = str(message.chat.id)
 
     if ALLOWED_CHAT_ID and chat_id != ALLOWED_CHAT_ID:
         log.info("Ignoring message from chat %s", chat_id)
         return
 
-    msg = update.message
-    if not msg or not msg.photo:
-        return
-
-    topic_id = msg.message_thread_id or 0
-    sender = msg.from_user.full_name if msg.from_user else "unknown"
+    # Get topic ID from message (message_thread_id in telegram library)
+    topic_id = getattr(message, 'message_thread_id', None) or 0
+    sender = message.from_user.full_name if message.from_user else "unknown"
     log.info("📸 Photo from %s | Topic ID: %s | Chat: %s", sender, topic_id, chat_id)
 
     # Filter by topic if configured
@@ -177,13 +175,20 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
             return
 
     # Get message caption/text (contains court location and other details)
-    caption = msg.caption or msg.text or ""
+    caption = message.caption or message.text or ""
     log.info("Message caption: %s", caption)
 
-    # Download the highest-resolution version of the photo
-    photo = msg.photo[-1]
-    tg_file = await context.bot.get_file(photo.file_id)
-    image_bytes = bytes(await tg_file.download_as_bytearray())
+    # Download the photo
+    if not message.photo:
+        return
+
+    photo = message.photo[-1]  # Highest resolution
+    try:
+        file_info = bot.get_file(photo.file_id)
+        image_bytes = bot.download_file(file_info.file_path)
+    except Exception as e:
+        log.error("Failed to download photo: %s", e)
+        return
 
     # OCR with caption context
     booking = extract_booking_from_image(image_bytes, caption=caption)
@@ -243,10 +248,8 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
 
 
 def main() -> None:
-    app = ApplicationBuilder().token(TELEGRAM_BOT_TOKEN).build()
-    app.add_handler(MessageHandler(filters.PHOTO, handle_photo))
     log.info("Bot started — listening for photos")
-    app.run_polling(drop_pending_updates=True)
+    bot.infinity_polling(drop_pending_updates=True)
 
 
 if __name__ == "__main__":
