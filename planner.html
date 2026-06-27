@@ -2673,12 +2673,14 @@ function loadCourtImages(bookings){
           img.src=src;
           img.style.display='block';
         }
-        // Show button if image exists
+        // Always show button
         const btnWrap=document.getElementById('rcpt-btn-wrap-'+b._key);
-        if(src && btnWrap)btnWrap.style.display='block';
+        if(btnWrap)btnWrap.style.display='block';
       })
       .catch(()=>{
         if(loading)loading.remove();
+        const btnWrap=document.getElementById('rcpt-btn-wrap-'+b._key);
+        if(btnWrap)btnWrap.style.display='block';
       });
   });
 }
