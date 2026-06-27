@@ -2366,6 +2366,29 @@ async function importBotSessions(){
       };
       const sess=saveSession({...botData,date:botDate,status:session.status||'scheduled',recurring:0,day_of_week:null});
       addOneOff(sess.id,botData,botDate);
+
+      // Also save to /bookings.json for Courts tab display
+      const courtBooking={
+        date:botDate,
+        time:`${session.start_time||''}-${session.end_time||''}`,
+        venue:session.venue_text||'',
+        court:session.court_no||'',
+        court_date:botDate,
+        class_type:session.class_type||'ActiveSG',
+        source:'activesg',
+        color:session.color||'#f59e0b',
+        status:session.status||'scheduled',
+        coach_ids:session.coach_ids||[],
+        notes:session.notes||'',
+        bot_sessions_key:key
+      };
+      try{
+        const bookRes=await fetch(`${FIREBASE_URL}/bookings.json`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(courtBooking)});
+        if(!bookRes.ok)throw new Error('Failed to save booking');
+      }catch(e){
+        console.error('Failed to save court booking:',e);
+      }
+
       try{
         const attRes=await fetch(`${FIREBASE_URL}/bot_attendance/${key}.json`);
         if(attRes.ok){const attData=await attRes.json();
@@ -2375,7 +2398,12 @@ async function importBotSessions(){
       await fetch(`${FIREBASE_URL}/bot_sessions/${key}/imported.json`,{method:'PUT',headers:{'Content-Type':'application/json'},body:'true'});
       count++;
     }
-    if(count>0){renderSched();renderMonth();}
+    if(count>0){
+      // Reload bookings from Firebase after import
+      const res=await fetch(`${FIREBASE_URL}/bookings.json`);
+      if(res.ok)brBookings=await res.json()||{};
+      renderSched();renderMonth();renderCourts();
+    }
   }catch(err){console.error('importBotSessions:',err);}
 }
 
@@ -2664,7 +2692,9 @@ function loadCourtImages(bookings){
     const img=document.getElementById('rcpt-thumb-'+b._key);
     const loading=document.getElementById('rcpt-img-loading-'+b._key);
     if(!img)return;
-    fetch(`${FIREBASE_URL}/booking_images/${b._key}.json`)
+    // Use bot_sessions_key if available (for bot-imported bookings), otherwise use booking key
+    const imgKey=b.bot_sessions_key||b._key;
+    fetch(`${FIREBASE_URL}/booking_images/${imgKey}.json`)
       .then(r=>r.json())
       .then(data=>{
         if(loading)loading.remove();
@@ -2719,7 +2749,9 @@ function viewReceiptImage(key){
   const body=document.getElementById('img-modal-body');
   modal.classList.add('open');
   body.innerHTML='<div style="color:var(--txm);font-size:13px;padding:20px">Loading…</div>';
-  fetch(`${FIREBASE_URL}/booking_images/${key}.json`)
+  // Look up the booking to check for bot_sessions_key
+  const imgKey=(brBookings[key]&&brBookings[key].bot_sessions_key)||key;
+  fetch(`${FIREBASE_URL}/booking_images/${imgKey}.json`)
     .then(r=>r.json())
     .then(data=>{
       const src=extractImgSrc(data);
