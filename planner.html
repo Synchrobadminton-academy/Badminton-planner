@@ -2634,15 +2634,15 @@ function showCourtDay(ds,updateGrid=true){
             </div>
           </div>
         </div>
-        ${b.source!=='activesg'?`<div id="rcpt-img-wrap-${b._key}" style="margin-top:10px">
+        <div id="rcpt-img-wrap-${b._key}" style="margin-top:10px">
           <div id="rcpt-img-loading-${b._key}" style="font-size:11px;color:var(--txm)">Loading receipt…</div>
           <img id="rcpt-thumb-${b._key}" style="display:none;max-width:100%;border-radius:8px;margin-top:6px;cursor:pointer;max-height:280px;object-fit:contain;border:1px solid var(--bdr)" onclick="viewReceiptImage('${b._key}')" alt="Receipt">
-          <div id="rcpt-upload-wrap-${b._key}" style="margin-top:6px;display:none">
+          ${b.source!=='activesg'?`<div id="rcpt-upload-wrap-${b._key}" style="margin-top:6px;display:none">
             <input type="file" id="rcpt-file-${b._key}" accept="image/*" capture="environment" style="display:none" onchange="uploadReceiptImage('${b._key}',this)">
             <button onclick="document.getElementById('rcpt-file-${b._key}').click()" style="background:none;border:1px solid var(--bdr);border-radius:6px;padding:4px 12px;font-size:11px;font-weight:700;cursor:pointer;color:var(--tx)">📷 Upload Receipt</button>
             <span id="rcpt-upload-status-${b._key}" style="font-size:11px;color:var(--txm);margin-left:8px"></span>
-          </div>
-        </div>`:''}
+          </div>`:''}
+        </div>
       </div>`).join('')}
     </div>
   </div>`;
@@ -2663,7 +2663,6 @@ function extractImgSrc(data){
 
 function loadCourtImages(bookings){
   bookings.forEach(b=>{
-    if(b.source==='activesg')return;
     const img=document.getElementById('rcpt-thumb-'+b._key);
     const loading=document.getElementById('rcpt-img-loading-'+b._key);
     if(!img)return;
