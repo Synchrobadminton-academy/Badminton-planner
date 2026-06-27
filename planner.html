@@ -1313,12 +1313,13 @@ function renderMonth(){
         const chipBorder=noColor2?'2px dashed var(--bdr)':color==='#ffffff'?'1px solid #d1d5db':'1px solid rgba(0,0,0,.18)';
         const chipTc=noColor2?'var(--tx)':tc;
         const noCoach=!inst.coach_ids||inst.coach_ids.length===0;
+        const isActivesg=inst.class_type==='ActiveSG';
         return`<div class="cal-chip" data-inst-id="${inst.id}" style="background:${chipBg};color:${chipTc};border:${chipBorder}">
-          ${noCoach?'<div class="block-warn">⚠️</div>':''}
-          <div class="cal-chip-venue">${esc(inst.venue_text||'—')}</div>
+          ${noCoach&&!isActivesg?'<div class="block-warn">⚠️</div>':''}
+          <div class="cal-chip-venue">${isActivesg?(inst.venue_text?esc(inst.venue_text)+' (activesg)':'(activesg)'):esc(inst.venue_text||'—')}</div>
           <div class="cal-chip-sub">${fmt12(inst.start_time)}–${fmt12(inst.end_time)}</div>
-          ${inst.court_no?`<div class="cal-chip-sub">Court ${esc(inst.court_no)}</div>`:''}
-          <div class="cal-chip-sub chip-coach">${cn?esc(cn):'<span style="opacity:.55;font-style:italic">No coach</span>'}</div>
+          ${inst.court_no?`<div class="cal-chip-sub">${esc(inst.court_no)}</div>`:''}
+          <div class="cal-chip-sub chip-coach">${cn||'—'}</div>
         </div>`;
       }).join('')}
     </div>`;
@@ -1456,7 +1457,7 @@ function openDay(dt,dow){
         <button class="btn btn-o btn-sm" onclick="cycleDay(${inst.id})">Cycle Status</button>
         <button class="btn btn-o btn-sm" onclick="copyInst(${inst.id})">📋 Copy</button>
         <button class="btn btn-o btn-sm" onclick="openEdit(${inst.id})">✎ Edit</button>
-        <button class="btn btn-o btn-sm btn-red" onclick="if(confirm('Delete?')){delInst(${inst.id});openDay('${dt}',${dow});renderMonth()}">Delete</button>
+        <button class="btn btn-o btn-sm btn-red" onclick="delInst(${inst.id});openDay('${dt}',${dow});renderMonth()">Delete</button>
       </div>
     </div>`;
   });
@@ -1550,7 +1551,7 @@ function toggleRec(){
   document.getElementById('m-rec-btn').className=cur?'btn btn-o':'btn btn-p';
 }
 function deleteCurrentInst(){
-  if(!editId)return;if(!confirm('Delete this session?'))return;
+  if(!editId)return;
   delInst(editId);editId=null;clip=null;
   document.getElementById('sess-modal').classList.remove('open');renderSched();
 }
@@ -2633,15 +2634,13 @@ function showCourtDay(ds,updateGrid=true){
             </div>
           </div>
         </div>
-        ${b.source!=='activesg'?`<div id="rcpt-img-wrap-${b._key}" style="margin-top:10px">
+        <div id="rcpt-img-wrap-${b._key}" style="margin-top:10px">
           <div id="rcpt-img-loading-${b._key}" style="font-size:11px;color:var(--txm)">Loading receipt…</div>
           <img id="rcpt-thumb-${b._key}" style="display:none;max-width:100%;border-radius:8px;margin-top:6px;cursor:pointer;max-height:280px;object-fit:contain;border:1px solid var(--bdr)" onclick="viewReceiptImage('${b._key}')" alt="Receipt">
-          <div id="rcpt-upload-wrap-${b._key}" style="margin-top:6px;display:none">
-            <input type="file" id="rcpt-file-${b._key}" accept="image/*" capture="environment" style="display:none" onchange="uploadReceiptImage('${b._key}',this)">
-            <button onclick="document.getElementById('rcpt-file-${b._key}').click()" style="background:none;border:1px solid var(--bdr);border-radius:6px;padding:4px 12px;font-size:11px;font-weight:700;cursor:pointer;color:var(--tx)">📷 Upload Receipt</button>
-            <span id="rcpt-upload-status-${b._key}" style="font-size:11px;color:var(--txm);margin-left:8px"></span>
+          <div id="rcpt-btn-wrap-${b._key}" style="margin-top:6px;display:none">
+            <button onclick="viewReceiptImage('${b._key}')" style="background:none;border:1px solid var(--bdr);border-radius:6px;padding:4px 12px;font-size:11px;font-weight:700;cursor:pointer;color:var(--tx)">📷 Show Receipt</button>
           </div>
-        </div>`:''}
+        </div>
       </div>`).join('')}
     </div>
   </div>`;
@@ -2662,7 +2661,6 @@ function extractImgSrc(data){
 
 function loadCourtImages(bookings){
   bookings.forEach(b=>{
-    if(b.source==='activesg')return;
     const img=document.getElementById('rcpt-thumb-'+b._key);
     const loading=document.getElementById('rcpt-img-loading-'+b._key);
     if(!img)return;
@@ -2675,14 +2673,12 @@ function loadCourtImages(bookings){
           img.src=src;
           img.style.display='block';
         }
-        // Always show upload button (replace or add receipt)
-        const uploadWrap=document.getElementById('rcpt-upload-wrap-'+b._key);
-        if(uploadWrap)uploadWrap.style.display='block';
+        // Show button if image exists
+        const btnWrap=document.getElementById('rcpt-btn-wrap-'+b._key);
+        if(src && btnWrap)btnWrap.style.display='block';
       })
       .catch(()=>{
         if(loading)loading.remove();
-        const uploadWrap=document.getElementById('rcpt-upload-wrap-'+b._key);
-        if(uploadWrap)uploadWrap.style.display='block';
       });
   });
 }
