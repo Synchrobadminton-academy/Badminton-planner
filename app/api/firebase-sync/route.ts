@@ -9,6 +9,7 @@ const FIREBASE_URL = (
 interface BotSession {
   receipt_type?: string;
   date?: string;
+  payment_date?: string;
   start_time?: string;
   end_time?: string;
   venue_text?: string;
@@ -93,6 +94,7 @@ export async function POST() {
       const {
         receipt_type,
         date,
+        payment_date,
         start_time,
         end_time,
         venue_text,
@@ -131,8 +133,8 @@ export async function POST() {
           `INSERT OR IGNORE INTO session_instances
              (session_id, coach_id, venue_id, date, start_time, end_time, hours,
               status, firebase_key, receipt_type, court_no, class_type,
-              programme_name, booker_name, total_amount, receipt_ref)
-           VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
+              programme_name, booker_name, total_amount, receipt_ref, payment_date)
+           VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
         ).run(
           sessionId, coachId, venueId, date, start_time, end_time, hours,
           status || "scheduled",
@@ -144,6 +146,7 @@ export async function POST() {
           booker_name || null,
           total_amount || null,
           receipt_ref || null,
+          payment_date || null,
         );
 
         const instanceId = siResult.lastInsertRowid as number;

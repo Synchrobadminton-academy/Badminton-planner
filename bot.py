@@ -19,6 +19,7 @@ import json
 import logging
 import os
 import re
+from datetime import datetime, timezone
 
 import anthropic
 import requests
@@ -192,7 +193,7 @@ def calculate_weekly_dates(start_date_str: str, end_date_str: str) -> list[str]:
         return []
 
 
-def build_bookings(booking: dict) -> list[dict]:
+def build_bookings(booking: dict, payment_date: str = "") -> list[dict]:
     """
     Convert raw OCR result into a flat list of Firebase-ready booking dicts.
 
@@ -223,6 +224,7 @@ def build_bookings(booking: dict) -> list[dict]:
                 {
                     "receipt_type": "court_booking",
                     "date": date,
+                    "payment_date": payment_date or date,
                     "start_time": start_time,
                     "end_time": end_time,
                     "court_no": slot.get("court_no", ""),
@@ -300,6 +302,9 @@ def handle_photo(message: types.Message) -> None:
         log.info("❌ Ignoring — topic %s not in ALLOWED_TOPICS", topic_id)
         return
 
+    # Date the screenshot was sent — used as payment_date for court_booking
+    payment_date = datetime.fromtimestamp(message.date, tz=timezone.utc).strftime("%Y-%m-%d")
+
     caption = message.caption or message.text or ""
     log.info("Caption: %s", caption)
 
@@ -321,7 +326,7 @@ def handle_photo(message: types.Message) -> None:
 
     log.info("OCR result: %s", json.dumps(raw))
 
-    bookings_to_save = build_bookings(raw)
+    bookings_to_save = build_bookings(raw, payment_date=payment_date)
     if not bookings_to_save:
         log.warning("No bookings produced from OCR result")
         return
