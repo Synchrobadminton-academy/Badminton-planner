@@ -12,20 +12,31 @@ interface Receipt {
   end_time: string | null;
   status: string | null;
   hours: number | null;
+  receipt_type: string | null;
+  court_no: string | null;
+  total_amount: string | null;
+  receipt_ref: string | null;
+  class_type: string | null;
+  programme_name: string | null;
   venue_name: string | null;
 }
 
-function StatusBadge({ status }: { status: string | null }) {
-  const s = status ?? "scheduled";
-  const cls =
-    s === "completed"
-      ? "bg-green-100 text-green-700 border-green-200"
-      : s === "cancelled"
-      ? "bg-red-100 text-red-500 border-red-200"
-      : "bg-blue-100 text-blue-600 border-blue-200";
+function TypeBadge({ type }: { type: string | null }) {
+  if (type === "court_booking")
+    return (
+      <span className="text-xs px-2 py-0.5 rounded border font-medium bg-red-50 text-red-600 border-red-200">
+        Court Booking
+      </span>
+    );
+  if (type === "programme_roster")
+    return (
+      <span className="text-xs px-2 py-0.5 rounded border font-medium bg-amber-50 text-amber-700 border-amber-200">
+        Programme
+      </span>
+    );
   return (
-    <span className={`text-xs px-2 py-0.5 rounded border font-medium ${cls}`}>
-      {s.charAt(0).toUpperCase() + s.slice(1)}
+    <span className="text-xs px-2 py-0.5 rounded border font-medium bg-slate-100 text-slate-500 border-slate-200">
+      Unknown
     </span>
   );
 }
@@ -35,7 +46,8 @@ export default function ReceiptsPage() {
   const [syncing, setSyncing] = useState(false);
   const [syncResult, setSyncResult] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
-  const [expanded, setExpanded] = useState<string | null>(null);
+  const [lightbox, setLightbox] = useState<Receipt | null>(null);
+  const [filter, setFilter] = useState<"all" | "court_booking" | "programme_roster">("all");
 
   const fetchReceipts = useCallback(async () => {
     setLoading(true);
@@ -61,7 +73,7 @@ export default function ReceiptsPage() {
         setSyncResult(`Error: ${data.error}`);
       } else {
         setSyncResult(
-          `Synced ${data.synced} new session${data.synced !== 1 ? "s" : ""} and ${data.images} image${data.images !== 1 ? "s" : ""} (${data.total} total in Firebase)`
+          `Synced ${data.synced} new session${data.synced !== 1 ? "s" : ""} and ${data.images} image${data.images !== 1 ? "s" : ""}`
         );
         await fetchReceipts();
       }
@@ -72,10 +84,13 @@ export default function ReceiptsPage() {
     }
   }
 
+  const visible =
+    filter === "all" ? receipts : receipts.filter((r) => r.receipt_type === filter);
+
   return (
-    <div className="max-w-4xl">
-      <div className="flex items-center justify-between mb-6">
-        <h1 className="text-xl font-bold text-slate-800">Telegram Receipts</h1>
+    <div className="max-w-5xl">
+      <div className="flex items-center justify-between mb-5">
+        <h1 className="text-xl font-bold text-slate-800">Receipts</h1>
         <div className="flex items-center gap-3">
           {syncResult && (
             <span className="text-sm text-slate-600 bg-slate-50 border border-slate-200 rounded px-3 py-1.5">
@@ -85,27 +100,42 @@ export default function ReceiptsPage() {
           <button
             onClick={handleSync}
             disabled={syncing}
-            className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded text-sm font-medium hover:bg-blue-700 disabled:opacity-50 transition-colors"
+            className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded text-sm font-medium hover:bg-blue-700 disabled:opacity-50"
           >
-            {syncing ? (
-              <>
-                <span className="animate-spin">↻</span> Syncing…
-              </>
-            ) : (
-              <>↺ Sync from Telegram</>
-            )}
+            {syncing ? <>↻ Syncing…</> : <>↺ Sync from Telegram</>}
           </button>
         </div>
       </div>
 
+      {/* Filter tabs */}
+      <div className="flex gap-1 mb-5">
+        {(["all", "court_booking", "programme_roster"] as const).map((f) => (
+          <button
+            key={f}
+            onClick={() => setFilter(f)}
+            className={`px-3 py-1.5 rounded text-sm font-medium transition-colors ${
+              filter === f
+                ? "bg-blue-600 text-white"
+                : "text-slate-600 hover:bg-slate-100 border border-slate-200"
+            }`}
+          >
+            {f === "all"
+              ? `All (${receipts.length})`
+              : f === "court_booking"
+              ? `Court Bookings (${receipts.filter((r) => r.receipt_type === "court_booking").length})`
+              : `Programmes (${receipts.filter((r) => r.receipt_type === "programme_roster").length})`}
+          </button>
+        ))}
+      </div>
+
       {loading ? (
         <div className="text-center text-slate-400 py-16 text-sm">Loading receipts…</div>
-      ) : receipts.length === 0 ? (
+      ) : visible.length === 0 ? (
         <div className="bg-white rounded-xl border border-slate-200 p-12 text-center">
           <div className="text-4xl mb-3">📷</div>
           <div className="text-slate-600 font-medium mb-1">No receipts yet</div>
           <div className="text-sm text-slate-400 mb-4">
-            Send booking photos to your Telegram group, then click &ldquo;Sync from Telegram&rdquo; above.
+            Send booking photos to your Telegram group, then click &ldquo;Sync from Telegram&rdquo;.
           </div>
           <button
             onClick={handleSync}
@@ -116,64 +146,99 @@ export default function ReceiptsPage() {
           </button>
         </div>
       ) : (
-        <div className="grid gap-4 sm:grid-cols-2">
-          {receipts.map((r) => (
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          {visible.map((r) => (
             <div
               key={r.firebase_key}
-              className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden"
+              className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden flex flex-col"
             >
-              {/* Receipt image */}
+              {/* Thumbnail */}
               <div
-                className="relative bg-slate-100 cursor-pointer"
-                style={{ height: 200 }}
-                onClick={() => setExpanded(expanded === r.firebase_key ? null : r.firebase_key)}
+                className="relative bg-slate-100 cursor-zoom-in flex-shrink-0"
+                style={{ height: 180 }}
+                onClick={() => setLightbox(r)}
               >
                 <img
                   src={`data:${r.mime_type};base64,${r.image_data}`}
                   alt="Receipt"
                   className="w-full h-full object-contain"
                 />
-                <div className="absolute top-2 right-2 bg-black/40 text-white text-xs px-2 py-0.5 rounded">
-                  {expanded === r.firebase_key ? "Click to collapse" : "Click to expand"}
-                </div>
               </div>
 
-              {expanded === r.firebase_key && (
-                <div className="border-t border-slate-100 bg-slate-50 p-3 flex justify-center">
-                  <img
-                    src={`data:${r.mime_type};base64,${r.image_data}`}
-                    alt="Receipt full"
-                    className="max-w-full rounded"
-                    style={{ maxHeight: 480 }}
-                  />
+              {/* Details */}
+              <div className="p-3 flex-1 flex flex-col gap-1">
+                <div className="flex items-center justify-between gap-2">
+                  <TypeBadge type={r.receipt_type} />
+                  {r.date && (
+                    <span className="text-xs text-slate-500">{r.date}</span>
+                  )}
                 </div>
-              )}
 
-              {/* Booking details */}
-              <div className="p-4">
-                <div className="flex items-start justify-between gap-2">
-                  <div>
-                    <div className="font-semibold text-slate-800 text-sm">
-                      {r.venue_name ?? "Unknown Venue"}
-                    </div>
-                    {r.date && (
-                      <div className="text-xs text-slate-500 mt-0.5">
-                        {r.date}
-                        {r.start_time && r.end_time && (
-                          <> &bull; {r.start_time}–{r.end_time}</>
-                        )}
-                        {r.hours != null && <> &bull; {r.hours.toFixed(1)}h</>}
-                      </div>
+                <div className="font-semibold text-slate-800 text-sm leading-tight mt-1">
+                  {r.receipt_type === "programme_roster" && r.programme_name
+                    ? r.programme_name
+                    : (r.venue_name ?? "Unknown Venue")}
+                </div>
+
+                {r.receipt_type === "court_booking" ? (
+                  <div className="text-xs text-slate-500 space-y-0.5">
+                    {r.start_time && r.end_time && (
+                      <div>{r.start_time}–{r.end_time}{r.court_no && ` · Court ${r.court_no}`}</div>
+                    )}
+                    {r.total_amount && (
+                      <div className="font-semibold text-red-600">S${r.total_amount}</div>
                     )}
                   </div>
-                  <StatusBadge status={r.status} />
-                </div>
-                <div className="mt-2 text-xs text-slate-400 font-mono truncate">
-                  {r.firebase_key}
-                </div>
+                ) : (
+                  <div className="text-xs text-slate-500 space-y-0.5">
+                    {r.class_type && <div>{r.class_type}</div>}
+                    {r.start_time && r.end_time && (
+                      <div>{r.start_time}–{r.end_time}{r.court_no && ` · Court ${r.court_no}`}</div>
+                    )}
+                    {r.venue_name && <div>{r.venue_name}</div>}
+                  </div>
+                )}
               </div>
             </div>
           ))}
+        </div>
+      )}
+
+      {/* Lightbox */}
+      {lightbox && (
+        <div
+          className="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-4"
+          onClick={() => setLightbox(null)}
+        >
+          <div
+            className="bg-white rounded-xl shadow-2xl overflow-hidden max-w-sm w-full"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between px-4 py-3 border-b border-slate-200">
+              <div>
+                <div className="font-medium text-slate-800 text-sm">
+                  {lightbox.receipt_type === "programme_roster" && lightbox.programme_name
+                    ? lightbox.programme_name
+                    : lightbox.venue_name}
+                </div>
+                {lightbox.date && (
+                  <div className="text-xs text-slate-500">{lightbox.date}</div>
+                )}
+              </div>
+              <button
+                onClick={() => setLightbox(null)}
+                className="text-slate-400 hover:text-slate-700 text-lg leading-none"
+              >
+                ✕
+              </button>
+            </div>
+            <img
+              src={`data:${lightbox.mime_type};base64,${lightbox.image_data}`}
+              alt="Receipt full size"
+              className="w-full object-contain"
+              style={{ maxHeight: 600 }}
+            />
+          </div>
         </div>
       )}
     </div>

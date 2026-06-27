@@ -70,13 +70,33 @@ function initSchema(db: Database.Database) {
     );
   `);
 
-  // Add firebase_key column to session_instances if it doesn't exist yet
+  // Migrate session_instances: add columns that may not exist in older DBs
   const siCols = db.pragma("table_info(session_instances)") as { name: string }[];
-  if (!siCols.some((c) => c.name === "firebase_key")) {
+  const siColNames = siCols.map((c) => c.name);
+
+  if (!siColNames.includes("firebase_key")) {
     db.exec("ALTER TABLE session_instances ADD COLUMN firebase_key TEXT");
     db.exec(
       "CREATE UNIQUE INDEX IF NOT EXISTS idx_si_firebase_key ON session_instances(firebase_key) WHERE firebase_key IS NOT NULL"
     );
+  }
+  if (!siColNames.includes("receipt_type")) {
+    db.exec("ALTER TABLE session_instances ADD COLUMN receipt_type TEXT");
+  }
+  if (!siColNames.includes("court_no")) {
+    db.exec("ALTER TABLE session_instances ADD COLUMN court_no TEXT");
+  }
+  if (!siColNames.includes("total_amount")) {
+    db.exec("ALTER TABLE session_instances ADD COLUMN total_amount TEXT");
+  }
+  if (!siColNames.includes("receipt_ref")) {
+    db.exec("ALTER TABLE session_instances ADD COLUMN receipt_ref TEXT");
+  }
+  if (!siColNames.includes("class_type")) {
+    db.exec("ALTER TABLE session_instances ADD COLUMN class_type TEXT");
+  }
+  if (!siColNames.includes("programme_name")) {
+    db.exec("ALTER TABLE session_instances ADD COLUMN programme_name TEXT");
   }
 
   // Seed default venues if empty

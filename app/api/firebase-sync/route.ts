@@ -6,28 +6,33 @@ const FIREBASE_URL = (
   "https://synchroadmin-133f3-default-rtdb.asia-southeast1.firebasedatabase.app"
 ).replace(/\/$/, "");
 
-const BOT_COACH_NAME = "ActiveSG Court";
+// Placeholder coaches for bot-sourced sessions (no real coach assigned)
+const COURT_BOOKING_COACH = "Court Booking";
+const PROGRAMME_COACH = "ActiveSG Programme";
 
 interface BotSession {
+  receipt_type?: string;
   date?: string;
   start_time?: string;
   end_time?: string;
   venue_text?: string;
   court_no?: string;
   class_type?: string;
-  notes?: string;
+  programme_name?: string;
+  total_amount?: string;
+  receipt_ref?: string;
   status?: string;
+  notes?: string;
 }
 
 export async function GET() {
   const db = getDb();
-  const imported = (
-    db
-      .prepare("SELECT firebase_key FROM session_instances WHERE firebase_key IS NOT NULL")
-      .all() as { firebase_key: string }[]
-  ).map((r) => r.firebase_key);
-
-  return NextResponse.json({ imported_count: imported.length, imported_keys: imported });
+  const rows = db
+    .prepare(
+      "SELECT firebase_key, receipt_type, date, venue_text FROM session_instances WHERE firebase_key IS NOT NULL ORDER BY date DESC"
+    )
+    .all();
+  return NextResponse.json({ imported: rows });
 }
 
 export async function POST() {
@@ -64,28 +69,39 @@ export async function POST() {
     )
   );
 
-  // 3. Get or create the ActiveSG placeholder coach
-  const coachId = findOrCreateCoach(db, BOT_COACH_NAME);
-
   let syncedSessions = 0;
   let syncedImages = 0;
   const errors: string[] = [];
 
-  // 4. Process each bot session
   for (const [key, session] of Object.entries(botSessions)) {
+    // 3. Sync session entry if not yet imported
     if (!imported.has(key)) {
-      const { date, start_time, end_time, venue_text, status } = session;
+      const {
+        receipt_type,
+        date,
+        start_time,
+        end_time,
+        venue_text,
+        court_no,
+        class_type,
+        programme_name,
+        total_amount,
+        receipt_ref,
+        status,
+      } = session;
 
       if (!date || !start_time || !end_time) {
-        errors.push(`Skipped ${key}: missing date/time`);
+        errors.push(`Skipped ${key}: missing date/time (receipt_type=${receipt_type})`);
         continue;
       }
 
-      const venueId = findOrCreateVenue(db, venue_text || "Unknown Venue");
-      const hours = computeHours(start_time, end_time);
-
       try {
-        // Create a parent sessions record
+        const coachName =
+          receipt_type === "court_booking" ? COURT_BOOKING_COACH : PROGRAMME_COACH;
+        const coachId = findOrCreateCoach(db, coachName);
+        const venueId = findOrCreateVenue(db, venue_text || "Unknown Venue");
+        const hours = computeHours(start_time, end_time);
+
         const sessionResult = db
           .prepare(
             "INSERT INTO sessions (coach_id, venue_id, recurring, date, start_time, end_time) VALUES (?,?,0,?,?,?)"
@@ -96,9 +112,21 @@ export async function POST() {
 
         db.prepare(
           `INSERT OR IGNORE INTO session_instances
-            (session_id, coach_id, venue_id, date, start_time, end_time, hours, status, firebase_key)
-           VALUES (?,?,?,?,?,?,?,?,?)`
-        ).run(sessionId, coachId, venueId, date, start_time, end_time, hours, status || "scheduled", key);
+             (session_id, coach_id, venue_id, date, start_time, end_time, hours,
+              status, firebase_key, receipt_type, court_no, class_type,
+              programme_name, total_amount, receipt_ref)
+           VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
+        ).run(
+          sessionId, coachId, venueId, date, start_time, end_time, hours,
+          status || "scheduled",
+          key,
+          receipt_type || null,
+          court_no || null,
+          class_type || null,
+          programme_name || null,
+          total_amount || null,
+          receipt_ref || null,
+        );
 
         syncedSessions++;
       } catch (err) {
@@ -106,7 +134,7 @@ export async function POST() {
       }
     }
 
-    // 5. Fetch and store the receipt image (only for first booking of a series)
+    // 4. Fetch and store receipt image if not yet saved
     if (!importedImages.has(key)) {
       try {
         const imgRes = await fetch(`${FIREBASE_URL}/booking_images/${key}.json`, {
@@ -122,7 +150,7 @@ export async function POST() {
           }
         }
       } catch {
-        // Non-fatal: image may not exist for all sessions
+        // Non-fatal: image doesn't exist for every session in a series
       }
     }
   }
