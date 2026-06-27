@@ -68,6 +68,15 @@ function initSchema(db: Database.Database) {
       mime_type TEXT DEFAULT 'image/jpeg',
       created_at TEXT DEFAULT (datetime('now'))
     );
+
+    CREATE TABLE IF NOT EXISTS attendance (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      session_instance_id INTEGER NOT NULL REFERENCES session_instances(id) ON DELETE CASCADE,
+      participant_name TEXT NOT NULL,
+      status TEXT DEFAULT 'absent',
+      created_at TEXT DEFAULT (datetime('now')),
+      UNIQUE(session_instance_id, participant_name)
+    );
   `);
 
   // Migrate session_instances: add columns that may not exist in older DBs
@@ -97,6 +106,12 @@ function initSchema(db: Database.Database) {
   }
   if (!siColNames.includes("programme_name")) {
     db.exec("ALTER TABLE session_instances ADD COLUMN programme_name TEXT");
+  }
+  if (!siColNames.includes("booker_name")) {
+    db.exec("ALTER TABLE session_instances ADD COLUMN booker_name TEXT");
+  }
+  if (!siColNames.includes("reimbursed")) {
+    db.exec("ALTER TABLE session_instances ADD COLUMN reimbursed INTEGER DEFAULT 0");
   }
 
   // Seed default venues if empty

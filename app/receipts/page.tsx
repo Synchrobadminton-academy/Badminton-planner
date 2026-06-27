@@ -60,6 +60,11 @@ export default function ReceiptsPage() {
   }, []);
 
   useEffect(() => {
+    // Auto-sync from Telegram on load so receipts are always current
+    fetch("/api/firebase-sync", { method: "POST" }).then(() => fetchReceipts());
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
     fetchReceipts();
   }, [fetchReceipts]);
 

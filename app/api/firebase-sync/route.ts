@@ -6,10 +6,6 @@ const FIREBASE_URL = (
   "https://synchroadmin-133f3-default-rtdb.asia-southeast1.firebasedatabase.app"
 ).replace(/\/$/, "");
 
-// Placeholder coaches for bot-sourced sessions (no real coach assigned)
-const COURT_BOOKING_COACH = "Court Booking";
-const PROGRAMME_COACH = "ActiveSG Programme";
-
 interface BotSession {
   receipt_type?: string;
   date?: string;
@@ -19,20 +15,33 @@ interface BotSession {
   court_no?: string;
   class_type?: string;
   programme_name?: string;
+  booker_name?: string;
   total_amount?: string;
   receipt_ref?: string;
+  participants?: string[];
   status?: string;
   notes?: string;
 }
 
 export async function GET() {
   const db = getDb();
-  const rows = db
-    .prepare(
-      "SELECT firebase_key, receipt_type, date, venue_text FROM session_instances WHERE firebase_key IS NOT NULL ORDER BY date DESC"
-    )
-    .all();
-  return NextResponse.json({ imported: rows });
+  const stats = {
+    court_bookings: (
+      db
+        .prepare("SELECT COUNT(*) as c FROM session_instances WHERE receipt_type = 'court_booking'")
+        .get() as { c: number }
+    ).c,
+    programme_sessions: (
+      db
+        .prepare("SELECT COUNT(*) as c FROM session_instances WHERE receipt_type = 'programme_roster'")
+        .get() as { c: number }
+    ).c,
+    attendance_records: (
+      db.prepare("SELECT COUNT(*) as c FROM attendance").get() as { c: number }
+    ).c,
+    receipts: (db.prepare("SELECT COUNT(*) as c FROM receipts").get() as { c: number }).c,
+  };
+  return NextResponse.json(stats);
 }
 
 export async function POST() {
@@ -51,10 +60,10 @@ export async function POST() {
   }
 
   if (!botSessions) {
-    return NextResponse.json({ synced: 0, images: 0, message: "No bot sessions in Firebase" });
+    return NextResponse.json({ synced: 0, images: 0, attendance: 0, message: "No bot sessions in Firebase" });
   }
 
-  // 2. Collect already-imported firebase_keys
+  // 2. Keys already imported
   const imported = new Set(
     (
       db
@@ -71,10 +80,15 @@ export async function POST() {
 
   let syncedSessions = 0;
   let syncedImages = 0;
+  let syncedAttendance = 0;
   const errors: string[] = [];
 
+  const insertAttendance = db.prepare(
+    "INSERT OR IGNORE INTO attendance (session_instance_id, participant_name, status) VALUES (?,?,'absent')"
+  );
+
   for (const [key, session] of Object.entries(botSessions)) {
-    // 3. Sync session entry if not yet imported
+    // 3. Sync session if not yet imported
     if (!imported.has(key)) {
       const {
         receipt_type,
@@ -85,19 +99,22 @@ export async function POST() {
         court_no,
         class_type,
         programme_name,
+        booker_name,
         total_amount,
         receipt_ref,
+        participants,
         status,
       } = session;
 
       if (!date || !start_time || !end_time) {
-        errors.push(`Skipped ${key}: missing date/time (receipt_type=${receipt_type})`);
+        errors.push(`Skipped ${key}: missing date/time`);
         continue;
       }
 
       try {
+        // court_booking uses a placeholder coach; programme_roster uses another
         const coachName =
-          receipt_type === "court_booking" ? COURT_BOOKING_COACH : PROGRAMME_COACH;
+          receipt_type === "court_booking" ? "Court Booking" : "ActiveSG Programme";
         const coachId = findOrCreateCoach(db, coachName);
         const venueId = findOrCreateVenue(db, venue_text || "Unknown Venue");
         const hours = computeHours(start_time, end_time);
@@ -110,12 +127,12 @@ export async function POST() {
 
         const sessionId = sessionResult.lastInsertRowid as number;
 
-        db.prepare(
+        const siResult = db.prepare(
           `INSERT OR IGNORE INTO session_instances
              (session_id, coach_id, venue_id, date, start_time, end_time, hours,
               status, firebase_key, receipt_type, court_no, class_type,
-              programme_name, total_amount, receipt_ref)
-           VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
+              programme_name, booker_name, total_amount, receipt_ref)
+           VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
         ).run(
           sessionId, coachId, venueId, date, start_time, end_time, hours,
           status || "scheduled",
@@ -124,17 +141,29 @@ export async function POST() {
           court_no || null,
           class_type || null,
           programme_name || null,
+          booker_name || null,
           total_amount || null,
           receipt_ref || null,
         );
 
+        const instanceId = siResult.lastInsertRowid as number;
         syncedSessions++;
+
+        // 4. For programme rosters: auto-fill attendance with participant names
+        if (receipt_type === "programme_roster" && Array.isArray(participants)) {
+          for (const name of participants) {
+            if (name && typeof name === "string" && name.trim()) {
+              insertAttendance.run(instanceId, name.trim());
+              syncedAttendance++;
+            }
+          }
+        }
       } catch (err) {
         errors.push(`Session ${key}: ${err}`);
       }
     }
 
-    // 4. Fetch and store receipt image if not yet saved
+    // 5. Fetch and store receipt image (linked to first booking key of a receipt)
     if (!importedImages.has(key)) {
       try {
         const imgRes = await fetch(`${FIREBASE_URL}/booking_images/${key}.json`, {
@@ -150,7 +179,7 @@ export async function POST() {
           }
         }
       } catch {
-        // Non-fatal: image doesn't exist for every session in a series
+        // Non-fatal — image only exists for the first slot of a court booking
       }
     }
   }
@@ -158,6 +187,7 @@ export async function POST() {
   return NextResponse.json({
     synced: syncedSessions,
     images: syncedImages,
+    attendance: syncedAttendance,
     total: Object.keys(botSessions).length,
     errors: errors.length > 0 ? errors : undefined,
   });

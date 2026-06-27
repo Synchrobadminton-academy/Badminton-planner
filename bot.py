@@ -6,12 +6,12 @@ OCRs them with Claude, and saves the booking + image to Firebase.
 Requirements:
     pip install pyTelegramBotAPI anthropic requests
 
-Environment variables (set in .env or your server):
+Environment variables:
     TELEGRAM_BOT_TOKEN   — from @BotFather
     ANTHROPIC_API_KEY    — from console.anthropic.com
     FIREBASE_URL         — e.g. https://your-db.firebasedatabase.app
-    ALLOWED_CHAT_ID      — Telegram group chat ID (optional, restricts to one group)
-    ALLOWED_TOPICS       — comma-separated topic IDs to accept images from (optional)
+    ALLOWED_CHAT_ID      — Telegram group chat ID (optional)
+    ALLOWED_TOPICS       — comma-separated topic IDs (optional)
 """
 
 import base64
@@ -38,75 +38,79 @@ FIREBASE_URL = os.environ.get(
     "https://synchroadmin-133f3-default-rtdb.asia-southeast1.firebasedatabase.app",
 ).rstrip("/")
 ALLOWED_CHAT_ID = os.environ.get("ALLOWED_CHAT_ID")
-ALLOWED_TOPICS = set(
-    int(x.strip()) for x in os.environ.get("ALLOWED_TOPICS", "").split(",") if x.strip()
-) if os.environ.get("ALLOWED_TOPICS") else None
+ALLOWED_TOPICS = (
+    set(int(x.strip()) for x in os.environ.get("ALLOWED_TOPICS", "").split(",") if x.strip())
+    if os.environ.get("ALLOWED_TOPICS")
+    else None
+)
 
 claude = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
 bot = telebot.TeleBot(TELEGRAM_BOT_TOKEN)
 
 # ──────────────────────────────────────────────────────────────────────────────
-# OCR prompt — detects receipt type and extracts appropriate fields
+# OCR prompt
 # ──────────────────────────────────────────────────────────────────────────────
-OCR_PROMPT = """Identify which receipt type this is, then extract the fields below.
+OCR_PROMPT = """Identify which receipt type this image is, then extract the fields.
 Return ONLY valid JSON — no markdown, no extra text.
 
-────────────────────────────────────────────────────────
-RECEIPT TYPE 1: court_booking
-  Identified by: an ActiveSG court PAYMENT RECEIPT (activesg.gov.sg) with
-  a "BOOKING DETAILS" section showing What / Where / When / Who, plus a
-  "PAYMENT RECEIPT" section with dollar amounts.
+════════════════════════════════════════════════════
+RECEIPT TYPE 1 — court_booking
+  Identified by: an ActiveSG PAYMENT RECEIPT (activesg.gov.sg) with
+  "BOOKING DETAILS" (What / Where / When / Who) and a "PAYMENT RECEIPT"
+  section showing dollar amounts.
 
   Return:
   {
     "receipt_type": "court_booking",
     "date": "YYYY-MM-DD",
-    "venue_text": "sports hall name only, e.g. 'Bukit Canberra Sport Hall'",
+    "venue_text": "hall/centre name only, e.g. 'Bukit Canberra Sport Hall'",
+    "booker_name": "person shown in the 'Who' field, e.g. 'ENG T-WU'",
     "slots": [
       {"start_time": "HH:MM", "end_time": "HH:MM", "court_no": "e.g. 01"}
     ],
-    "total_amount": "total paid as a string, e.g. '7.00'",
-    "receipt_ref": "reference number at the bottom, e.g. 'SSC20260627RC01890316'",
+    "total_amount": "total paid as a number-string, e.g. '7.00'",
+    "receipt_ref": "reference at the bottom, e.g. 'SSC20260627RC01890316'",
     "notes": ""
   }
 
   Rules for court_booking:
-  - slots: list EVERY time slot in the "When" section (there may be 2 or more).
-    Each slot is 1 hour unless the receipt shows otherwise; infer end_time = start_time + 1 hour.
-  - venue_text: use the hall/centre name from "Where", NOT the full address.
-  - total_amount: the final "Total:" value excluding currency symbol.
+  - slots: list EVERY time slot shown under "When" (often 2+). Each slot is
+    1 hour unless stated; infer end_time = start_time + 1h.
+  - booker_name: the name in the "Who" row — this is who paid and needs reimbursement.
+  - total_amount: final "Total:" value, digits only (no currency symbol).
 
-────────────────────────────────────────────────────────
-RECEIPT TYPE 2: programme_roster
-  Identified by: a spreadsheet/table showing Programme Name, Programme ID,
-  Programme Date (a range), Programme Time, Service Provider, and a list of
-  Participants. Usually sent with a Telegram caption that gives the specific
-  session dates, venue, courts, and class type.
+════════════════════════════════════════════════════
+RECEIPT TYPE 2 — programme_roster
+  Identified by: a spreadsheet/table with Programme Name, Programme ID,
+  Programme Date (a date range), Programme Time, Service Provider, and a
+  numbered list of Participants. Often sent with a Telegram caption giving
+  the exact session dates, venue, courts, and class type.
 
   Return:
   {
     "receipt_type": "programme_roster",
-    "programme_name": "full programme name from the spreadsheet",
-    "start_date": "YYYY-MM-DD  (from Programme Date range)",
-    "end_date":   "YYYY-MM-DD  (from Programme Date range)",
+    "programme_name": "full name from the spreadsheet header",
+    "start_date": "YYYY-MM-DD  (start of Programme Date range)",
+    "end_date":   "YYYY-MM-DD  (end of Programme Date range)",
     "start_time": "HH:MM  (from Programme Time or caption)",
     "end_time":   "HH:MM  (from Programme Time or caption)",
-    "venue_text": "venue from caption (e.g. 'Bishan Clubhouse'), or from spreadsheet if no caption",
-    "court_no": "court(s) from caption, e.g. '1 & 2'",
+    "venue_text": "venue from caption, e.g. 'Bishan Clubhouse'",
+    "court_no":   "court(s) from caption, e.g. '1 & 2'",
     "class_type": "class type from caption, e.g. 'ActiveSG (Advance)'",
+    "participants": ["FULL NAME 1", "FULL NAME 2"],
     "notes": ""
   }
 
   Rules for programme_roster:
-  - Caption ALWAYS takes priority over spreadsheet for venue, court, class type, times.
-  - start_date / end_date come from the Programme Date range in the spreadsheet.
-  - If year is missing anywhere, use 2026.
-  - Times: convert to 24-hour HH:MM (e.g. 4:00 pm → 16:00).
+  - Caption ALWAYS overrides image for venue, court, class_type, times.
+  - participants: copy EVERY name from the S/N numbered list, in order.
+  - start_date / end_date from the Programme Date range in the spreadsheet.
+  - Times: 24-hour HH:MM (4:00 pm → 16:00).
+  - Missing year → use 2026.
 
-────────────────────────────────────────────────────────
-General rules:
-- Return ONLY JSON, no markdown fences.
-- If you cannot determine the receipt type, return {"receipt_type": "unknown"}.
+════════════════════════════════════════════════════
+If the type cannot be determined: {"receipt_type": "unknown"}
+Return ONLY JSON — no markdown fences.
 """
 
 
@@ -117,22 +121,21 @@ def extract_booking_from_image(
     try:
         prompt = OCR_PROMPT
         if caption:
-            prompt += f"\n\nTelegram caption (authoritative for venue/dates/court/class type):\n{caption}"
+            prompt += (
+                "\n\nTelegram caption "
+                "(authoritative for venue / dates / court / class type):\n" + caption
+            )
 
         response = claude.messages.create(
             model="claude-haiku-4-5-20251001",
-            max_tokens=768,
+            max_tokens=1024,
             messages=[
                 {
                     "role": "user",
                     "content": [
                         {
                             "type": "image",
-                            "source": {
-                                "type": "base64",
-                                "media_type": mime_type,
-                                "data": b64,
-                            },
+                            "source": {"type": "base64", "media_type": mime_type, "data": b64},
                         },
                         {"type": "text", "text": prompt},
                     ],
@@ -148,13 +151,8 @@ def extract_booking_from_image(
 
 
 def save_booking_to_firebase(booking: dict) -> str | None:
-    """POST a single booking entry to Firebase bot_sessions; returns the generated key."""
     try:
-        r = requests.post(
-            f"{FIREBASE_URL}/bot_sessions.json",
-            json=booking,
-            timeout=15,
-        )
+        r = requests.post(f"{FIREBASE_URL}/bot_sessions.json", json=booking, timeout=15)
         r.raise_for_status()
         return r.json().get("name")
     except Exception as e:
@@ -178,13 +176,13 @@ def save_image_to_firebase(key: str, image_bytes: bytes, mime_type: str = "image
 
 
 def calculate_weekly_dates(start_date_str: str, end_date_str: str) -> list[str]:
-    """Return all dates at 7-day intervals from start_date to end_date (inclusive)."""
+    """Return all dates at 7-day intervals from start_date to end_date inclusive."""
     from datetime import datetime, timedelta
+
     try:
         start = datetime.strptime(start_date_str, "%Y-%m-%d")
         end = datetime.strptime(end_date_str, "%Y-%m-%d")
-        dates = []
-        current = start
+        dates, current = [], start
         while current <= end:
             dates.append(current.strftime("%Y-%m-%d"))
             current += timedelta(weeks=1)
@@ -196,85 +194,92 @@ def calculate_weekly_dates(start_date_str: str, end_date_str: str) -> list[str]:
 
 def build_bookings(booking: dict) -> list[dict]:
     """
-    Convert the raw OCR result into a flat list of Firebase-ready booking dicts.
+    Convert raw OCR result into a flat list of Firebase-ready booking dicts.
 
-    Type 1 (court_booking):   one entry per slot on the same date.
-    Type 2 (programme_roster): one entry per weekly session date.
+    court_booking   → one dict per slot (same date, different times).
+    programme_roster → one dict per weekly session date (participants embedded in each).
     """
     receipt_type = booking.get("receipt_type", "unknown")
-    bookings = []
+    bookings: list[dict] = []
 
     if receipt_type == "court_booking":
         date = booking.get("date")
         slots = booking.get("slots") or []
 
         if not date:
-            log.warning("court_booking: no date found — skipping")
+            log.warning("court_booking: no date — skipping")
             return []
         if not slots:
-            log.warning("court_booking: no slots found — skipping")
+            log.warning("court_booking: no slots — skipping")
             return []
 
         for slot in slots:
             start_time = slot.get("start_time")
             end_time = slot.get("end_time")
             if not start_time or not end_time:
-                log.warning("court_booking: slot missing time, skipping: %s", slot)
+                log.warning("court_booking: slot missing time: %s", slot)
                 continue
-            bookings.append({
-                "receipt_type": "court_booking",
-                "date": date,
-                "start_time": start_time,
-                "end_time": end_time,
-                "court_no": slot.get("court_no", ""),
-                "venue_text": booking.get("venue_text", ""),
-                "total_amount": booking.get("total_amount", ""),
-                "receipt_ref": booking.get("receipt_ref", ""),
-                "class_type": "Court Booking",
-                "coach_ids": [],
-                "color": "#ef4444",
-                "status": "scheduled",
-                "notes": booking.get("notes", ""),
-            })
+            bookings.append(
+                {
+                    "receipt_type": "court_booking",
+                    "date": date,
+                    "start_time": start_time,
+                    "end_time": end_time,
+                    "court_no": slot.get("court_no", ""),
+                    "venue_text": booking.get("venue_text", ""),
+                    "booker_name": booking.get("booker_name", ""),
+                    "total_amount": booking.get("total_amount", ""),
+                    "receipt_ref": booking.get("receipt_ref", ""),
+                    "class_type": "Court Booking",
+                    "coach_ids": [],
+                    "color": "#ef4444",
+                    "status": "scheduled",
+                    "notes": booking.get("notes", ""),
+                }
+            )
 
     elif receipt_type == "programme_roster":
         start_date = booking.get("start_date")
         end_date = booking.get("end_date")
         start_time = booking.get("start_time")
         end_time = booking.get("end_time")
-        venue_text = booking.get("venue_text", "")
 
         if not (start_date and end_date and start_time and end_time):
-            log.warning("programme_roster: missing required date/time fields — skipping")
+            log.warning("programme_roster: missing date/time fields — skipping")
             return []
 
         dates = calculate_weekly_dates(start_date, end_date)
         if not dates:
-            log.warning("programme_roster: failed to calculate session dates")
+            log.warning("programme_roster: could not calculate session dates")
             return []
 
+        participants = booking.get("participants") or []
         log.info(
-            "programme_roster: %d sessions from %s to %s",
-            len(dates), start_date, end_date,
+            "programme_roster: %d sessions, %d participants (%s to %s)",
+            len(dates), len(participants), start_date, end_date,
         )
+
         for date in dates:
-            bookings.append({
-                "receipt_type": "programme_roster",
-                "date": date,
-                "start_time": start_time,
-                "end_time": end_time,
-                "court_no": booking.get("court_no", ""),
-                "venue_text": venue_text,
-                "class_type": booking.get("class_type", "ActiveSG"),
-                "programme_name": booking.get("programme_name", ""),
-                "coach_ids": [],
-                "color": "#f59e0b",
-                "status": "scheduled",
-                "notes": booking.get("notes", ""),
-            })
+            bookings.append(
+                {
+                    "receipt_type": "programme_roster",
+                    "date": date,
+                    "start_time": start_time,
+                    "end_time": end_time,
+                    "court_no": booking.get("court_no", ""),
+                    "venue_text": booking.get("venue_text", ""),
+                    "class_type": booking.get("class_type", "ActiveSG"),
+                    "programme_name": booking.get("programme_name", ""),
+                    "participants": participants,  # embedded in every entry for the sync
+                    "coach_ids": [],
+                    "color": "#f59e0b",
+                    "status": "scheduled",
+                    "notes": booking.get("notes", ""),
+                }
+            )
 
     else:
-        log.warning("Unknown receipt_type: %s — skipping", receipt_type)
+        log.warning("Unknown receipt_type '%s' — skipping", receipt_type)
 
     return bookings
 
@@ -289,7 +294,7 @@ def handle_photo(message: types.Message) -> None:
 
     topic_id = getattr(message, "message_thread_id", None) or 0
     sender = message.from_user.full_name if message.from_user else "unknown"
-    log.info("📸 Photo from %s | Topic ID: %s | Chat: %s", sender, topic_id, chat_id)
+    log.info("📸 Photo from %s | Topic %s | Chat %s", sender, topic_id, chat_id)
 
     if ALLOWED_TOPICS and topic_id not in ALLOWED_TOPICS:
         log.info("❌ Ignoring — topic %s not in ALLOWED_TOPICS", topic_id)
@@ -318,24 +323,27 @@ def handle_photo(message: types.Message) -> None:
 
     bookings_to_save = build_bookings(raw)
     if not bookings_to_save:
-        log.warning("No bookings to save after processing OCR result")
+        log.warning("No bookings produced from OCR result")
         return
 
     first_key: str | None = None
     for i, b in enumerate(bookings_to_save):
-        log.info("Saving [%d/%d] %s: %s", i + 1, len(bookings_to_save), b.get("date"), json.dumps(b))
+        log.info(
+            "Saving [%d/%d] %s %s",
+            i + 1, len(bookings_to_save),
+            b.get("receipt_type"), b.get("date"),
+        )
         key = save_booking_to_firebase(b)
         if not key:
-            log.error("Firebase save failed for date %s", b.get("date"))
+            log.error("Firebase save failed for %s", b.get("date"))
             continue
 
-        log.info("Saved with key: %s", key)
+        log.info("Saved → %s", key)
 
-        # Store the image once, linked to the first booking's key
+        # Store the image once, tied to the first booking key
         if first_key is None:
             first_key = key
-            saved = save_image_to_firebase(key, image_bytes)
-            if saved:
+            if save_image_to_firebase(key, image_bytes):
                 log.info("Image stored at booking_images/%s", key)
             else:
                 log.warning("Image upload failed for key %s", key)
@@ -344,7 +352,7 @@ def handle_photo(message: types.Message) -> None:
 def main() -> None:
     try:
         bot.delete_webhook()
-        log.info("Webhook deleted (if it existed)")
+        log.info("Webhook deleted")
     except Exception as e:
         log.warning("Webhook deletion: %s", e)
 

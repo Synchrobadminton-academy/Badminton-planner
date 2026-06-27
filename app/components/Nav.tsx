@@ -6,6 +6,7 @@ const links = [
   { href: "/schedule", label: "Schedule" },
   { href: "/coaches", label: "Coaches" },
   { href: "/tracker", label: "Monthly Tracker" },
+  { href: "/attendance", label: "Attendance" },
   { href: "/court-records", label: "Court Records" },
   { href: "/receipts", label: "Receipts" },
 ];

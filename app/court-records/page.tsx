@@ -12,25 +12,23 @@ interface CourtRecord {
   court_no: string | null;
   total_amount: string | null;
   receipt_ref: string | null;
+  booker_name: string | null;
+  reimbursed: number;
   venue_name: string | null;
   image_data: string | null;
   mime_type: string | null;
 }
 
-function groupByDate(records: CourtRecord[]): [string, CourtRecord[]][] {
+/** Group slots by receipt_ref (one receipt = one booking event, possibly multiple slots) */
+function groupByReceipt(records: CourtRecord[]): Map<string, CourtRecord[]> {
   const map = new Map<string, CourtRecord[]>();
   for (const r of records) {
-    const list = map.get(r.date) ?? [];
+    const key = r.receipt_ref ?? r.firebase_key;
+    const list = map.get(key) ?? [];
     list.push(r);
-    map.set(r.date, list);
+    map.set(key, list);
   }
-  return Array.from(map.entries());
-}
-
-function totalForDate(records: CourtRecord[]): string {
-  // The receipt covers all slots; show the amount from the first entry that has it
-  const withAmount = records.find((r) => r.total_amount);
-  return withAmount ? `S$${withAmount.total_amount}` : "—";
+  return map;
 }
 
 export default function CourtRecordsPage() {
@@ -38,8 +36,9 @@ export default function CourtRecordsPage() {
   const [loading, setLoading] = useState(true);
   const [syncing, setSyncing] = useState(false);
   const [syncMsg, setSyncMsg] = useState<string | null>(null);
-  const [expandedDate, setExpandedDate] = useState<string | null>(null);
+  const [expanded, setExpanded] = useState<string | null>(null);
   const [lightbox, setLightbox] = useState<CourtRecord | null>(null);
+  const [reimbursing, setReimbursing] = useState<string | null>(null);
 
   const fetchRecords = useCallback(async () => {
     setLoading(true);
@@ -52,7 +51,11 @@ export default function CourtRecordsPage() {
   }, []);
 
   useEffect(() => {
-    fetchRecords();
+    // Auto-sync on mount then fetch
+    (async () => {
+      await fetch("/api/firebase-sync", { method: "POST" });
+      await fetchRecords();
+    })();
   }, [fetchRecords]);
 
   async function handleSync() {
@@ -61,42 +64,50 @@ export default function CourtRecordsPage() {
     try {
       const res = await fetch("/api/firebase-sync", { method: "POST" });
       const data = await res.json();
-      if (data.error) {
-        setSyncMsg(`Error: ${data.error}`);
-      } else {
-        setSyncMsg(`Synced ${data.synced} new entry/entries and ${data.images} image(s)`);
-        await fetchRecords();
-      }
-    } catch (err) {
-      setSyncMsg(`Failed: ${err}`);
+      setSyncMsg(`Synced ${data.synced} new entry/entries`);
+      await fetchRecords();
     } finally {
       setSyncing(false);
     }
   }
 
-  const grouped = groupByDate(records);
+  async function toggleReimbursed(receipt_ref: string, current: number) {
+    setReimbursing(receipt_ref);
+    try {
+      await fetch("/api/court-records", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ receipt_ref, reimbursed: !current }),
+      });
+      await fetchRecords();
+    } finally {
+      setReimbursing(null);
+    }
+  }
 
-  // Grand total paid
-  const grandTotal = records
-    .filter((r) => r.total_amount && r.receipt_ref)
-    // dedupe by receipt_ref (same receipt = same charge)
-    .reduce<{ refs: Set<string>; total: number }>(
-      (acc, r) => {
-        if (!acc.refs.has(r.receipt_ref!)) {
-          acc.refs.add(r.receipt_ref!);
-          acc.total += parseFloat(r.total_amount || "0");
-        }
-        return acc;
-      },
-      { refs: new Set(), total: 0 }
-    ).total;
+  const grouped = groupByReceipt(records);
+  const groupEntries = Array.from(grouped.entries()).sort(([, a], [, b]) =>
+    b[0].date.localeCompare(a[0].date)
+  );
+
+  // Totals
+  const uniqueReceipts = Array.from(
+    new Map(records.filter((r) => r.receipt_ref).map((r) => [r.receipt_ref!, r])).values()
+  );
+  const totalPaid = uniqueReceipts.reduce((s, r) => s + parseFloat(r.total_amount || "0"), 0);
+  const totalPending = uniqueReceipts
+    .filter((r) => !r.reimbursed)
+    .reduce((s, r) => s + parseFloat(r.total_amount || "0"), 0);
+  const totalReimbursed = uniqueReceipts
+    .filter((r) => r.reimbursed)
+    .reduce((s, r) => s + parseFloat(r.total_amount || "0"), 0);
 
   return (
     <div className="max-w-4xl">
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-xl font-bold text-slate-800">Court Records</h1>
-          <p className="text-sm text-slate-500 mt-0.5">One-off ActiveSG court bookings</p>
+          <p className="text-sm text-slate-500 mt-0.5">One-off ActiveSG court bookings &amp; reimbursements</p>
         </div>
         <div className="flex items-center gap-3">
           {syncMsg && (
@@ -109,37 +120,37 @@ export default function CourtRecordsPage() {
             disabled={syncing}
             className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded text-sm font-medium hover:bg-blue-700 disabled:opacity-50"
           >
-            {syncing ? <>↻ Syncing…</> : <>↺ Sync from Telegram</>}
+            {syncing ? <>↻ Syncing…</> : <>↺ Sync</>}
           </button>
         </div>
       </div>
 
-      {/* Summary */}
+      {/* Summary cards */}
       {records.length > 0 && (
         <div className="grid grid-cols-3 gap-4 mb-6">
           <div className="bg-white rounded-lg border border-slate-200 p-4">
-            <div className="text-2xl font-bold text-slate-800">{grouped.length}</div>
-            <div className="text-xs text-slate-500 mt-0.5">Booking dates</div>
-          </div>
-          <div className="bg-white rounded-lg border border-slate-200 p-4">
-            <div className="text-2xl font-bold text-slate-800">{records.length}</div>
-            <div className="text-xs text-slate-500 mt-0.5">Total court slots</div>
-          </div>
-          <div className="bg-white rounded-lg border border-slate-200 p-4">
-            <div className="text-2xl font-bold text-red-600">S${grandTotal.toFixed(2)}</div>
+            <div className="text-2xl font-bold text-slate-800">S${totalPaid.toFixed(2)}</div>
             <div className="text-xs text-slate-500 mt-0.5">Total paid</div>
+          </div>
+          <div className="bg-white rounded-lg border border-red-100 p-4">
+            <div className="text-2xl font-bold text-red-600">S${totalPending.toFixed(2)}</div>
+            <div className="text-xs text-slate-500 mt-0.5">Pending reimbursement</div>
+          </div>
+          <div className="bg-white rounded-lg border border-green-100 p-4">
+            <div className="text-2xl font-bold text-green-600">S${totalReimbursed.toFixed(2)}</div>
+            <div className="text-xs text-slate-500 mt-0.5">Reimbursed</div>
           </div>
         </div>
       )}
 
       {loading ? (
         <div className="text-center text-slate-400 py-16 text-sm">Loading…</div>
-      ) : records.length === 0 ? (
+      ) : groupEntries.length === 0 ? (
         <div className="bg-white rounded-xl border border-slate-200 p-12 text-center">
           <div className="text-4xl mb-3">🏸</div>
           <div className="text-slate-600 font-medium mb-1">No court records yet</div>
           <div className="text-sm text-slate-400 mb-4">
-            Send an ActiveSG court booking receipt to the Telegram group, then sync.
+            Send an ActiveSG court booking receipt to the Telegram group and sync.
           </div>
           <button
             onClick={handleSync}
@@ -156,83 +167,112 @@ export default function CourtRecordsPage() {
               <tr>
                 <th className="text-left px-4 py-3 font-medium text-slate-600">Date</th>
                 <th className="text-left px-4 py-3 font-medium text-slate-600">Venue</th>
+                <th className="text-left px-3 py-3 font-medium text-slate-600">Booked by</th>
                 <th className="text-center px-3 py-3 font-medium text-slate-600">Slots</th>
-                <th className="text-right px-4 py-3 font-medium text-slate-600">Paid</th>
+                <th className="text-right px-4 py-3 font-medium text-slate-600">Amount</th>
+                <th className="text-center px-3 py-3 font-medium text-slate-600">Reimbursed</th>
                 <th className="text-center px-3 py-3 font-medium text-slate-600">Receipt</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
-              {grouped.map(([date, dayRecords]) => (
-                <>
-                  <tr
-                    key={date}
-                    className="hover:bg-slate-50 cursor-pointer"
-                    onClick={() => setExpandedDate(expandedDate === date ? null : date)}
-                  >
-                    <td className="px-4 py-3 font-medium text-slate-800">{date}</td>
-                    <td className="px-4 py-3 text-slate-600">
-                      {dayRecords[0]?.venue_name ?? "—"}
-                    </td>
-                    <td className="px-3 py-3 text-center text-slate-700">
-                      {dayRecords.length} slot{dayRecords.length !== 1 ? "s" : ""}
-                    </td>
-                    <td className="px-4 py-3 text-right font-semibold text-red-700">
-                      {totalForDate(dayRecords)}
-                    </td>
-                    <td className="px-3 py-3 text-center">
-                      {dayRecords[0]?.image_data ? (
+              {groupEntries.map(([receiptRef, slots]) => {
+                const first = slots[0];
+                const isExpanded = expanded === receiptRef;
+                const isReimbursed = !!first.reimbursed;
+
+                return (
+                  <>
+                    <tr
+                      key={receiptRef}
+                      className={`hover:bg-slate-50 cursor-pointer ${
+                        isReimbursed ? "opacity-60" : ""
+                      }`}
+                      onClick={() => setExpanded(isExpanded ? null : receiptRef)}
+                    >
+                      <td className="px-4 py-3 font-medium text-slate-800">{first.date}</td>
+                      <td className="px-4 py-3 text-slate-600">{first.venue_name ?? "—"}</td>
+                      <td className="px-3 py-3 text-slate-600 font-medium">
+                        {first.booker_name ?? "—"}
+                      </td>
+                      <td className="px-3 py-3 text-center text-slate-700">
+                        {slots.length}
+                      </td>
+                      <td className="px-4 py-3 text-right font-semibold text-slate-800">
+                        {first.total_amount ? `S$${first.total_amount}` : "—"}
+                      </td>
+                      <td className="px-3 py-3 text-center">
                         <button
                           onClick={(e) => {
                             e.stopPropagation();
-                            setLightbox(dayRecords[0]);
+                            if (first.receipt_ref) {
+                              toggleReimbursed(first.receipt_ref, first.reimbursed);
+                            }
                           }}
-                          className="text-blue-500 hover:text-blue-700 text-xs underline"
+                          disabled={!first.receipt_ref || reimbursing === first.receipt_ref}
+                          className={`text-xs px-2.5 py-1 rounded border font-medium transition-colors ${
+                            isReimbursed
+                              ? "bg-green-100 text-green-700 border-green-300"
+                              : "bg-red-50 text-red-600 border-red-200 hover:bg-red-100"
+                          }`}
                         >
-                          View
+                          {reimbursing === first.receipt_ref
+                            ? "…"
+                            : isReimbursed
+                            ? "✓ Done"
+                            : "Pending"}
                         </button>
-                      ) : (
-                        <span className="text-slate-300 text-xs">—</span>
-                      )}
-                    </td>
-                  </tr>
-
-                  {expandedDate === date && (
-                    <tr key={`${date}-detail`}>
-                      <td colSpan={5} className="bg-slate-50 px-6 py-3">
-                        <div className="text-xs font-medium text-slate-500 mb-2">
-                          Slot details
-                        </div>
-                        <table className="w-full text-xs">
-                          <thead>
-                            <tr className="text-slate-500">
-                              <th className="text-left pb-1">Time</th>
-                              <th className="text-left pb-1">Court</th>
-                              <th className="text-left pb-1">Hours</th>
-                              <th className="text-left pb-1">Ref</th>
-                            </tr>
-                          </thead>
-                          <tbody className="divide-y divide-slate-200">
-                            {dayRecords.map((r) => (
-                              <tr key={r.id}>
-                                <td className="py-1 text-slate-700">
-                                  {r.start_time}–{r.end_time}
-                                </td>
-                                <td className="py-1 text-slate-600">
-                                  {r.court_no ? `Court ${r.court_no}` : "—"}
-                                </td>
-                                <td className="py-1 text-slate-600">{r.hours.toFixed(1)}h</td>
-                                <td className="py-1 text-slate-400 font-mono text-xs">
-                                  {r.receipt_ref ?? "—"}
-                                </td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
+                      </td>
+                      <td className="px-3 py-3 text-center">
+                        {first.image_data ? (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setLightbox(first);
+                            }}
+                            className="text-blue-500 hover:text-blue-700 text-xs underline"
+                          >
+                            View
+                          </button>
+                        ) : (
+                          <span className="text-slate-300 text-xs">—</span>
+                        )}
                       </td>
                     </tr>
-                  )}
-                </>
-              ))}
+
+                    {isExpanded && (
+                      <tr key={`${receiptRef}-detail`}>
+                        <td colSpan={7} className="bg-slate-50 px-6 py-3">
+                          <div className="text-xs font-medium text-slate-500 mb-2">
+                            Slot breakdown · Ref: {first.receipt_ref ?? "n/a"}
+                          </div>
+                          <table className="w-full text-xs">
+                            <thead>
+                              <tr className="text-slate-400">
+                                <th className="text-left pb-1 font-medium">Time</th>
+                                <th className="text-left pb-1 font-medium">Court</th>
+                                <th className="text-left pb-1 font-medium">Hours</th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-slate-200">
+                              {slots.map((s) => (
+                                <tr key={s.id}>
+                                  <td className="py-1 text-slate-700">
+                                    {s.start_time}–{s.end_time}
+                                  </td>
+                                  <td className="py-1 text-slate-600">
+                                    {s.court_no ? `Court ${s.court_no}` : "—"}
+                                  </td>
+                                  <td className="py-1 text-slate-600">{s.hours.toFixed(1)}h</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </td>
+                      </tr>
+                    )}
+                  </>
+                );
+              })}
             </tbody>
           </table>
         </div>
@@ -249,15 +289,15 @@ export default function CourtRecordsPage() {
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between px-4 py-3 border-b border-slate-200">
-              <span className="font-medium text-slate-800 text-sm">
-                {lightbox.date} — {lightbox.venue_name}
-              </span>
-              <button
-                onClick={() => setLightbox(null)}
-                className="text-slate-400 hover:text-slate-700 text-lg leading-none"
-              >
-                ✕
-              </button>
+              <div>
+                <div className="font-medium text-slate-800 text-sm">{lightbox.venue_name}</div>
+                <div className="text-xs text-slate-500">
+                  {lightbox.date}
+                  {lightbox.booker_name && <> · Booked by {lightbox.booker_name}</>}
+                  {lightbox.total_amount && <> · S${lightbox.total_amount}</>}
+                </div>
+              </div>
+              <button onClick={() => setLightbox(null)} className="text-slate-400 hover:text-slate-700 text-lg">✕</button>
             </div>
             <img
               src={`data:${lightbox.mime_type};base64,${lightbox.image_data}`}
