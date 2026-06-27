@@ -140,15 +140,15 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
     if not msg or not msg.photo:
         return
 
+    topic_id = msg.message_thread_id or 0
+    sender = msg.from_user.full_name if msg.from_user else "unknown"
+    log.info("📸 Photo from %s | Topic ID: %s | Chat: %s", sender, topic_id, chat_id)
+
     # Filter by topic if configured
     if ALLOWED_TOPICS:
-        topic_id = msg.message_thread_id or 0
         if topic_id not in ALLOWED_TOPICS:
-            log.info("Ignoring photo from topic %s (not in allowed list)", topic_id)
+            log.info("❌ Ignoring — topic %s not in ALLOWED_TOPICS", topic_id)
             return
-
-    sender = msg.from_user.full_name if msg.from_user else "unknown"
-    log.info("Photo received from %s in chat %s", sender, chat_id)
 
     # Download the highest-resolution version of the photo
     photo = msg.photo[-1]
