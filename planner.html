@@ -1313,12 +1313,13 @@ function renderMonth(){
         const chipBorder=noColor2?'2px dashed var(--bdr)':color==='#ffffff'?'1px solid #d1d5db':'1px solid rgba(0,0,0,.18)';
         const chipTc=noColor2?'var(--tx)':tc;
         const noCoach=!inst.coach_ids||inst.coach_ids.length===0;
+        const isActivesg=inst.class_type==='ActiveSG';
         return`<div class="cal-chip" data-inst-id="${inst.id}" style="background:${chipBg};color:${chipTc};border:${chipBorder}">
-          ${noCoach?'<div class="block-warn">⚠️</div>':''}
-          <div class="cal-chip-venue">${esc(inst.venue_text||'—')}</div>
+          ${noCoach&&!isActivesg?'<div class="block-warn">⚠️</div>':''}
+          <div class="cal-chip-venue">${esc(inst.venue_text||'—')}${isActivesg?' (activesg)':''}</div>
           <div class="cal-chip-sub">${fmt12(inst.start_time)}–${fmt12(inst.end_time)}</div>
-          ${inst.court_no?`<div class="cal-chip-sub">Court ${esc(inst.court_no)}</div>`:''}
-          <div class="cal-chip-sub chip-coach">${cn?esc(cn):'<span style="opacity:.55;font-style:italic">No coach</span>'}</div>
+          ${inst.court_no?`<div class="cal-chip-sub">${esc(inst.court_no)}</div>`:''}
+          <div class="cal-chip-sub chip-coach">${cn||'—'}</div>
         </div>`;
       }).join('')}
     </div>`;
