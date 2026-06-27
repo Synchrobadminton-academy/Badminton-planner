@@ -46,25 +46,26 @@ ALLOWED_TOPICS = set(
 
 claude = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
 
-OCR_PROMPT = """Extract badminton court booking details from receipt. Return ONLY valid JSON:
+OCR_PROMPT = """Extract badminton programme details from receipt. Return ONLY valid JSON:
 
 {
-  "court_date": "YYYY-MM-DD (single date) OR null if date range",
+  "date": "YYYY-MM-DD (single date) OR null if recurring",
   "start_date": "YYYY-MM-DD OR null if single date",
   "end_date": "YYYY-MM-DD OR null if single date",
-  "time": "e.g. 4pm, 4pm-6pm, 10:00",
-  "slots": 1,
-  "venue": "venue/location name",
-  "court": "court number or name",
-  "booker": "name of person who booked",
-  "source": "activesg"
+  "start_time": "HH:MM (24-hour format)",
+  "end_time": "HH:MM (24-hour format)",
+  "venue_text": "venue name",
+  "court_no": "court number(s)",
+  "class_type": "ActiveSG",
+  "coach_ids": [],
+  "notes": "any additional details"
 }
 
 Rules:
-- If receipt shows date range: set start_date and end_date (both YYYY-MM-DD), leave court_date null
-- If single date: set court_date, leave start/end null
+- If receipt shows date range: set start_date and end_date, leave date null
+- If single date: set date only
 - If year missing, use 2026
-- slots = duration in hours (e.g. 10am-12pm = 2 slots)
+- start_time / end_time: convert to 24-hour HH:MM (e.g. "10:00", "18:00")
 - Return ONLY JSON, no markdown
 """
 
@@ -102,10 +103,11 @@ def extract_booking_from_image(image_bytes: bytes, mime_type: str = "image/jpeg"
 
 
 def save_booking_to_firebase(booking: dict) -> str | None:
-    """POST booking; returns the Firebase-generated key."""
+    """POST booking to bot_sessions for ActiveSG; returns the Firebase-generated key."""
     try:
+        # Save to bot_sessions (where planner expects ActiveSG data)
         r = requests.post(
-            f"{FIREBASE_URL}/bookings.json",
+            f"{FIREBASE_URL}/bot_sessions.json",
             json=booking,
             timeout=15,
         )
@@ -180,11 +182,12 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         log.warning("Could not extract booking from photo sent by %s", sender)
         return
 
-    # Fill in booker name from Telegram if not on receipt
-    if not booking.get("booker"):
-        booking["booker"] = sender
-
-    booking["source"] = "activesg"
+    # Ensure required fields
+    booking.setdefault("class_type", "ActiveSG")
+    booking.setdefault("coach_ids", [])
+    booking.setdefault("color", "#f59e0b")
+    booking.setdefault("status", "scheduled")
+    booking.setdefault("notes", "")
 
     # Handle recurring programmes (date range) vs single bookings
     bookings_to_save = []
@@ -197,7 +200,7 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
                      len(dates), booking["start_date"], booking["end_date"])
             for date in dates:
                 b = booking.copy()
-                b["court_date"] = date
+                b["date"] = date
                 b.pop("start_date", None)
                 b.pop("end_date", None)
                 bookings_to_save.append(b)
@@ -206,17 +209,20 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
             return
     else:
         # Single booking
+        if not booking.get("date"):
+            log.warning("No date found in receipt")
+            return
         bookings_to_save = [booking]
 
     # Save all bookings
     for b in bookings_to_save:
-        log.info("Saving booking for %s: %s", b.get("court_date"), json.dumps(b))
+        log.info("Saving session for %s: %s", b.get("date"), json.dumps(b))
         key = save_booking_to_firebase(b)
         if not key:
-            log.error("Failed to save booking for date %s", b.get("court_date"))
+            log.error("Failed to save session for date %s", b.get("date"))
             continue
 
-        log.info("Booking saved with key: %s", key)
+        log.info("Session saved with key: %s", key)
 
         # Save image for first booking only
         if b == bookings_to_save[0]:
