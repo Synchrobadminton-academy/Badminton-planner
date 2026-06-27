@@ -248,6 +248,12 @@ def handle_photo(message: types.Message) -> None:
 
 
 def main() -> None:
+    try:
+        bot.delete_webhook()
+        log.info("Webhook deleted (if it existed)")
+    except Exception as e:
+        log.warning("Webhook deletion: %s", e)
+
     log.info("Bot started — listening for photos")
     bot.infinity_polling()
 
