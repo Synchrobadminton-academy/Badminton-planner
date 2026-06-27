@@ -1457,7 +1457,7 @@ function openDay(dt,dow){
         <button class="btn btn-o btn-sm" onclick="cycleDay(${inst.id})">Cycle Status</button>
         <button class="btn btn-o btn-sm" onclick="copyInst(${inst.id})">📋 Copy</button>
         <button class="btn btn-o btn-sm" onclick="openEdit(${inst.id})">✎ Edit</button>
-        <button class="btn btn-o btn-sm btn-red" onclick="if(confirm('Delete?')){delInst(${inst.id});openDay('${dt}',${dow});renderMonth()}">Delete</button>
+        <button class="btn btn-o btn-sm btn-red" onclick="delInst(${inst.id});openDay('${dt}',${dow});renderMonth()">Delete</button>
       </div>
     </div>`;
   });
@@ -1551,7 +1551,7 @@ function toggleRec(){
   document.getElementById('m-rec-btn').className=cur?'btn btn-o':'btn btn-p';
 }
 function deleteCurrentInst(){
-  if(!editId)return;if(!confirm('Delete this session?'))return;
+  if(!editId)return;
   delInst(editId);editId=null;clip=null;
   document.getElementById('sess-modal').classList.remove('open');renderSched();
 }
