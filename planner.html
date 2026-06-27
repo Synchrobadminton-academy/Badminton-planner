@@ -1316,7 +1316,7 @@ function renderMonth(){
         const isActivesg=inst.class_type==='ActiveSG';
         return`<div class="cal-chip" data-inst-id="${inst.id}" style="background:${chipBg};color:${chipTc};border:${chipBorder}">
           ${noCoach&&!isActivesg?'<div class="block-warn">⚠️</div>':''}
-          <div class="cal-chip-venue">${esc(inst.venue_text||'—')}${isActivesg?' (activesg)':''}</div>
+          <div class="cal-chip-venue">${isActivesg?(inst.venue_text?esc(inst.venue_text)+' (activesg)':'(activesg)'):esc(inst.venue_text||'—')}</div>
           <div class="cal-chip-sub">${fmt12(inst.start_time)}–${fmt12(inst.end_time)}</div>
           ${inst.court_no?`<div class="cal-chip-sub">${esc(inst.court_no)}</div>`:''}
           <div class="cal-chip-sub chip-coach">${cn||'—'}</div>
