@@ -46,24 +46,26 @@ ALLOWED_TOPICS = set(
 
 claude = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
 
-OCR_PROMPT = """You are extracting badminton court booking details from a receipt image.
+OCR_PROMPT = """Extract badminton court booking details from receipt. Return ONLY valid JSON:
 
-Return ONLY a JSON object with these exact keys (use null for anything not found):
 {
-  "court_date": "YYYY-MM-DD",
-  "time": "e.g. 4pm, 4pm-6pm, 16:00",
+  "court_date": "YYYY-MM-DD (single date) OR null if date range",
+  "start_date": "YYYY-MM-DD OR null if single date",
+  "end_date": "YYYY-MM-DD OR null if single date",
+  "time": "e.g. 4pm, 4pm-6pm, 10:00",
   "slots": 1,
   "venue": "venue/location name",
   "court": "court number or name",
   "booker": "name of person who booked",
-  "source": "receipt"
+  "source": "activesg"
 }
 
 Rules:
-- court_date must be in YYYY-MM-DD format
-- slots = number of 1-hour time slots booked (e.g. 4pm-6pm = 2 slots)
-- If the year is missing from the receipt, use the current year
-- Return ONLY the JSON, no other text
+- If receipt shows date range: set start_date and end_date (both YYYY-MM-DD), leave court_date null
+- If single date: set court_date, leave start/end null
+- If year missing, use 2026
+- slots = duration in hours (e.g. 10am-12pm = 2 slots)
+- Return ONLY JSON, no markdown
 """
 
 
@@ -114,6 +116,23 @@ def save_booking_to_firebase(booking: dict) -> str | None:
         return None
 
 
+def calculate_weekly_dates(start_date_str: str, end_date_str: str) -> list[str]:
+    """Calculate all Wednesdays between start and end date (inclusive)."""
+    from datetime import datetime, timedelta
+    try:
+        start = datetime.strptime(start_date_str, "%Y-%m-%d")
+        end = datetime.strptime(end_date_str, "%Y-%m-%d")
+        dates = []
+        current = start
+        while current <= end:
+            dates.append(current.strftime("%Y-%m-%d"))
+            current += timedelta(weeks=1)
+        return dates
+    except Exception as e:
+        log.error("Date calculation failed: %s", e)
+        return []
+
+
 def save_image_to_firebase(key: str, image_bytes: bytes, mime_type: str = "image/jpeg") -> bool:
     b64 = base64.b64encode(image_bytes).decode("utf-8")
     try:
@@ -161,29 +180,51 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         log.warning("Could not extract booking from photo sent by %s", sender)
         return
 
-    # Fill in the booker name from Telegram if not on the receipt
+    # Fill in booker name from Telegram if not on receipt
     if not booking.get("booker"):
         booking["booker"] = sender
 
-    # Ensure source field is set correctly (non-activesg so planner imports it)
-    booking["source"] = "receipt"
+    booking["source"] = "activesg"
 
-    log.info("Extracted booking: %s", json.dumps(booking))
+    # Handle recurring programmes (date range) vs single bookings
+    bookings_to_save = []
 
-    # Save booking
-    key = save_booking_to_firebase(booking)
-    if not key:
-        log.error("Failed to save booking for %s", sender)
-        return
-
-    log.info("Booking saved with key: %s", key)
-
-    # Save image alongside booking
-    saved = save_image_to_firebase(key, image_bytes)
-    if saved:
-        log.info("Image saved to booking_images/%s", key)
+    if booking.get("start_date") and booking.get("end_date"):
+        # Recurring weekly programme — create instance for each week
+        dates = calculate_weekly_dates(booking["start_date"], booking["end_date"])
+        if dates:
+            log.info("Recurring programme: %d sessions from %s to %s",
+                     len(dates), booking["start_date"], booking["end_date"])
+            for date in dates:
+                b = booking.copy()
+                b["court_date"] = date
+                b.pop("start_date", None)
+                b.pop("end_date", None)
+                bookings_to_save.append(b)
+        else:
+            log.warning("Failed to calculate weekly dates")
+            return
     else:
-        log.warning("Booking saved but image upload failed for key %s", key)
+        # Single booking
+        bookings_to_save = [booking]
+
+    # Save all bookings
+    for b in bookings_to_save:
+        log.info("Saving booking for %s: %s", b.get("court_date"), json.dumps(b))
+        key = save_booking_to_firebase(b)
+        if not key:
+            log.error("Failed to save booking for date %s", b.get("court_date"))
+            continue
+
+        log.info("Booking saved with key: %s", key)
+
+        # Save image for first booking only
+        if b == bookings_to_save[0]:
+            saved = save_image_to_firebase(key, image_bytes)
+            if saved:
+                log.info("Image saved to booking_images/%s", key)
+            else:
+                log.warning("Image upload failed for key %s", key)
 
 
 def main() -> None:
