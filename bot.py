@@ -38,6 +38,11 @@ FIREBASE_URL = os.environ.get(
     "https://synchroadmin-133f3-default-rtdb.asia-southeast1.firebasedatabase.app",
 ).rstrip("/")
 ALLOWED_CHAT_ID = os.environ.get("ALLOWED_CHAT_ID")  # optional
+# Topic IDs to accept images from (comma-separated)
+# e.g. ALLOWED_TOPICS="123,456"
+ALLOWED_TOPICS = set(
+    int(x.strip()) for x in os.environ.get("ALLOWED_TOPICS", "").split(",") if x.strip()
+) if os.environ.get("ALLOWED_TOPICS") else None
 
 claude = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
 
@@ -134,6 +139,13 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
     msg = update.message
     if not msg or not msg.photo:
         return
+
+    # Filter by topic if configured
+    if ALLOWED_TOPICS:
+        topic_id = msg.message_thread_id or 0
+        if topic_id not in ALLOWED_TOPICS:
+            log.info("Ignoring photo from topic %s (not in allowed list)", topic_id)
+            return
 
     sender = msg.from_user.full_name if msg.from_user else "unknown"
     log.info("Photo received from %s in chat %s", sender, chat_id)
