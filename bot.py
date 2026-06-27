@@ -249,7 +249,7 @@ def handle_photo(message: types.Message) -> None:
 
 def main() -> None:
     log.info("Bot started — listening for photos")
-    bot.infinity_polling(drop_pending_updates=True)
+    bot.infinity_polling()
 
 
 if __name__ == "__main__":
