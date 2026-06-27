@@ -2402,7 +2402,12 @@ async function importBotSessions(){
       // Reload bookings from Firebase after import
       const res=await fetch(`${FIREBASE_URL}/bookings.json`);
       if(res.ok)brBookings=await res.json()||{};
-      renderSched();renderMonth();renderCourts();
+      renderSched();renderMonth();
+      // Update all potentially affected views
+      if(currentView==='courts')renderCourts();
+      if(currentView==='bookings')renderBookingRecords();
+      if(currentView==='receipts')renderReceipts();
+      if(currentView==='dashboard')renderDashboard();
     }
   }catch(err){console.error('importBotSessions:',err);}
 }
