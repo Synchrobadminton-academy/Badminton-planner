@@ -62,7 +62,7 @@ OCR_PROMPT = """Extract badminton programme details from receipt + message conte
 }
 
 Rules:
-- venue_text: Use court location from message caption FIRST, fall back to receipt
+- venue_text: Use court location from message caption FIRST, fall back to receipt. Extract ONLY the sports hall name (e.g. "Clementi Sports Hall", "Yio Chu Kang Sports Centre"), NOT the full address
 - If receipt shows date range: set start_date and end_date, leave date null
 - If single date: set date only
 - If year missing, use 2026
