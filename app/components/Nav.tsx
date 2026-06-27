@@ -6,6 +6,7 @@ const links = [
   { href: "/schedule", label: "Schedule" },
   { href: "/coaches", label: "Coaches" },
   { href: "/tracker", label: "Monthly Tracker" },
+  { href: "/receipts", label: "Receipts" },
 ];
 
 export default function Nav() {

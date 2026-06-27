@@ -60,7 +60,24 @@ function initSchema(db: Database.Database) {
       hours REAL NOT NULL,
       created_at TEXT DEFAULT (datetime('now'))
     );
+
+    CREATE TABLE IF NOT EXISTS receipts (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      firebase_key TEXT UNIQUE NOT NULL,
+      image_data TEXT NOT NULL,
+      mime_type TEXT DEFAULT 'image/jpeg',
+      created_at TEXT DEFAULT (datetime('now'))
+    );
   `);
+
+  // Add firebase_key column to session_instances if it doesn't exist yet
+  const siCols = db.pragma("table_info(session_instances)") as { name: string }[];
+  if (!siCols.some((c) => c.name === "firebase_key")) {
+    db.exec("ALTER TABLE session_instances ADD COLUMN firebase_key TEXT");
+    db.exec(
+      "CREATE UNIQUE INDEX IF NOT EXISTS idx_si_firebase_key ON session_instances(firebase_key) WHERE firebase_key IS NOT NULL"
+    );
+  }
 
   // Seed default venues if empty
   const venueCount = (db.prepare("SELECT COUNT(*) as c FROM venues").get() as { c: number }).c;
@@ -69,6 +86,20 @@ function initSchema(db: Database.Database) {
       "Court 1", "Court 2", "Court 3"
     );
   }
+}
+
+/** Find or create a coach by name; returns the coach id. */
+export function findOrCreateCoach(db: Database.Database, name: string): number {
+  const existing = db.prepare("SELECT id FROM coaches WHERE name = ?").get(name) as { id: number } | undefined;
+  if (existing) return existing.id;
+  return (db.prepare("INSERT INTO coaches (name, contact, hourly_rate, active) VALUES (?,?,?,?)").run(name, "", 0, 1).lastInsertRowid) as number;
+}
+
+/** Find or create a venue by name; returns the venue id. */
+export function findOrCreateVenue(db: Database.Database, name: string): number {
+  const existing = db.prepare("SELECT id FROM venues WHERE name = ?").get(name) as { id: number } | undefined;
+  if (existing) return existing.id;
+  return (db.prepare("INSERT INTO venues (name) VALUES (?)").run(name).lastInsertRowid) as number;
 }
 
 export function computeHours(startTime: string, endTime: string): number {

@@ -37,7 +37,22 @@ export interface SessionInstance {
   end_time: string;
   status: "scheduled" | "completed" | "cancelled";
   hours: number;
+  firebase_key?: string;
   // joined fields
   coach_name?: string;
   venue_name?: string;
+}
+
+export interface Receipt {
+  id: number;
+  firebase_key: string;
+  image_data: string;
+  mime_type: string;
+  created_at: string;
+  date: string | null;
+  start_time: string | null;
+  end_time: string | null;
+  status: string | null;
+  hours: number | null;
+  venue_name: string | null;
 }
