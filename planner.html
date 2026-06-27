@@ -2235,6 +2235,8 @@ let courtsSelectedDate=null;
 
 async function loadBookingsFromFirebase(){
   try{
+    // Import any pending bot sessions first
+    await importBotSessions();
     const res=await fetch(`${FIREBASE_URL}/bookings.json`);
     brBookings=res.ok?(await res.json()||{}):{};
     if(currentView==='bookings')renderBookingRecords();
