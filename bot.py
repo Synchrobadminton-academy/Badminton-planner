@@ -107,7 +107,7 @@ RECEIPT TYPE 2 — programme_roster
   - participants: copy EVERY name from the S/N numbered list, in order.
   - start_date / end_date from the Programme Date range in the spreadsheet.
   - Times: 24-hour HH:MM (4:00 pm → 16:00).
-  - Missing year → use 2026.
+  - Missing year → infer from today's date (see footer note).
 
 ════════════════════════════════════════════════════
 If the type cannot be determined: {"receipt_type": "unknown"}
@@ -116,11 +116,18 @@ Return ONLY JSON — no markdown fences.
 
 
 def extract_booking_from_image(
-    image_bytes: bytes, mime_type: str = "image/jpeg", caption: str = ""
+    image_bytes: bytes, mime_type: str = "image/jpeg", caption: str = "", send_date: str = ""
 ) -> dict | None:
     b64 = base64.b64encode(image_bytes).decode("utf-8")
     try:
         prompt = OCR_PROMPT
+        if send_date:
+            prompt += (
+                f"\n\nToday's date (when this screenshot was sent): {send_date}. "
+                "If any date on the receipt is missing the year, infer the year so the "
+                "date falls within the next 3 months from today. Sessions are typically "
+                "booked 1–4 weeks in advance."
+            )
         if caption:
             prompt += (
                 "\n\nTelegram caption "
@@ -319,7 +326,7 @@ def handle_photo(message: types.Message) -> None:
         log.error("Failed to download photo: %s", e)
         return
 
-    raw = extract_booking_from_image(image_bytes, caption=caption)
+    raw = extract_booking_from_image(image_bytes, caption=caption, send_date=payment_date)
     if not raw:
         log.warning("OCR returned nothing for photo from %s", sender)
         return
