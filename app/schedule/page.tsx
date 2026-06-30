@@ -76,6 +76,11 @@ export default function SchedulePage() {
     setInstances(await res.json());
   }, [monday, sunday]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Auto-sync from Telegram on first load so new bookings appear immediately
+  useEffect(() => {
+    fetch("/api/firebase-sync", { method: "POST" }).then(() => fetchInstances());
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
   useEffect(() => {
     fetchInstances();
   }, [fetchInstances]);
