@@ -1,0 +1,13 @@
+{
+  "name": "badminton-planner",
+  "version": "1.0.0",
+  "description": "Badminton coach manpower planner",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js"
+  },
+  "keywords": ["badminton", "planner", "coaching"],
+  "author": "",
+  "license": "ISC"
+}
