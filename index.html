@@ -397,7 +397,6 @@ function checkPw(){
       <div class="tab-item" data-view="bookers" onclick="showView('bookers')"><span class="tab-icon">💼</span>Bookers</div>
 <div class="tab-item" data-view="bookings" onclick="showView('bookings')"><span class="tab-icon">🗓</span>Booking Records</div>
       <div class="tab-item" data-view="receipts" onclick="showView('receipts')"><span class="tab-icon">🧾</span>Receipts</div>
-      <div class="tab-item" data-view="debug" onclick="showView('debug')"><span class="tab-icon">🔧</span>Debug</div>
     </div>
   </div>
 </aside>
@@ -411,17 +410,6 @@ function checkPw(){
 
 <!-- DASHBOARD -->
 <div class="view active" id="view-dashboard"><div class="main-inner dash-wrap"></div></div>
-
-<!-- DEBUG -->
-<div class="view" id="view-debug">
-  <div class="card"><div class="card-hdr">Data Diagnostics</div><div class="card-body" id="debug-body" style="font-size:12px;line-height:1.8"></div></div>
-  <div class="card"><div class="card-hdr">Actions</div><div class="card-body" style="display:flex;gap:8px;flex-wrap:wrap">
-    <button class="btn btn-p" onclick="debugRebuild()">Force Rebuild Sessions from Receipts</button>
-    <button class="btn btn-o" onclick="renderDebug()">Refresh</button>
-  </div></div>
-  <div class="card"><div class="card-hdr">Instances on Calendar</div><div class="card-body" id="debug-insts" style="font-size:11px;line-height:1.8;font-family:monospace;word-break:break-all"></div></div>
-  <div class="card"><div class="card-hdr">Bookings (non-ActiveSG)</div><div class="card-body" id="debug-bookings" style="font-size:11px;line-height:1.8;font-family:monospace;word-break:break-all"></div></div>
-</div>
 
 <!-- SCHEDULE -->
 <div class="view" id="view-schedule">
@@ -793,7 +781,6 @@ async function syncLoop(){
     else if(currentView==='schedule')renderSched();
     else if(currentView==='coaches')renderCoaches();
     else if(currentView==='courts')renderCourts();
-    else if(currentView==='debug')renderDebug();
   }finally{
     syncInProgress=false;
     if(statusEl){statusEl.style.background='#10b981';}
@@ -979,7 +966,6 @@ function showView(v){
   if(v==='receipts'){renderReceipts();loadBookingsFromFirebase();}
   if(v==='bookers'){loadBookingsFromFirebase();renderBookers();}
   if(v==='analytics')renderAnalytics();
-  if(v==='debug')renderDebug();
 }
 
 // ── SCHED TOGGLE ──────────────────────────────────────────────
@@ -2416,52 +2402,6 @@ async function importBotSessions(){
 
 function renderAdmin(){}
 
-function renderDebug(){
-  const insts=getInsts();
-  const sessions=S.get('sessions');
-  const bookings=Object.entries(brBookings).filter(([,b])=>b&&b.source!=='activesg');
-  const el=document.getElementById('debug-body');
-  if(!el)return;
-  el.innerHTML=`
-    <b>Sessions in Firebase:</b> ${sessions.length}<br>
-    <b>Instances on calendar:</b> ${insts.length}<br>
-    <b>Non-ActiveSG bookings:</b> ${bookings.length}<br>
-    <b>Pending Firebase writes:</b> ${[...pendingWrites].join(', ')||'none'}<br>
-  `;
-  const instsEl=document.getElementById('debug-insts');
-  if(instsEl)instsEl.innerHTML=insts.length?insts.map(i=>`<div>id=${i.id} sess=${i.session_id} date=${i.date} venue=${esc(i.venue_text||'')} ${i.start_time}–${i.end_time}</div>`).join(''):'<em>No instances</em>';
-  const bkEl=document.getElementById('debug-bookings');
-  if(bkEl)bkEl.innerHTML=bookings.length?bookings.map(([k,b])=>{
-    const cd=normalizeCourtDate(b.court_date||b.date||b.payment_date||'');
-    const parsed=parseBookingTime(b.time,b.slots);
-    return`<div style="margin-bottom:6px;padding-bottom:6px;border-bottom:1px solid var(--bdr)">
-      <b>${k}</b> &nbsp; date: ${cd} &nbsp; slots: ${b.slots??'(not set)'} &nbsp; source: ${b.source||'none'}<br>
-      time field: "${b.time||''}" &nbsp; → &nbsp; parsed: ${parsed?parsed.start+'–'+parsed.end:'(failed)'} &nbsp; sess_id: ${b.session_id||'none'}
-    </div>`;
-  }).join(''):'<em>No non-ActiveSG bookings found</em>';
-}
-
-async function debugRebuild(){
-  const el=document.getElementById('debug-body');
-  if(el)el.innerHTML='<em>Rebuilding…</em>';
-  // Clear existing receipt-sourced instances (those whose session_id matches a booking's session_id)
-  const bookings=Object.entries(brBookings).filter(([,b])=>b&&b.source!=='activesg');
-  const bookingSessIds=new Set(bookings.map(([,b])=>b.session_id).filter(Boolean));
-  let insts=getInsts().filter(i=>!bookingSessIds.has(i.session_id));
-  let sessions=S.get('sessions').filter(s=>!bookingSessIds.has(s.id));
-  S.set('instances',insts);
-  S.set('sessions',sessions);
-  // Clear session_id from bookings in Firebase so they get re-imported
-  for(const[key,b]of bookings){
-    if(b.session_id){
-      await fetch(`${FIREBASE_URL}/bookings/${key}/session_id.json`,{method:'DELETE'});
-      if(brBookings[key])delete brBookings[key].session_id;
-    }
-  }
-  await new Promise(r=>setTimeout(r,1000));
-  await importReceiptSessions();
-  renderDebug();
-}
 
 // Helper: get payment date (falls back to created_at or date for old records)
 function getPaymentDate(b){return b.payment_date||b.created_at?.slice(0,10)||b.date||'';}
