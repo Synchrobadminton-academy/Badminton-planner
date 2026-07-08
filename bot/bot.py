@@ -18,7 +18,7 @@ import json
 import logging
 import os
 import re
-from datetime import datetime
+from datetime import datetime, timedelta
 
 import anthropic
 import requests
@@ -141,9 +141,8 @@ def calculate_weekly_dates(start_date_str: str, end_date_str: str) -> list[str]:
         current = start
         while current <= end:
             dates.append(current.strftime("%Y-%m-%d"))
-            current = current.replace(day=current.day + 7) if False else \
-                      datetime.fromtimestamp(current.timestamp() + 7 * 86400)
-        return [d for d in dates if datetime.strptime(d, "%Y-%m-%d") <= end]
+            current += timedelta(weeks=1)
+        return dates
     except Exception as e:
         log.error("Date calculation failed: %s", e)
         return []
