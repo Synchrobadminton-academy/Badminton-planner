@@ -18,6 +18,7 @@ import json
 import logging
 import os
 import re
+from datetime import datetime
 
 import anthropic
 import requests
@@ -37,8 +38,6 @@ FIREBASE_URL = os.environ.get(
     "https://synchroadmin-133f3-default-rtdb.asia-southeast1.firebasedatabase.app",
 ).rstrip("/")
 ALLOWED_CHAT_ID = os.environ.get("ALLOWED_CHAT_ID")  # optional
-# Topic IDs to accept images from (comma-separated)
-# e.g. ALLOWED_TOPICS="123,456"
 ALLOWED_TOPICS = set(
     int(x.strip()) for x in os.environ.get("ALLOWED_TOPICS", "").split(",") if x.strip()
 ) if os.environ.get("ALLOWED_TOPICS") else None
@@ -46,38 +45,50 @@ ALLOWED_TOPICS = set(
 claude = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
 bot = telebot.TeleBot(TELEGRAM_BOT_TOKEN)
 
-OCR_PROMPT = """Extract badminton programme details from receipt + message context. Return ONLY valid JSON:
 
-{
-  "date": "YYYY-MM-DD (single date) OR null if recurring",
-  "start_date": "YYYY-MM-DD OR null if single date",
-  "end_date": "YYYY-MM-DD OR null if single date",
-  "start_time": "HH:MM (24-hour format)",
-  "end_time": "HH:MM (24-hour format)",
-  "venue_text": "exact court location from message or receipt",
+def build_ocr_prompt(caption: str = "") -> str:
+    year = datetime.now().year
+    prompt = f"""Extract badminton court booking details from this receipt image. Return ONLY a valid JSON object, no markdown, no explanation.
+
+{{
+  "date": "YYYY-MM-DD (single booking) OR null if recurring weekly",
+  "start_date": "YYYY-MM-DD OR null if single booking",
+  "end_date": "YYYY-MM-DD OR null if single booking",
+  "start_time": "HH:MM (24-hour)",
+  "end_time": "HH:MM (24-hour)",
+  "venue_text": "sports hall name only",
   "court_no": "court number(s)",
   "class_type": "ActiveSG",
   "coach_ids": [],
-  "notes": "any additional details"
-}
+  "notes": "any extra details"
+}}
 
-Rules:
-- venue_text: Use court location from message caption FIRST, fall back to receipt. Extract ONLY the sports hall name (e.g. "Clementi Sports Hall", "Yio Chu Kang Sports Centre"), NOT the full address
-- If receipt shows date range: set start_date and end_date, leave date null
-- If single date: set date only
-- If year missing, use 2026
-- start_time / end_time: convert to 24-hour HH:MM (e.g. "10:00", "18:00")
-- Return ONLY JSON, no markdown
-"""
+Rules — follow these exactly:
+
+1. YEAR: Receipts never print the year. ALWAYS use {year} for every date. Never use any other year regardless of what you see.
+
+2. TIME SLOTS: ActiveSG receipts list individual 1-hour slots (e.g. "3:00 pm", "4:00 pm"). These are consecutive bookings in one block. Merge them:
+   - start_time = the EARLIEST slot time
+   - end_time = the LATEST slot time + 1 hour
+   - Example: slots at 3pm and 4pm → start_time="15:00", end_time="17:00"
+   - Example: slots at 4pm and 5pm → start_time="16:00", end_time="18:00"
+   - Example: slots at 10am, 11am, 12pm → start_time="10:00", end_time="13:00"
+   - Example: single slot at 7pm → start_time="19:00", end_time="20:00"
+
+3. VENUE: Use the message caption first if provided, then fall back to the receipt. Extract ONLY the sports hall name (e.g. "Bukit Canberra Sport Hall", "Clementi Sport Hall") — not the full address.
+
+4. RECURRING: If the receipt shows a date range for a weekly programme, set start_date and end_date (leave date null). Otherwise set date only.
+
+5. Return ONLY the JSON object."""
+
+    if caption:
+        prompt += f"\n\nMessage caption (use for venue and context):\n{caption}"
+    return prompt
 
 
 def extract_booking_from_image(image_bytes: bytes, mime_type: str = "image/jpeg", caption: str = "") -> dict | None:
     b64 = base64.b64encode(image_bytes).decode("utf-8")
     try:
-        prompt = OCR_PROMPT
-        if caption:
-            prompt += f"\n\nAdditional context from message:\n{caption}"
-
         response = claude.messages.create(
             model="claude-haiku-4-5-20251001",
             max_tokens=512,
@@ -93,24 +104,23 @@ def extract_booking_from_image(image_bytes: bytes, mime_type: str = "image/jpeg"
                                 "data": b64,
                             },
                         },
-                        {"type": "text", "text": prompt},
+                        {"type": "text", "text": build_ocr_prompt(caption)},
                     ],
                 }
             ],
         )
         raw = response.content[0].text.strip()
-        # Strip markdown code fences if present
         raw = re.sub(r"^```[a-z]*\n?", "", raw).rstrip("`").strip()
-        return json.loads(raw)
+        result = json.loads(raw)
+        log.info("OCR result: %s", json.dumps(result))
+        return result
     except Exception as e:
         log.error("OCR failed: %s", e)
         return None
 
 
 def save_booking_to_firebase(booking: dict) -> str | None:
-    """POST booking to bot_sessions for ActiveSG; returns the Firebase-generated key."""
     try:
-        # Save to bot_sessions (where planner expects ActiveSG data)
         r = requests.post(
             f"{FIREBASE_URL}/bot_sessions.json",
             json=booking,
@@ -124,8 +134,6 @@ def save_booking_to_firebase(booking: dict) -> str | None:
 
 
 def calculate_weekly_dates(start_date_str: str, end_date_str: str) -> list[str]:
-    """Calculate all Wednesdays between start and end date (inclusive)."""
-    from datetime import datetime, timedelta
     try:
         start = datetime.strptime(start_date_str, "%Y-%m-%d")
         end = datetime.strptime(end_date_str, "%Y-%m-%d")
@@ -133,8 +141,9 @@ def calculate_weekly_dates(start_date_str: str, end_date_str: str) -> list[str]:
         current = start
         while current <= end:
             dates.append(current.strftime("%Y-%m-%d"))
-            current += timedelta(weeks=1)
-        return dates
+            current = current.replace(day=current.day + 7) if False else \
+                      datetime.fromtimestamp(current.timestamp() + 7 * 86400)
+        return [d for d in dates if datetime.strptime(d, "%Y-%m-%d") <= end]
     except Exception as e:
         log.error("Date calculation failed: %s", e)
         return []
@@ -163,26 +172,21 @@ def handle_photo(message: types.Message) -> None:
         log.info("Ignoring message from chat %s", chat_id)
         return
 
-    # Get topic ID from message (message_thread_id in telegram library)
     topic_id = getattr(message, 'message_thread_id', None) or 0
     sender = message.from_user.full_name if message.from_user else "unknown"
     log.info("📸 Photo from %s | Topic ID: %s | Chat: %s", sender, topic_id, chat_id)
 
-    # Filter by topic if configured
-    if ALLOWED_TOPICS:
-        if topic_id not in ALLOWED_TOPICS:
-            log.info("❌ Ignoring — topic %s not in ALLOWED_TOPICS", topic_id)
-            return
+    if ALLOWED_TOPICS and topic_id not in ALLOWED_TOPICS:
+        log.info("❌ Ignoring — topic %s not in ALLOWED_TOPICS", topic_id)
+        return
 
-    # Get message caption/text (contains court location and other details)
     caption = message.caption or message.text or ""
-    log.info("Message caption: %s", caption)
+    log.info("Caption: %s", caption or "(none)")
 
-    # Download the photo
     if not message.photo:
         return
 
-    photo = message.photo[-1]  # Highest resolution
+    photo = message.photo[-1]
     try:
         file_info = bot.get_file(photo.file_id)
         image_bytes = bot.download_file(file_info.file_path)
@@ -190,28 +194,23 @@ def handle_photo(message: types.Message) -> None:
         log.error("Failed to download photo: %s", e)
         return
 
-    # OCR with caption context
     booking = extract_booking_from_image(image_bytes, caption=caption)
     if not booking:
         log.warning("Could not extract booking from photo sent by %s", sender)
         return
 
-    # Ensure required fields
     booking.setdefault("class_type", "ActiveSG")
     booking.setdefault("coach_ids", [])
     booking.setdefault("color", "#f59e0b")
     booking.setdefault("status", "scheduled")
     booking.setdefault("notes", "")
 
-    # Handle recurring programmes (date range) vs single bookings
     bookings_to_save = []
 
     if booking.get("start_date") and booking.get("end_date"):
-        # Recurring weekly programme — create instance for each week
         dates = calculate_weekly_dates(booking["start_date"], booking["end_date"])
         if dates:
-            log.info("Recurring programme: %d sessions from %s to %s",
-                     len(dates), booking["start_date"], booking["end_date"])
+            log.info("Recurring: %d sessions from %s to %s", len(dates), booking["start_date"], booking["end_date"])
             for date in dates:
                 b = booking.copy()
                 b["date"] = date
@@ -222,26 +221,21 @@ def handle_photo(message: types.Message) -> None:
             log.warning("Failed to calculate weekly dates")
             return
     else:
-        # Single booking
         if not booking.get("date"):
             log.warning("No date found in receipt")
             return
         bookings_to_save = [booking]
 
-    # Save all bookings
-    for b in bookings_to_save:
-        log.info("Saving session for %s: %s", b.get("date"), json.dumps(b))
+    for i, b in enumerate(bookings_to_save):
+        log.info("Saving booking for %s: %s–%s at %s", b.get("date"), b.get("start_time"), b.get("end_time"), b.get("venue_text"))
         key = save_booking_to_firebase(b)
         if not key:
-            log.error("Failed to save session for date %s", b.get("date"))
+            log.error("Failed to save booking for date %s", b.get("date"))
             continue
+        log.info("Saved with key: %s", key)
 
-        log.info("Session saved with key: %s", key)
-
-        # Save image for first booking only
-        if b == bookings_to_save[0]:
-            saved = save_image_to_firebase(key, image_bytes)
-            if saved:
+        if i == 0:
+            if save_image_to_firebase(key, image_bytes):
                 log.info("Image saved to booking_images/%s", key)
             else:
                 log.warning("Image upload failed for key %s", key)
