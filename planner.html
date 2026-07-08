@@ -242,14 +242,6 @@ table.sched td.tslot.cell-target{background:rgba(37,99,235,.22)!important;outlin
 .blank-view .blank-sub{font-size:12px;color:var(--txf)}
 
 /* Bookers */
-.booker-hub{display:flex;flex-direction:column;align-items:center;gap:16px;padding:20px;background:var(--surf2);border-radius:12px;margin-bottom:16px}
-.booker-center{width:80px;height:80px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-weight:700;color:#fff;font-size:13px;text-align:center;line-height:1.2;box-shadow:0 4px 12px rgba(0,0,0,.15)}
-.booker-bubble{width:60px;height:60px;border-radius:50%;background:var(--surf);border:2px solid var(--bdr);display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;text-align:center;cursor:pointer;transition:all .2s;white-space:normal;padding:4px;position:relative;overflow:hidden}
-.booker-bubble:hover{transform:scale(1.1);box-shadow:0 4px 12px rgba(0,0,0,.2)}
-.booker-bubble.unassigned{background:rgba(100,116,139,.1);border-color:var(--txm)}
-.booker-circle{display:flex;flex-wrap:wrap;gap:12px;justify-content:center;max-width:500px}
-.booker-remove{position:absolute;top:-8px;right:-8px;width:22px;height:22px;background:#ef4444;color:#fff;border:none;border-radius:50%;font-size:13px;cursor:pointer;display:none;align-items:center;justify-content:center;font-weight:700}
-.booker-bubble:hover .booker-remove{display:flex}
 
 /* Mobile */
 @media(max-width:768px){
@@ -395,7 +387,7 @@ function checkPw(){
       <div class="tab-item" data-view="analytics" onclick="showView('analytics')"><span class="tab-icon">📈</span>Analytics</div>
       <div class="tab-item" data-view="coaches" onclick="showView('coaches')"><span class="tab-icon">⚙️</span>Calendar Settings</div>
       <div class="tab-item" data-view="bookers" onclick="showView('bookers')"><span class="tab-icon">💼</span>Bookers</div>
-<div class="tab-item" data-view="bookings" onclick="showView('bookings')"><span class="tab-icon">🗓</span>Booking Records</div>
+      <div class="tab-item" data-view="bookings" onclick="showView('bookings')"><span class="tab-icon">🗓</span>Booking Records</div>
       <div class="tab-item" data-view="receipts" onclick="showView('receipts')"><span class="tab-icon">🧾</span>Receipts</div>
     </div>
   </div>
@@ -564,19 +556,15 @@ function checkPw(){
   </div>
 </div>
 
-<!-- BOOKERS -->
+<!-- BOOKERS (blank for now) -->
 <div class="view" id="view-bookers">
-  <div class="page-hdr"><h1 class="page-title">Booker Teams</h1></div>
-  <div id="bookers-teams"></div>
-  <div class="card">
-    <div class="card-hdr">Unassigned Bookers</div>
-    <div class="card-body">
-      <div id="bookers-unassigned" style="display:flex;flex-wrap:wrap;gap:8px"></div>
-    </div>
+  <div class="main-inner">
+    <div class="page-hdr"><h1 class="page-title">Bookers</h1></div>
+    <div class="empty" style="padding:40px 0">Nothing here yet.</div>
   </div>
 </div>
 
-<!-- BOOKINGS (blank) -->
+<!-- BOOKING RECORDS -->
 <div class="view" id="view-bookings">
   <div class="main-inner">
     <div class="page-hdr">
@@ -622,8 +610,13 @@ function checkPw(){
   </div>
 </div>
 
-<!-- ANALYTICS -->
-<div class="view" id="view-analytics"><div class="main-inner"><div class="empty" style="padding:40px">Loading…</div></div></div>
+<!-- ANALYTICS (blank for now) -->
+<div class="view" id="view-analytics">
+  <div class="main-inner">
+    <div class="page-hdr"><h1 class="page-title">Analytics</h1></div>
+    <div class="empty" style="padding:40px 0">Nothing here yet.</div>
+  </div>
+</div>
 
 </div><!-- /main-inner -->
 </div><!-- /main-content -->
@@ -965,8 +958,6 @@ function showView(v){
   if(v==='bookings')loadBookingsFromFirebase();
   if(v==='courts'){renderCourts();loadBookingsFromFirebase();}
   if(v==='receipts'){renderReceipts();loadBookingsFromFirebase();}
-  if(v==='bookers'){loadBookingsFromFirebase();renderBookers();}
-  if(v==='analytics')renderAnalytics();
 }
 
 // ── SCHED TOGGLE ──────────────────────────────────────────────
@@ -1907,175 +1898,6 @@ function renderDashboard(){
 
 
 
-// ── ANALYTICS ────────────────────────────────────────────────
-function classCategory(ct){
-  if(!ct)return'group';
-  const found=getClassTypes().find(x=>x.name.toLowerCase()===ct.toLowerCase());
-  if(found)return found.cat;
-  // fallback by keyword for legacy data
-  const t=ct.toLowerCase();
-  if(t.includes('activesg'))return'activesg';
-  if(t.includes('private'))return'private';
-  return'group';
-}
-
-function buildStudentMap(){
-  const map={};
-  getInsts().filter(i=>i.status!=='cancelled').forEach(inst=>{
-    getAttendance(inst.id).forEach(a=>{
-      const key=a.name.trim().toLowerCase();
-      if(!map[key])map[key]={name:a.name.trim(),sessions:[]};
-      map[key].sessions.push({date:inst.date,class_type:inst.class_type||'',numCoaches:(inst.coach_ids||[]).length});
-    });
-  });
-  return map;
-}
-
-function renderAnalytics(){
-  const el=document.getElementById('view-analytics');
-  const insts=getInsts().filter(i=>i.status!=='cancelled');
-  const sm=buildStudentMap();
-  const students=Object.values(sm);
-  const today=new Date();
-  const todayStr=ds(today);
-
-  // 1. Active students — attended in last 14 days
-  const cut14=ds(new Date(today.getFullYear(),today.getMonth(),today.getDate()-14));
-  const activeSet=new Set();
-  students.forEach(s=>{if(s.sessions.some(x=>x.date>=cut14))activeSet.add(s.name.toLowerCase());});
-  const totalActive=activeSet.size;
-
-  // 2. Class fill rate — ActiveSG cap 16, Group cap 5×coaches
-  let asFill=0,asN=0,grFill=0,grN=0;
-  insts.forEach(inst=>{
-    const cat=classCategory(inst.class_type);
-    const att=getAttendance(inst.id);
-    if(cat==='activesg'){asFill+=att.length/16;asN++;}
-    else if(cat==='group'){const nc=Math.max(1,(inst.coach_ids||[]).length);grFill+=att.length/(5*nc);grN++;}
-  });
-  const asRate=asN?Math.round(asFill/asN*100):null;
-  const grRate=grN?Math.round(grFill/grN*100):null;
-
-  // 3. Drop-off rate — last seen >60 days ago (exclude ASG-only students)
-  const cut60=ds(new Date(today.getFullYear(),today.getMonth(),today.getDate()-60));
-  let dropped=0;
-  students.forEach(s=>{
-    const last=s.sessions.map(x=>x.date).sort().pop();
-    if(last<cut60&&s.sessions.some(x=>classCategory(x.class_type)!=='activesg'))dropped++;
-  });
-  const dropRate=students.length?Math.round(dropped/students.length*100):null;
-
-  // 4. Conversion rate — attended ASG then later Group
-  let asgBase=0,conv=0;
-  students.forEach(s=>{
-    const asgFirst=s.sessions.filter(x=>classCategory(x.class_type)==='activesg').map(x=>x.date).sort()[0];
-    if(!asgFirst)return;
-    asgBase++;
-    if(s.sessions.some(x=>classCategory(x.class_type)==='group'&&x.date>asgFirst))conv++;
-  });
-  const convRate=asgBase?Math.round(conv/asgBase*100):null;
-
-  // 5. Coach:student ratio by type
-  const rmap={activesg:[0,0],private:[0,0],group:[0,0]};
-  insts.forEach(inst=>{
-    const cat=classCategory(inst.class_type);
-    const att=getAttendance(inst.id);
-    if(!att.length)return;
-    const nc=(inst.coach_ids||[]).length||1;
-    rmap[cat][0]+=att.length/nc;rmap[cat][1]++;
-  });
-
-  // 6. Retention rate — 2+ sessions
-  const retained=students.filter(s=>s.sessions.length>=2).length;
-  const retRate=students.length?Math.round(retained/students.length*100):null;
-
-  // 7. Avg student tenure
-  let tenSum=0,tenN=0;
-  students.forEach(s=>{
-    if(s.sessions.length<2)return;
-    const dates=s.sessions.map(x=>x.date).sort();
-    tenSum+=Math.round((new Date(dates[dates.length-1])-new Date(dates[0]))/86400000);
-    tenN++;
-  });
-  const avgTenure=tenN?Math.round(tenSum/tenN):null;
-
-  // 8. New sign-ups per month
-  const signups={};
-  students.forEach(s=>{
-    const first=s.sessions.map(x=>x.date).sort()[0];
-    if(first){const mo=first.slice(0,7);signups[mo]=(signups[mo]||0)+1;}
-  });
-  const signupRows=Object.entries(signups).sort((a,b)=>b[0].localeCompare(a[0]));
-
-  const fmtPct=v=>v!==null?v+'%':'—';
-  const fmtRatio=r=>r[1]?`1 : ${Math.round(r[0]/r[1])}`:'—';
-
-  el.innerHTML=`<div class="main-inner">
-    <div class="page-hdr"><h1 class="page-title">Analytics</h1></div>
-    <div class="anl-grid">
-      <div class="anl-card">
-        <div class="anl-val">${totalActive}</div>
-        <div class="anl-lbl">Active Students</div>
-        <div class="anl-sub">attended in last 14 days</div>
-      </div>
-      <div class="anl-card">
-        <div class="anl-val">${fmtPct(asRate)}</div>
-        <div class="anl-lbl">ActiveSG Fill Rate</div>
-        <div class="anl-sub">avg vs cap of 16</div>
-      </div>
-      <div class="anl-card">
-        <div class="anl-val">${fmtPct(grRate)}</div>
-        <div class="anl-lbl">Group Fill Rate</div>
-        <div class="anl-sub">avg vs 5 per coach</div>
-      </div>
-      <div class="anl-card">
-        <div class="anl-val">${fmtPct(dropRate)}</div>
-        <div class="anl-lbl">Drop-off Rate</div>
-        <div class="anl-sub">last seen &gt;60 days ago</div>
-      </div>
-      <div class="anl-card">
-        <div class="anl-val">${fmtPct(convRate)}</div>
-        <div class="anl-lbl">Conversion Rate</div>
-        <div class="anl-sub">ActiveSG → Group</div>
-      </div>
-      <div class="anl-card">
-        <div class="anl-val">${fmtPct(retRate)}</div>
-        <div class="anl-lbl">Retention Rate</div>
-        <div class="anl-sub">attended 2+ sessions</div>
-      </div>
-      <div class="anl-card">
-        <div class="anl-val">${avgTenure!==null?avgTenure+'d':'—'}</div>
-        <div class="anl-lbl">Avg Student Tenure</div>
-        <div class="anl-sub">first → last session</div>
-      </div>
-      <div class="anl-card">
-        <div style="font-size:11px;font-weight:800;color:var(--txm);text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px">Coach : Student</div>
-        ${['activesg','group','private'].map(t=>`
-          <div style="display:flex;justify-content:space-between;align-items:center;padding:5px 0;border-bottom:1px solid var(--bdr);font-size:12px">
-            <span style="color:var(--txm)">${t==='activesg'?'ActiveSG':t==='group'?'Group':'Private'}</span>
-            <span style="font-weight:700">${fmtRatio(rmap[t])}</span>
-          </div>`).join('')}
-      </div>
-    </div>
-    ${signupRows.length?`<div class="card">
-      <div class="card-hdr">New Sign-ups per Month</div>
-      <table style="width:100%;border-collapse:collapse">
-        <thead><tr style="border-bottom:1px solid var(--bdr)">
-          <th style="padding:9px 14px;text-align:left;font-size:11px;color:var(--txm);font-weight:700">Month</th>
-          <th style="padding:9px 14px;text-align:right;font-size:11px;color:var(--txm);font-weight:700">New Students</th>
-        </tr></thead>
-        <tbody>${signupRows.map(([mo,cnt])=>{
-          const[y,m]=mo.split('-').map(Number);
-          const lbl=new Date(y,m-1,1).toLocaleString('default',{month:'long',year:'numeric'});
-          return`<tr style="border-bottom:1px solid var(--bdr)">
-            <td style="padding:9px 14px;font-size:12px">${lbl}</td>
-            <td style="padding:9px 14px;font-size:12px;font-weight:700;text-align:right">${cnt}</td>
-          </tr>`;
-        }).join('')}</tbody>
-      </table>
-    </div>`:'<div class="card"><div class="empty">No attendance data yet.</div></div>'}
-  </div>`;
-}
 
 // ── ATTENDANCE VIEW ───────────────────────────────────────────
 let attDetailId=null;
@@ -2401,7 +2223,6 @@ async function importBotSessions(){
   }catch(err){console.error('importBotSessions:',err);}
 }
 
-function renderAdmin(){}
 
 // Helper: get payment date (falls back to created_at or date for old records)
 function getPaymentDate(b){return b.payment_date||b.created_at?.slice(0,10)||b.date||'';}
@@ -2721,63 +2542,7 @@ function markNoLesson(key,val){
     });
 }
 
-// ── BOOKERS ───────────────────────────────────────────────────
-function renderBookers(){
-  const teamEl=document.getElementById('bookers-teams');
-  const unassignedEl=document.getElementById('bookers-unassigned');
-  if(!teamEl||!unassignedEl)return;
-
-  const bookerMap=S.get('booker_coach_map');
-  const allBookers=new Set(Object.values(brBookings).filter(b=>b&&b.source!=='activesg').map(b=>b.booker).filter(Boolean));
-  const coaches=getCoaches();
-
-  if(!allBookers.size){
-    teamEl.innerHTML='<div class="card"><div class="card-body"><div class="empty" style="color:var(--txm);font-size:12px">No bookers found in receipts yet.</div></div></div>';
-    unassignedEl.innerHTML='';
-    return;
-  }
-
-  const assignedByCoach={};
-  coaches.forEach(c=>{assignedByCoach[c.id]=[];});
-  const unassigned=[];
-
-  allBookers.forEach(booker=>{
-    const coachId=bookerMap[booker];
-    if(coachId&&assignedByCoach[coachId]){
-      assignedByCoach[coachId].push(booker);
-    }else{
-      unassigned.push(booker);
-    }
-  });
-
-  teamEl.innerHTML=coaches.filter(c=>assignedByCoach[c.id].length>0).map(coach=>{
-    const coachColor=coach.color||'#3b82f6';
-    return`<div class="booker-hub">
-      <div class="booker-center" style="background:${coachColor};" title="Coach: ${esc(coach.name)}">${esc(coach.name)}</div>
-      <div class="booker-circle">
-        ${assignedByCoach[coach.id].sort().map(booker=>`<div class="booker-bubble" title="${esc(booker)}">
-          ${esc(booker)}
-          <button class="booker-remove" onclick="assignBooker('${booker.replace(/'/g,"\\'")}',(null))">✕</button>
-        </div>`).join('')}
-      </div>
-    </div>`;
-  }).join('');
-
-  unassignedEl.innerHTML=unassigned.sort().map(booker=>`<div class="booker-bubble unassigned" title="Click to assign">
-    ${esc(booker)}
-    <select onchange="assignBooker('${booker.replace(/'/g,"\\'")}',(this.value||null)|0)" style="position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%">
-      <option value="">Assign to coach...</option>
-      ${getCoaches().map(c=>`<option value="${c.id}">${esc(c.name)}</option>`).join('')}
-    </select>
-  </div>`).join('')||'<div style="color:var(--txm);font-size:12px">All bookers assigned!</div>';
-}
-function assignBooker(bookerName,coachId){
-  const map=S.get('booker_coach_map');
-  if(coachId){map[bookerName]=coachId;}
-  else{delete map[bookerName];}
-  S.set('booker_coach_map',map);
-  renderBookers();
-}
+// ── BOOKER → COACH LOOKUP (used by Receipts) ──────────────────
 function getBookerCoach(bookerName){
   const map=S.get('booker_coach_map');
   const coachId=map[bookerName];
