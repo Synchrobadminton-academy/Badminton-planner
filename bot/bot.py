@@ -47,7 +47,10 @@ bot = telebot.TeleBot(TELEGRAM_BOT_TOKEN)
 
 
 def build_ocr_prompt(caption: str = "") -> str:
-    year = datetime.now().year
+    # Receipts are always for upcoming bookings (~2 weeks out).
+    # Using today+12 days as the reference year means late-December receipts
+    # for January dates correctly resolve to next year.
+    year = (datetime.now() + timedelta(days=12)).year
     prompt = f"""Extract badminton court booking details from this receipt image. Return ONLY a valid JSON object, no markdown, no explanation.
 
 {{
