@@ -18,7 +18,7 @@ import json
 import logging
 import os
 import re
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, date
 
 import anthropic
 import requests
@@ -45,18 +45,12 @@ ALLOWED_TOPICS = set(
 claude = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
 bot = telebot.TeleBot(TELEGRAM_BOT_TOKEN)
 
+OCR_PROMPT = """Extract badminton court booking details from this receipt image. Return ONLY a valid JSON object, no markdown, no explanation.
 
-def build_ocr_prompt(caption: str = "") -> str:
-    # Receipts are always for upcoming bookings (~2 weeks out).
-    # Using today+12 days as the reference year means late-December receipts
-    # for January dates correctly resolve to next year.
-    year = (datetime.now() + timedelta(days=12)).year
-    prompt = f"""Extract badminton court booking details from this receipt image. Return ONLY a valid JSON object, no markdown, no explanation.
-
-{{
-  "date": "YYYY-MM-DD (single booking) OR null if recurring weekly",
-  "start_date": "YYYY-MM-DD OR null if single booking",
-  "end_date": "YYYY-MM-DD OR null if single booking",
+{
+  "date": "MM-DD (single booking) OR null if recurring weekly",
+  "start_date": "MM-DD OR null if single booking",
+  "end_date": "MM-DD OR null if single booking",
   "start_time": "HH:MM (24-hour)",
   "end_time": "HH:MM (24-hour)",
   "venue_text": "sports hall name only",
@@ -64,13 +58,15 @@ def build_ocr_prompt(caption: str = "") -> str:
   "class_type": "ActiveSG",
   "coach_ids": [],
   "notes": "any extra details"
-}}
+}
 
 Rules — follow these exactly:
 
-1. YEAR: Receipts never print the year. ALWAYS use {year} for every date. Never use any other year regardless of what you see.
+1. DATES: Output only MM-DD (month and day, no year). The year will be calculated separately.
+   - Single booking → set "date" as MM-DD, leave start_date and end_date null
+   - Recurring weekly programme with a date range → set start_date and end_date as MM-DD, leave date null
 
-2. TIME SLOTS: ActiveSG receipts list individual 1-hour slots (e.g. "3:00 pm", "4:00 pm"). These are consecutive bookings in one block. Merge them:
+2. TIME SLOTS: ActiveSG receipts list individual 1-hour slots (e.g. "3:00 pm", "4:00 pm"). These are consecutive — merge them into one block:
    - start_time = the EARLIEST slot time
    - end_time = the LATEST slot time + 1 hour
    - Example: slots at 3pm and 4pm → start_time="15:00", end_time="17:00"
@@ -80,10 +76,27 @@ Rules — follow these exactly:
 
 3. VENUE: Use the message caption first if provided, then fall back to the receipt. Extract ONLY the sports hall name (e.g. "Bukit Canberra Sport Hall", "Clementi Sport Hall") — not the full address.
 
-4. RECURRING: If the receipt shows a date range for a weekly programme, set start_date and end_date (leave date null). Otherwise set date only.
+4. Return ONLY the JSON object."""
 
-5. Return ONLY the JSON object."""
 
+def fix_year(mm_dd: str) -> str:
+    """Given a MM-DD string, return YYYY-MM-DD using whichever year is the first future date."""
+    if not mm_dd:
+        return mm_dd
+    try:
+        today = date.today()
+        month, day = map(int, mm_dd.split("-"))
+        candidate = date(today.year, month, day)
+        if candidate < today:
+            candidate = date(today.year + 1, month, day)
+        return candidate.strftime("%Y-%m-%d")
+    except Exception as e:
+        log.error("fix_year failed for %s: %s", mm_dd, e)
+        return mm_dd
+
+
+def build_ocr_prompt(caption: str = "") -> str:
+    prompt = OCR_PROMPT
     if caption:
         prompt += f"\n\nMessage caption (use for venue and context):\n{caption}"
     return prompt
@@ -115,6 +128,13 @@ def extract_booking_from_image(image_bytes: bytes, mime_type: str = "image/jpeg"
         raw = response.content[0].text.strip()
         raw = re.sub(r"^```[a-z]*\n?", "", raw).rstrip("`").strip()
         result = json.loads(raw)
+
+        # Resolve MM-DD fields to full YYYY-MM-DD using first-future-date logic
+        for field in ("date", "start_date", "end_date"):
+            val = result.get(field)
+            if val:
+                result[field] = fix_year(val)
+
         log.info("OCR result: %s", json.dumps(result))
         return result
     except Exception as e:
@@ -213,9 +233,9 @@ def handle_photo(message: types.Message) -> None:
         dates = calculate_weekly_dates(booking["start_date"], booking["end_date"])
         if dates:
             log.info("Recurring: %d sessions from %s to %s", len(dates), booking["start_date"], booking["end_date"])
-            for date in dates:
+            for date_str in dates:
                 b = booking.copy()
-                b["date"] = date
+                b["date"] = date_str
                 b.pop("start_date", None)
                 b.pop("end_date", None)
                 bookings_to_save.append(b)
