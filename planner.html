@@ -294,6 +294,7 @@ table.sched td.tslot.cell-target{background:rgba(37,99,235,.22)!important;outlin
 <nav>
   <button class="ham-btn" onclick="toggleSidebar()" title="Toggle sidebar">☰</button>
   <span class="brand">🏸 Coach Planner</span>
+  <button class="theme-btn" id="sync-btn" onclick="syncFromFirebase()" title="Sync from Telegram bot">🔄</button>
   <button class="theme-btn ml" id="theme-btn" onclick="toggleTheme()">🌙</button>
 </nav>
 
@@ -1647,6 +1648,102 @@ function toggleClassRecord(bodyId,arrowId){
   body.classList.toggle('open');
   if(arrow)arrow.textContent=body.classList.contains('open')?'▼':'▶';
 }
+
+// ── FIREBASE SYNC ─────────────────────────────────────────────
+const FB_URL='https://synchroadmin-133f3-default-rtdb.asia-southeast1.firebasedatabase.app';
+
+function showToast(msg,duration){
+  let t=document.getElementById('fb-toast');
+  if(!t){
+    t=document.createElement('div');t.id='fb-toast';
+    t.style.cssText='position:fixed;top:62px;right:12px;background:#1e293b;color:#fff;padding:10px 16px;border-radius:10px;font-size:12px;font-weight:600;z-index:500;box-shadow:0 4px 20px rgba(0,0,0,.35);max-width:300px;opacity:0;transition:opacity .3s;pointer-events:none';
+    document.body.appendChild(t);
+  }
+  t.textContent=msg;t.style.opacity='1';
+  clearTimeout(t._timer);t._timer=setTimeout(()=>{t.style.opacity='0';},duration||4000);
+}
+
+function dateAddDays(str,days){
+  const[y,m,d]=str.split('-').map(Number);
+  const dt=new Date(y,m-1,d+days);
+  return`${dt.getFullYear()}-${String(dt.getMonth()+1).padStart(2,'0')}-${String(dt.getDate()).padStart(2,'0')}`;
+}
+
+async function syncFromFirebase(){
+  const btn=document.getElementById('sync-btn');
+  if(btn)btn.textContent='⏳';
+  try{
+    const res=await fetch(`${FB_URL}/bot_sessions.json`);
+    if(!res.ok)throw new Error('HTTP '+res.status);
+    const data=await res.json();
+    if(!data||typeof data!=='object'){if(btn)btn.textContent='🔄';return;}
+
+    let imported=0;
+    for(const[key,entry]of Object.entries(data)){
+      if(!entry||entry.processed)continue;
+      if(!entry.start_time||!entry.end_time)continue;
+
+      const instData={
+        coach_ids:entry.coach_ids||[],
+        color:entry.color||'#f59e0b',
+        venue_text:entry.venue_text||'',
+        class_type:entry.class_type||'',
+        standard:entry.standard||'',
+        court_no:entry.court_no||'',
+        notes:entry.notes||'',
+        start_time:entry.start_time,
+        end_time:entry.end_time,
+      };
+
+      // Add venue to venues list if new
+      if(instData.venue_text){
+        const vl=getVenues();
+        if(!vl.includes(instData.venue_text)){vl.push(instData.venue_text);S.set('venues',vl);}
+      }
+
+      const isRecurring=entry.start_date&&entry.end_date;
+      const sess=saveSession({...instData,recurring:isRecurring?1:0,day_of_week:null,date:entry.date||null});
+
+      if(isRecurring){
+        // Expand the date range weekly
+        const l=getInsts();const hrs=compHrs(instData.start_time,instData.end_time);
+        let cur=entry.start_date;
+        while(cur<=entry.end_date){
+          if(!l.find(i=>i.session_id===sess.id&&i.date===cur))
+            l.push({id:S.nextId(l),session_id:sess.id,...instData,date:cur,status:'scheduled',hours:hrs});
+          cur=dateAddDays(cur,7);
+        }
+        S.set('instances',l);
+      } else if(entry.date){
+        addOneOff(sess.id,instData,entry.date);
+      }
+
+      // Mark processed in Firebase so it isn't re-imported
+      try{
+        await fetch(`${FB_URL}/bot_sessions/${key}.json`,{
+          method:'PATCH',headers:{'Content-Type':'application/json'},
+          body:JSON.stringify({processed:true})
+        });
+      }catch(_){}
+
+      imported++;
+    }
+
+    if(imported>0){
+      showToast(`📥 ${imported} booking${imported!==1?'s':''} imported from Telegram bot`);
+      if(currentView==='schedule')renderSched();
+    }
+    if(btn)btn.textContent='🔄';
+  }catch(err){
+    console.error('Firebase sync:',err);
+    showToast('⚠️ Bot sync failed',5000);
+    if(btn)btn.textContent='🔄';
+  }
+}
+
+// Sync on page load and every 30 seconds
+syncFromFirebase();
+setInterval(syncFromFirebase,30000);
 
 // ── BOOT ─────────────────────────────────────────────────────
 applyFolderState('coaches');
