@@ -1088,6 +1088,7 @@ function renderWeek(){
       div.dataset.instId=String(inst.id);
       div.style.cssText=`background:${blockBg};color:${tc};border:${blockBorder};left:calc(${lp}% + 1px);width:calc(${wp}% - 2px);height:${hpx}px`;
       div.innerHTML=`
+        ${(!inst.coach_ids||inst.coach_ids.length===0)?'<div class="block-warn">⚠️</div>':''}
         ${inst.venue_text?`<div class="sb-venue">${inst.programme?'(activesg) ':''}${esc(inst.venue_text)}</div>`:'<div class="sb-venue" style="opacity:.4">—</div>'}
         <div class="sb-time">Time: ${fmt12(inst.start_time)}–${fmt12(inst.end_time)}</div>
         ${inst.court_no?`<div class="sb-row">Court: ${esc(inst.court_no)}</div>`:''}
@@ -1282,7 +1283,9 @@ function renderMonth(){
         const noColor2=!color||color==='';const chipBg=noColor2?'rgba(0,0,0,0.05)':color;
         const chipBorder=noColor2?'2px dashed var(--bdr)':color==='#ffffff'?'1px solid #d1d5db':'1px solid rgba(0,0,0,.18)';
         const chipTc=noColor2?'var(--tx)':tc;
+        const noCoach=!inst.coach_ids||inst.coach_ids.length===0;
         return`<div class="cal-chip" data-inst-id="${inst.id}" style="background:${chipBg};color:${chipTc};border:${chipBorder}">
+          ${noCoach?'<div class="block-warn">⚠️</div>':''}
           <div class="cal-chip-venue">${inst.programme?'(activesg) ':''}${esc(inst.venue_text||'—')}</div>
           <div class="cal-chip-sub">Time: ${fmt12(inst.start_time)}–${fmt12(inst.end_time)}</div>
           ${inst.court_no?`<div class="cal-chip-sub">Court: ${esc(inst.court_no)}</div>`:''}
