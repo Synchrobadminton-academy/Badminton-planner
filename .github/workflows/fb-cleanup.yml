@@ -47,5 +47,41 @@ jobs:
                   put(f"bot_sessions/{k}/imported", True)
                   print(f"flagged junk bot entry {k} (date={v.get('date')}) as imported")
 
+          # Backfill payment fields on bot-imported bookings created before
+          # booker tracking existed (parse "Booked under/by NAME" from notes)
+          import re
+          from datetime import datetime, timezone
+          PUSH_CHARS = "-0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ_abcdefghijklmnopqrstuvwxyz"
+          def key_date(key):
+              try:
+                  ts = 0
+                  for c in key[:8]:
+                      ts = ts * 64 + PUSH_CHARS.index(c)
+                  if ts < 1e12: return None
+                  return datetime.fromtimestamp(ts / 1000, tz=timezone.utc).strftime("%Y-%m-%d")
+              except Exception:
+                  return None
+          def hours(t1, t2):
+              try:
+                  h1, m1 = map(int, t1.split(":")); h2, m2 = map(int, t2.split(":"))
+                  return max(1, round(((h2 * 60 + m2) - (h1 * 60 + m1)) / 60))
+              except Exception:
+                  return 1
+          for k, b in (bookings or {}).items():
+              bk = b.get("bot_sessions_key") if b else None
+              if not bk or b.get("booker"): continue
+              src = bs.get(bk) or {}
+              mt = re.search(r"booked\s+(?:under|by)[:\s]+([^.\n]+)", src.get("notes") or "", re.I)
+              if not mt: continue
+              fields = {
+                  "booker": mt.group(1).strip(),
+                  "payment_date": b.get("payment_date") or key_date(bk) or src.get("date"),
+                  "venue_type": b.get("venue_type") or ("school" if re.search(r"school|primary|secondary", b.get("venue") or "", re.I) else "sports_hall"),
+                  "slots": b.get("slots") or hours(src.get("start_time"), src.get("end_time")),
+              }
+              for fk, fv in fields.items():
+                  put(f"bookings/{k}/{fk}", fv)
+              print(f"backfilled booking {k}: booker={fields['booker']} slots={fields['slots']} type={fields['venue_type']}")
+
           print("done")
           EOF
