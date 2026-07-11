@@ -329,7 +329,10 @@ def handle_photo(message: types.Message) -> None:
         bookings_to_save = [booking]
 
     saved = 0
+    receipt_key = None  # the receipt image is stored under the first entry's key
     for i, b in enumerate(bookings_to_save):
+        if receipt_key:
+            b["receipt_key"] = receipt_key
         log.info("Saving booking for %s: %s–%s at %s", b.get("date"), b.get("start_time"), b.get("end_time"), b.get("venue_text"))
         key = save_booking_to_firebase(b)
         if not key:
@@ -339,6 +342,7 @@ def handle_photo(message: types.Message) -> None:
         log.info("Saved with key: %s", key)
 
         if i == 0:
+            receipt_key = key
             if save_image_to_firebase(key, image_bytes):
                 log.info("Image saved to booking_images/%s", key)
             else:
