@@ -746,8 +746,15 @@ async function fetchFirebaseData(){
 async function pushToFirebase(key,value){
   pendingWrites.add(key);
   try{
-    await fetch(`${FIREBASE_URL}/${key}.json`,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(value)});
-  }catch(e){console.error('pushToFirebase error for',key,e);}
+    const r=await fetch(`${FIREBASE_URL}/${key}.json`,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(value)});
+    if(!r.ok)throw new Error('HTTP '+r.status);
+    return true;
+  }catch(e){
+    console.error('pushToFirebase error for',key,e);
+    const s=document.getElementById('sync-status');if(s)s.style.background='#ef4444';
+    const l=document.getElementById('sync-label');if(l)l.textContent='⚠️ Save failed';
+    return false;
+  }
   finally{pendingWrites.delete(key);}
 }
 
@@ -2157,14 +2164,34 @@ async function importReceiptSessions(){
   }catch(err){console.error('importReceiptSessions:',err);}
 }
 
+let botImportRunning=false;
 async function importBotSessions(){
+  if(botImportRunning)return;
+  botImportRunning=true;
   try{
     const res=await fetch(`${FIREBASE_URL}/bot_sessions.json`);
     if(!res.ok)return;
     const data=await res.json();
     if(!data)return;
-    const entries=Object.entries(data).filter(([,s])=>s&&!s.imported);
+    const todayStr=ds(new Date());
+    const sessList=S.get('sessions');
+    // Import anything not yet imported. Self-heal: a today-or-future entry
+    // flagged imported but with no matching session was lost — re-import it.
+    const entries=Object.entries(data).filter(([key,s])=>{
+      if(!s||!s.date)return false;
+      if(!s.imported)return true;
+      // Match by bot_key, falling back to date+time+venue+court for sessions
+      // imported before bot_key existed
+      return s.date>=todayStr&&!sessList.some(x=>x.bot_key===key||(
+        x.date===s.date&&x.start_time===s.start_time&&
+        (x.venue_text||'')===(s.venue_text||'')&&(x.court_no||'')===(s.court_no||'')
+      ));
+    });
     if(!entries.length)return;
+    // Ensure brBookings is loaded so re-imports don't duplicate Courts records
+    if(!Object.keys(brBookings||{}).length){
+      try{const r=await fetch(`${FIREBASE_URL}/bookings.json`);if(r.ok)brBookings=await r.json()||{};}catch(e){}
+    }
     let count=0;
     for(const[key,session]of entries){
       const botDate=normalizeCourtDate(session.date)||session.date;
@@ -2175,29 +2202,51 @@ async function importBotSessions(){
         coach_ids:session.coach_ids||[],color:session.color||'#f59e0b',
         notes:session.notes||''
       };
-      const sess=saveSession({...botData,date:botDate,status:session.status||'scheduled',recurring:0,day_of_week:null});
-      addOneOff(sess.id,botData,botDate);
-
-      // Also save to /bookings.json for Courts tab display
-      const courtBooking={
-        date:botDate,
-        time:`${session.start_time||''}-${session.end_time||''}`,
-        venue:session.venue_text||'',
-        court:session.court_no||'',
-        court_date:botDate,
-        class_type:session.class_type||'ActiveSG',
-        source:'activesg',
-        color:session.color||'#f59e0b',
-        status:session.status||'scheduled',
-        coach_ids:session.coach_ids||[],
-        notes:session.notes||'',
-        bot_sessions_key:key
+      // Add session + instance to the cache directly (bypassing S.set so the
+      // writes happen in a controlled order below), then confirm both reached
+      // Firebase before marking the entry imported — otherwise a failed write
+      // would flag it done and lose the booking forever
+      const sl=syncCache['sessions'];
+      const sess={...botData,bot_key:key,date:botDate,status:session.status||'scheduled',recurring:0,day_of_week:null,id:S.nextId(sl)};
+      sl.push(sess);
+      const il=syncCache['instances'];
+      il.push({id:S.nextId(il),session_id:sess.id,...botData,date:botDate,status:'scheduled',hours:compHrs(botData.start_time,botData.end_time)});
+      const rollback=()=>{
+        syncCache['sessions']=syncCache['sessions'].filter(x=>x.id!==sess.id);
+        syncCache['instances']=syncCache['instances'].filter(x=>x.session_id!==sess.id);
+        console.error('importBotSessions: write failed for',key,'— will retry');
       };
-      try{
-        const bookRes=await fetch(`${FIREBASE_URL}/bookings.json`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(courtBooking)});
-        if(!bookRes.ok)throw new Error('Failed to save booking');
-      }catch(e){
-        console.error('Failed to save court booking:',e);
+      if(!await pushToFirebase('sessions',syncCache['sessions'])){rollback();continue;}
+      if(!await pushToFirebase('instances',syncCache['instances'])){
+        rollback();
+        await pushToFirebase('sessions',syncCache['sessions']);
+        continue;
+      }
+
+      // Also save to /bookings.json for Courts tab display (skip if this
+      // entry already has one from a previous import)
+      const hasBooking=Object.values(brBookings||{}).some(b=>b&&b.bot_sessions_key===key);
+      if(!hasBooking){
+        const courtBooking={
+          date:botDate,
+          time:`${session.start_time||''}-${session.end_time||''}`,
+          venue:session.venue_text||'',
+          court:session.court_no||'',
+          court_date:botDate,
+          class_type:session.class_type||'ActiveSG',
+          source:'activesg',
+          color:session.color||'#f59e0b',
+          status:session.status||'scheduled',
+          coach_ids:session.coach_ids||[],
+          notes:session.notes||'',
+          bot_sessions_key:key
+        };
+        try{
+          const bookRes=await fetch(`${FIREBASE_URL}/bookings.json`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(courtBooking)});
+          if(!bookRes.ok)throw new Error('Failed to save booking');
+        }catch(e){
+          console.error('Failed to save court booking:',e);
+        }
       }
 
       try{
@@ -2221,6 +2270,7 @@ async function importBotSessions(){
       if(currentView==='dashboard')renderDashboard();
     }
   }catch(err){console.error('importBotSessions:',err);}
+  finally{botImportRunning=false;}
 }
 
 
