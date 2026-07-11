@@ -2194,7 +2194,7 @@ async function importBotSessions(){
       if(!s.imported)return true;
       // Programme-roster entries may merge into an existing session, so they
       // can't be self-healed by session lookup — never re-import them
-      if(s.student_name)return false;
+      if(s.student_name||(s.students&&s.students.length))return false;
       // Match by bot_key, falling back to date+time+venue+court for sessions
       // imported before bot_key existed
       return s.date>=todayStr&&!sessList.some(x=>x.bot_key===key||(
@@ -2211,20 +2211,30 @@ async function importBotSessions(){
     for(const[key,session]of entries){
       try{
       const botDate=normalizeCourtDate(session.date)||session.date;
-      const student=(session.student_name||'').trim();
+      // Programme receipts carry the class participant list (array), or a
+      // single name from older bot versions
+      const students=[...new Set(
+        (Array.isArray(session.students)?session.students:[])
+          .concat(session.student_name?[session.student_name]:[])
+          .map(s=>String(s||'').trim()).filter(Boolean)
+      )];
 
       // Programme receipt whose class already exists on the calendar for this
-      // slot: just add the student to that class's attendance roster
-      if(student){
+      // slot: just add the participants to that class's attendance roster
+      if(students.length){
         const target=getInsts().find(i=>i.status!=='cancelled'&&i.date===botDate&&
           i.start_time===session.start_time&&i.end_time===session.end_time&&
           (i.venue_text||'')===(session.venue_text||''));
         if(target){
           const roster=getAttendance(target.id);
-          if(!roster.some(a=>(a.name||'').trim().toLowerCase()===student.toLowerCase())){
-            roster.push({id:attNextId(roster),name:student,present:false});
-            saveAttendance(target.id,roster);
-          }
+          let added=false;
+          students.forEach(name=>{
+            if(!roster.some(a=>(a.name||'').trim().toLowerCase()===name.toLowerCase())){
+              roster.push({id:attNextId(roster),name,present:false});
+              added=true;
+            }
+          });
+          if(added)saveAttendance(target.id,roster);
           await fetch(`${FIREBASE_URL}/bot_sessions/${key}/imported.json`,{method:'PUT',headers:{'Content-Type':'application/json'},body:'true'});
           count++;
           continue;
@@ -2237,7 +2247,7 @@ async function importBotSessions(){
         class_type:session.class_type||'ActiveSG',standard:session.standard||'',
         coach_ids:session.coach_ids||[],color:session.color||'#f59e0b',
         notes:session.notes||'',
-        programme:student?1:0
+        programme:students.length?1:0
       };
       // Add session + instance to the cache directly (bypassing S.set so the
       // writes happen in a controlled order below), then confirm both reached
@@ -2262,13 +2272,13 @@ async function importBotSessions(){
       }
 
       // First programme receipt for this class: start its attendance roster
-      if(student)saveAttendance(instId,[{id:1,name:student,present:false}]);
+      if(students.length)saveAttendance(instId,students.map((n,i)=>({id:i+1,name:n,present:false})));
 
       // Also save to /bookings.json for Courts tab display (skip if this
       // entry already has one from a previous import; programme receipts are
       // not court bookings and get no record here)
       const hasBooking=Object.values(brBookings||{}).some(b=>b&&b.bot_sessions_key===key);
-      if(!hasBooking&&!student){
+      if(!hasBooking&&!students.length){
         // Booker for the payment records: the Telegram sender, set by the bot
         const booker=session.booker||null;
         const courtBooking={
