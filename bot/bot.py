@@ -57,6 +57,7 @@ OCR_PROMPT = """Extract badminton court booking details from this receipt image.
   "court_no": "court number(s)",
   "class_type": "ActiveSG",
   "coach_ids": [],
+  "booker": "name the booking was made under, OR null",
   "notes": "any extra details"
 }
 
@@ -76,7 +77,9 @@ Rules — follow these exactly:
 
 3. VENUE: Use the message caption first if provided, then fall back to the receipt. Extract ONLY the sports hall name (e.g. "Bukit Canberra Sport Hall", "Clementi Sport Hall") — not the full address.
 
-4. Return ONLY the JSON object."""
+4. BOOKER: The name the booking/account was made under (e.g. "Booked under TAN AH KOW" or the account holder shown). null if the receipt shows no name.
+
+5. Return ONLY the JSON object."""
 
 
 def parse_mm_dd(value: str) -> tuple[int, int]:
@@ -284,6 +287,20 @@ def handle_photo(message: types.Message) -> None:
     booking.setdefault("status", "scheduled")
     booking.setdefault("notes", "")
 
+    if booking.get("date") and not (booking.get("start_date") and booking.get("end_date")):
+        # Court receipt: attach the payment-record fields Booking Records uses
+        # to total what each booker is owed (court cost + incentive)
+        booking["booker"] = booking.get("booker") or (message.from_user.full_name if message.from_user else None)
+        booking["payment_date"] = date.today().strftime("%Y-%m-%d")
+        venue = booking.get("venue_text") or ""
+        booking["venue_type"] = "school" if re.search(r"school|primary|secondary", venue, re.I) else "sports_hall"
+        try:
+            sh, sm = map(int, (booking.get("start_time") or "0:0").split(":"))
+            eh, em = map(int, (booking.get("end_time") or "0:0").split(":"))
+            booking["slots"] = max(1, round(((eh * 60 + em) - (sh * 60 + sm)) / 60))
+        except Exception:
+            booking["slots"] = 1
+
     bookings_to_save = []
 
     if booking.get("start_date") and booking.get("end_date"):
@@ -333,7 +350,8 @@ def handle_photo(message: types.Message) -> None:
         note = "" if saved == len(bookings_to_save) else f" ({len(bookings_to_save) - saved} failed to save)"
         reply(message, f"✅ Saved {saved} weekly sessions: {times} — {venue}{court}\n{fmt_date(first)} to {fmt_date(last)}{note}")
     else:
-        reply(message, f"✅ Saved: {fmt_date(booking['date'])}, {times} — {venue}{court}")
+        who = f"\nBooker: {booking['booker']}" if booking.get("booker") else ""
+        reply(message, f"✅ Saved: {fmt_date(booking['date'])}, {times} — {venue}{court}{who}")
 
 
 def main() -> None:
