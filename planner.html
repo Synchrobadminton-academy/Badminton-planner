@@ -972,7 +972,7 @@ function showView(v){
   if(v==='attendance'){attDetailId=null;renderAttendance();}
   if(v==='bookings')loadBookingsFromFirebase();
   if(v==='courts'){renderCourts();loadBookingsFromFirebase();}
-  if(v==='receipts'){renderReceipts();loadBookingsFromFirebase();}
+  if(v==='receipts'){renderReceipts();loadBookingsFromFirebase();loadReceiptsTab();}
 }
 
 // ── SCHED TOGGLE ──────────────────────────────────────────────
@@ -2200,6 +2200,7 @@ async function importBotSessions(){
     if(!res.ok)return;
     const data=await res.json();
     if(!data)return;
+    botSessionsCache=data;
     const todayStr=ds(new Date());
     const sessList=S.get('sessions');
     // Flag unusable entries (no date or no times — junk from old bot bugs) as
@@ -2286,9 +2287,10 @@ async function importBotSessions(){
       if(student)saveAttendance(instId,[{id:1,name:student,present:false}]);
 
       // Also save to /bookings.json for Courts tab display (skip if this
-      // entry already has one from a previous import)
+      // entry already has one from a previous import; programme receipts are
+      // not court bookings and get no record here)
       const hasBooking=Object.values(brBookings||{}).some(b=>b&&b.bot_sessions_key===key);
-      if(!hasBooking){
+      if(!hasBooking&&!student){
         // Booker for the payment records: the Telegram sender, set by the bot
         const booker=session.booker||null;
         const courtBooking={
@@ -2710,23 +2712,57 @@ function closeConfirm(){
 }
 
 // ── RECEIPTS ──────────────────────────────────────────────────
+// The Receipts tab lists every receipt photo processed from the Telegram
+// group — one row per stored image — filed by the date it was sent (encoded
+// in the image's Firebase key).
+let receiptImageKeys=null;
+let botSessionsCache=null;
+async function loadReceiptsTab(){
+  try{
+    const[imgRes,bsRes]=await Promise.all([
+      fetch(`${FIREBASE_URL}/booking_images.json?shallow=true`),
+      fetch(`${FIREBASE_URL}/bot_sessions.json`)
+    ]);
+    if(imgRes.ok)receiptImageKeys=await imgRes.json()||{};
+    if(bsRes.ok)botSessionsCache=await bsRes.json()||{};
+  }catch(e){console.error('loadReceiptsTab:',e);}
+  if(currentView==='receipts')renderReceipts();
+}
 function renderReceipts(){
   const list=document.getElementById('receipts-list');if(!list)return;
-  const all=Object.entries(brBookings).filter(([,b])=>b&&b.source!=='activesg').map(([k,b])=>({...b,_key:k}));
-  if(!all.length){
+  if(!receiptImageKeys){
+    list.innerHTML='<div class="empty" style="padding:40px 0">Loading…</div>';
+    return;
+  }
+  const bookingByBotKey={};
+  Object.entries(brBookings).forEach(([k,b])=>{if(b&&b.bot_sessions_key)bookingByBotKey[b.bot_sessions_key]={...b,_key:k};});
+  const receipts=[];
+  Object.keys(receiptImageKeys).forEach(imgKey=>{
+    const sent=fbKeyDate(imgKey);
+    const bs=(botSessionsCache||{})[imgKey];
+    if(bs&&bs.student_name){receipts.push({kind:'programme',sent:sent||'Unknown',imgKey,bs});return;}
+    const court=bookingByBotKey[imgKey];
+    if(court){receipts.push({kind:'court',sent:sent||court.payment_date||'Unknown',imgKey,b:court});return;}
+    const legacy=brBookings[imgKey];
+    if(legacy&&legacy.source!=='activesg'){receipts.push({kind:'court',sent:getPaymentDate(legacy)||sent||'Unknown',imgKey,b:{...legacy,_key:imgKey}});return;}
+    if(bs){receipts.push({kind:'bot',sent:sent||'Unknown',imgKey,bs});return;}
+    receipts.push({kind:'unknown',sent:sent||'Unknown',imgKey});
+  });
+  if(!receipts.length){
     list.innerHTML='<div class="empty" style="padding:40px 0">No receipts yet.</div>';
     return;
   }
-  // Group by payment_date descending
+  // File by the date the receipt was sent in the group, newest first
   const byDate={};
-  all.forEach(b=>{
-    const pd=getPaymentDate(b)||'Unknown';
-    if(!byDate[pd])byDate[pd]=[];
-    byDate[pd].push(b);
+  receipts.forEach(r=>{if(!byDate[r.sent])byDate[r.sent]=[];byDate[r.sent].push(r);});
+  const dates=Object.keys(byDate).sort((a,b)=>{
+    if(a==='Unknown')return 1;
+    if(b==='Unknown')return -1;
+    return b.localeCompare(a);
   });
-  const dates=Object.keys(byDate).sort((a,b)=>b.localeCompare(a));
+  const viewBtn=k=>`<button onclick="viewReceiptImage('${k}')" style="background:none;border:1px solid var(--bdr);border-radius:6px;padding:3px 10px;font-size:11px;font-weight:700;cursor:pointer;color:var(--tx);white-space:nowrap">📷 Receipt</button>`;
   const sections=dates.map(dt=>{
-    const items=byDate[dt].sort((a,b)=>(a.time||'').localeCompare(b.time||''));
+    const items=byDate[dt].sort((a,b)=>a.imgKey.localeCompare(b.imgKey));
     let dateLabel=dt;
     if(dt!=='Unknown'){
       const d=new Date(dt+'T00:00:00');
@@ -2735,22 +2771,50 @@ function renderReceipts(){
     return`<div class="card" style="margin-bottom:14px">
       <div class="card-hdr">${dateLabel}</div>
       <div class="card-body" style="padding:0 16px">
-        ${items.map(b=>`<div class="rcpt-row">
-          <div class="rcpt-court-badge">Ct${esc(b.court||'?')}</div>
-          <div class="rcpt-info" style="flex:1">
-            <div class="rcpt-venue">${esc(b.venue||'—')}</div>
-            <div class="rcpt-meta">
-              ${b.time||'—'} &nbsp;·&nbsp; ${esc(b.booker||'—')}${(()=>{const coach=getBookerCoach(b.booker);return coach?'<span style="color:#10b981;font-weight:700"> ('+esc(coach.name)+')</span>':''})()}
-              &nbsp;·&nbsp; <span class="${b.venue_type==='school'?'br-badge-sc':'br-badge-sh'}">${b.venue_type==='school'?'School':'Sports Hall'}</span>
-              &nbsp;·&nbsp; ${b.slots||1} hr${(b.slots||1)>1?'s':''}
-              ${b.court_date&&b.court_date!==dt?`<br><span style="font-size:11px">Court date: ${b.court_date}</span>`:''}
+        ${items.map(r=>{
+          if(r.kind==='court'){
+            const b=r.b;
+            return`<div class="rcpt-row">
+              <div class="rcpt-court-badge">Ct${esc(b.court||'?')}</div>
+              <div class="rcpt-info" style="flex:1">
+                <div class="rcpt-venue">${esc(b.venue||'—')}</div>
+                <div class="rcpt-meta">
+                  ${b.time||'—'} &nbsp;·&nbsp; ${esc(b.booker||'—')}${(()=>{const coach=getBookerCoach(b.booker);return coach?'<span style="color:#10b981;font-weight:700"> ('+esc(coach.name)+')</span>':''})()}
+                  &nbsp;·&nbsp; <span class="${b.venue_type==='school'?'br-badge-sc':'br-badge-sh'}">${b.venue_type==='school'?'School':'Sports Hall'}</span>
+                  &nbsp;·&nbsp; ${b.slots||1} hr${(b.slots||1)>1?'s':''}
+                  ${b.court_date?`<br><span style="font-size:11px">Court date: ${b.court_date}</span>`:''}
+                </div>
+              </div>
+              <div style="display:flex;gap:6px;flex-direction:column;align-items:flex-end">
+                ${viewBtn(r.imgKey)}
+                <button onclick="promptDeleteReceipt('${b._key}','${esc(b.venue||'—')}',0)" style="background:none;border:1px solid var(--bdr);color:#ef4444;border-radius:6px;padding:3px 8px;font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap">🗑️ Delete</button>
+              </div>
+            </div>`;
+          }
+          if(r.kind==='programme'||r.kind==='bot'){
+            const bs=r.bs;
+            return`<div class="rcpt-row">
+              <div class="rcpt-court-badge" style="background:#8b5cf6">${r.kind==='programme'?'🎓':'🏸'}</div>
+              <div class="rcpt-info" style="flex:1">
+                <div class="rcpt-venue">${esc(bs.venue_text||'—')}</div>
+                <div class="rcpt-meta">
+                  ${r.kind==='programme'?`${esc(bs.student_name)} &nbsp;·&nbsp; `:''}${esc(bs.class_type||'')}
+                  ${bs.start_time?` &nbsp;·&nbsp; ${fmt12(bs.start_time)}–${fmt12(bs.end_time)}`:''}
+                  ${bs.date?`<br><span style="font-size:11px">First session: ${bs.date}</span>`:''}
+                </div>
+              </div>
+              <div style="display:flex;gap:6px;flex-direction:column;align-items:flex-end">${viewBtn(r.imgKey)}</div>
+            </div>`;
+          }
+          return`<div class="rcpt-row">
+            <div class="rcpt-court-badge" style="background:var(--txm)">📄</div>
+            <div class="rcpt-info" style="flex:1">
+              <div class="rcpt-venue">Receipt</div>
+              <div class="rcpt-meta">No linked booking</div>
             </div>
-          </div>
-          <div style="display:flex;gap:6px;flex-direction:column;align-items:flex-end">
-            <button onclick="viewReceiptImage('${b._key}')" style="background:none;border:1px solid var(--bdr);border-radius:6px;padding:3px 10px;font-size:11px;font-weight:700;cursor:pointer;color:var(--tx);white-space:nowrap">📷 Receipt</button>
-            <button onclick="promptDeleteReceipt('${b._key}','${esc(b.venue||'—')}',0)" style="background:none;border:1px solid var(--bdr);color:#ef4444;border-radius:6px;padding:3px 8px;font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap">🗑️ Delete</button>
-          </div>
-        </div>`).join('')}
+            <div style="display:flex;gap:6px;flex-direction:column;align-items:flex-end">${viewBtn(r.imgKey)}</div>
+          </div>`;
+        }).join('')}
       </div>
     </div>`;
   });
