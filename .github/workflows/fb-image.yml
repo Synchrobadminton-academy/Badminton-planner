@@ -1,0 +1,18 @@
+name: fb-image
+on:
+  workflow_dispatch:
+    inputs:
+      key:
+        description: booking_images key to dump
+        required: true
+
+jobs:
+  dump:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Print receipt image as base64
+        run: |
+          FB=https://synchroadmin-133f3-default-rtdb.asia-southeast1.firebasedatabase.app
+          echo "BEGIN_B64"
+          curl -s "$FB/booking_images/${{ inputs.key }}.json" | jq -r '.data' | fold -w 3000
+          echo "END_B64"
