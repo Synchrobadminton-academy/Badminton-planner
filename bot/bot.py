@@ -57,6 +57,7 @@ OCR_PROMPT = """Extract badminton court booking details from this receipt image.
   "court_no": "court number(s)",
   "class_type": "ActiveSG",
   "coach_ids": [],
+  "student_name": "registered participant's name (recurring programme receipts only), OR null",
   "notes": "any extra details"
 }
 
@@ -76,7 +77,11 @@ Rules — follow these exactly:
 
 3. VENUE: Use the message caption first if provided, then fall back to the receipt. Extract ONLY the sports hall name (e.g. "Bukit Canberra Sport Hall", "Clementi Sport Hall") — not the full address.
 
-4. Return ONLY the JSON object."""
+4. STUDENT: For a recurring programme registration receipt, extract the registered
+   participant's / child's name into "student_name". For court booking receipts
+   leave it null.
+
+5. Return ONLY the JSON object."""
 
 
 def parse_mm_dd(value: str) -> tuple[int, int]:
@@ -289,6 +294,7 @@ def handle_photo(message: types.Message) -> None:
         # to total what each booker is owed (court cost + incentive).
         # The booker is whoever posted the photo in the group.
         booking["booker"] = message.from_user.full_name if message.from_user else None
+        booking.pop("student_name", None)  # roster autofill is for programme receipts only
         booking["payment_date"] = date.today().strftime("%Y-%m-%d")
         venue = booking.get("venue_text") or ""
         booking["venue_type"] = "school" if re.search(r"school|primary|secondary", venue, re.I) else "sports_hall"
@@ -346,7 +352,8 @@ def handle_photo(message: types.Message) -> None:
     elif len(bookings_to_save) > 1:
         first, last = bookings_to_save[0]["date"], bookings_to_save[-1]["date"]
         note = "" if saved == len(bookings_to_save) else f" ({len(bookings_to_save) - saved} failed to save)"
-        reply(message, f"✅ Saved {saved} weekly sessions: {times} — {venue}{court}\n{fmt_date(first)} to {fmt_date(last)}{note}")
+        student = f"\nStudent: {booking['student_name']}" if booking.get("student_name") else ""
+        reply(message, f"✅ Saved {saved} weekly sessions: {times} — {venue}{court}\n{fmt_date(first)} to {fmt_date(last)}{note}{student}")
     else:
         who = f"\nBooker: {booking['booker']}" if booking.get("booker") else ""
         reply(message, f"✅ Saved: {fmt_date(booking['date'])}, {times} — {venue}{court}{who}")
