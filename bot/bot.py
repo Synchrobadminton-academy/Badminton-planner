@@ -79,13 +79,22 @@ Rules — follow these exactly:
 4. Return ONLY the JSON object."""
 
 
+def parse_mm_dd(value: str) -> tuple[int, int]:
+    """Accept 'MM-DD' or 'YYYY-MM-DD' and return (month, day)."""
+    parts = value.split("-")
+    if len(parts) == 3:
+        parts = parts[1:]
+    month, day = map(int, parts)
+    return month, day
+
+
 def fix_year(mm_dd: str) -> str:
     """Given a MM-DD string, return YYYY-MM-DD using whichever year is the first future date."""
     if not mm_dd:
         return mm_dd
     try:
         today = date.today()
-        month, day = map(int, mm_dd.split("-"))
+        month, day = parse_mm_dd(mm_dd)
         candidate = date(today.year, month, day)
         if candidate < today:
             candidate = date(today.year + 1, month, day)
@@ -93,6 +102,23 @@ def fix_year(mm_dd: str) -> str:
     except Exception as e:
         log.error("fix_year failed for %s: %s", mm_dd, e)
         return mm_dd
+
+
+def fix_year_range(start_mm_dd: str, end_mm_dd: str) -> tuple[str, str]:
+    """Resolve a MM-DD date range. The end date gets the first future year;
+    the start date is anchored to the end date (a recurring programme may
+    have already started, so the start can be in the past)."""
+    end_full = fix_year(end_mm_dd)
+    try:
+        end_d = datetime.strptime(end_full, "%Y-%m-%d").date()
+        month, day = parse_mm_dd(start_mm_dd)
+        start_d = date(end_d.year, month, day)
+        if start_d > end_d:
+            start_d = date(end_d.year - 1, month, day)
+        return start_d.strftime("%Y-%m-%d"), end_full
+    except Exception as e:
+        log.error("fix_year_range failed for %s..%s: %s", start_mm_dd, end_mm_dd, e)
+        return start_mm_dd, end_full
 
 
 def build_ocr_prompt(caption: str = "") -> str:
@@ -129,11 +155,13 @@ def extract_booking_from_image(image_bytes: bytes, mime_type: str = "image/jpeg"
         raw = re.sub(r"^```[a-z]*\n?", "", raw).rstrip("`").strip()
         result = json.loads(raw)
 
-        # Resolve MM-DD fields to full YYYY-MM-DD using first-future-date logic
-        for field in ("date", "start_date", "end_date"):
-            val = result.get(field)
-            if val:
-                result[field] = fix_year(val)
+        # Resolve MM-DD fields to full YYYY-MM-DD
+        if result.get("date"):
+            result["date"] = fix_year(result["date"])
+        if result.get("start_date") and result.get("end_date"):
+            result["start_date"], result["end_date"] = fix_year_range(
+                result["start_date"], result["end_date"]
+            )
 
         log.info("OCR result: %s", json.dumps(result))
         return result
