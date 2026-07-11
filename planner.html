@@ -2262,9 +2262,8 @@ async function importBotSessions(){
       // entry already has one from a previous import)
       const hasBooking=Object.values(brBookings||{}).some(b=>b&&b.bot_sessions_key===key);
       if(!hasBooking){
-        // Booker for the payment records: explicit field from the bot, else
-        // parse "Booked under/by NAME" out of the receipt notes
-        const booker=session.booker||(((session.notes||'').match(/booked\s+(?:under|by)[:\s]+([^.\n]+)/i)||[])[1]||'').trim()||null;
+        // Booker for the payment records: the Telegram sender, set by the bot
+        const booker=session.booker||null;
         const courtBooking={
           date:botDate,
           time:`${session.start_time||''}-${session.end_time||''}`,
