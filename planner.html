@@ -1088,10 +1088,8 @@ function renderWeek(){
       div.dataset.instId=String(inst.id);
       div.style.cssText=`background:${blockBg};color:${tc};border:${blockBorder};left:calc(${lp}% + 1px);width:calc(${wp}% - 2px);height:${hpx}px`;
       div.innerHTML=`
-        ${(!inst.coach_ids||inst.coach_ids.length===0)?'<div class="block-warn">⚠️</div>':''}
-        ${inst.venue_text?`<div class="sb-venue">${esc(inst.venue_text)}</div>`:'<div class="sb-venue" style="opacity:.4">—</div>'}
-        <div class="sb-time">${fmt12(inst.start_time)} – ${fmt12(inst.end_time)}</div>
-        ${inst.class_type||inst.standard?`<div class="sb-row">${esc([inst.class_type,inst.standard].filter(Boolean).join(', '))}</div>`:''}
+        ${inst.venue_text?`<div class="sb-venue">${inst.programme?'(activesg) ':''}${esc(inst.venue_text)}</div>`:'<div class="sb-venue" style="opacity:.4">—</div>'}
+        <div class="sb-time">Time: ${fmt12(inst.start_time)}–${fmt12(inst.end_time)}</div>
         ${inst.court_no?`<div class="sb-row">Court: ${esc(inst.court_no)}</div>`:''}
         ${cn?`<div class="sb-row" style="font-weight:700">${esc(cn)}</div>`:''}
         ${inst.notes?`<div class="sb-row" style="font-style:italic;opacity:.85">${esc(inst.notes)}</div>`:''}
@@ -1284,14 +1282,11 @@ function renderMonth(){
         const noColor2=!color||color==='';const chipBg=noColor2?'rgba(0,0,0,0.05)':color;
         const chipBorder=noColor2?'2px dashed var(--bdr)':color==='#ffffff'?'1px solid #d1d5db':'1px solid rgba(0,0,0,.18)';
         const chipTc=noColor2?'var(--tx)':tc;
-        const noCoach=!inst.coach_ids||inst.coach_ids.length===0;
-        const isActivesg=inst.class_type==='ActiveSG';
         return`<div class="cal-chip" data-inst-id="${inst.id}" style="background:${chipBg};color:${chipTc};border:${chipBorder}">
-          ${noCoach&&!isActivesg?'<div class="block-warn">⚠️</div>':''}
-          <div class="cal-chip-venue">${isActivesg?(inst.venue_text?esc(inst.venue_text)+' (activesg)':'(activesg)'):esc(inst.venue_text||'—')}</div>
-          <div class="cal-chip-sub">${fmt12(inst.start_time)}–${fmt12(inst.end_time)}</div>
-          ${inst.court_no?`<div class="cal-chip-sub">${esc(inst.court_no)}</div>`:''}
-          <div class="cal-chip-sub chip-coach">${cn||'—'}</div>
+          <div class="cal-chip-venue">${inst.programme?'(activesg) ':''}${esc(inst.venue_text||'—')}</div>
+          <div class="cal-chip-sub">Time: ${fmt12(inst.start_time)}–${fmt12(inst.end_time)}</div>
+          ${inst.court_no?`<div class="cal-chip-sub">Court: ${esc(inst.court_no)}</div>`:''}
+          ${cn?`<div class="cal-chip-sub chip-coach">${esc(cn)}</div>`:''}
         </div>`;
       }).join('')}
     </div>`;
@@ -1692,7 +1687,8 @@ function getComboColors(){const v=S.get('combo-colors');return(v&&!Array.isArray
 function saveComboColor(comboKey,color){const cc=getComboColors();cc[comboKey]=color;S.set('combo-colors',cc);}
 function getComboKey(coachIds){return coachIds.sort((a,b)=>a-b).join(',')}
 function getBlockColor(inst){
-  if(!inst.coach_ids||inst.coach_ids.length===0)return inst.color||'';
+  if(!inst.coach_ids||inst.coach_ids.length===0)return '#ef4444'; // no coach assigned — red
+
   const coaches=getCoaches();
   const mainIds=inst.coach_ids.filter(id=>{const c=coaches.find(x=>x.id===id);return c&&(c.type||'main')==='main';});
   if(!mainIds.length)return '';
@@ -2238,7 +2234,8 @@ async function importBotSessions(){
         venue_text:session.venue_text||'',court_no:session.court_no||'',
         class_type:session.class_type||'ActiveSG',standard:session.standard||'',
         coach_ids:session.coach_ids||[],color:session.color||'#f59e0b',
-        notes:session.notes||''
+        notes:session.notes||'',
+        programme:student?1:0
       };
       // Add session + instance to the cache directly (bypassing S.set so the
       // writes happen in a controlled order below), then confirm both reached
