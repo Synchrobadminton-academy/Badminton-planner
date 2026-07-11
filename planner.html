@@ -628,9 +628,9 @@ function checkPw(){
       <div class="fg" style="margin:0"><label>End</label><input type="time" id="m-end" step="1800" required></div>
     </div>
     <div class="fg"><label>Notes (optional)</label><input type="text" id="m-notes" placeholder="e.g. *Spare*, 1 Hour only"></div>
-    <div class="fg" id="m-rec-wrap">
-      <button type="button" id="m-rec-btn" onclick="toggleRec()" class="btn btn-o" style="width:100%;justify-content:center">
-        Recurring every <span id="m-rec-day">Sun</span>: Off
+    <div class="fg" id="m-receipt-wrap" style="display:none">
+      <button type="button" id="m-receipt-btn" onclick="viewSessionReceipt()" class="btn btn-o" style="width:100%;justify-content:center">
+        📷 View Receipt
       </button>
       <input type="hidden" id="m-rec" value="0">
     </div>
@@ -1486,8 +1486,8 @@ function openModal(date,day,startH,endH){
   document.getElementById('m-start').value=d2t(startH);
   document.getElementById('m-end').value=d2t(endH||startH+1);
   document.getElementById('m-rec').value='0';
-  document.getElementById('m-rec-btn').className='btn btn-o';
-  document.getElementById('m-rec-btn').innerHTML=`Recurring every <span id="m-rec-day">${DAYS[day]}</span>: <b>Off</b>`;
+  mReceiptKey=null;
+  document.getElementById('m-receipt-wrap').style.display='none';
   document.getElementById('m-del-btn').style.display='none';
   document.getElementById('vsugg').innerHTML=getVenues().map(v=>`<option>${esc(v)}</option>`).join('');
   updateSessionDatalist();
@@ -1507,19 +1507,18 @@ function openEdit(id){
   document.getElementById('m-start').value=inst.start_time;
   document.getElementById('m-end').value=inst.end_time;
   document.getElementById('m-rec').value='0';
-  document.getElementById('m-rec-btn').innerHTML=`Recurring every <span id="m-rec-day">${DAYS[mDay]}</span>: <b>Off</b>`;
+  // Bot-imported sessions carry their receipt's image key — offer to view it
+  const _sess=S.get('sessions').find(s=>s&&s.id===inst.session_id);
+  mReceiptKey=(_sess&&(_sess.receipt_key||_sess.bot_key))||null;
+  document.getElementById('m-receipt-wrap').style.display=mReceiptKey?'':'none';
   document.getElementById('m-del-btn').style.display='';
   document.getElementById('vsugg').innerHTML=getVenues().map(v=>`<option>${esc(v)}</option>`).join('');
   document.getElementById('sess-modal').classList.add('open');
   document.getElementById('clip-bar').style.display='none';
 }
 function closeModal(){editId=null;document.getElementById('sess-modal').classList.remove('open')}
-function toggleRec(){
-  const cur=document.getElementById('m-rec').value==='1';
-  document.getElementById('m-rec').value=cur?'0':'1';
-  document.getElementById('m-rec-btn').innerHTML=`Recurring every <span id="m-rec-day">${DAYS[mDay]}</span>: <b>${cur?'Off':'On'}</b>`;
-  document.getElementById('m-rec-btn').className=cur?'btn btn-o':'btn btn-p';
-}
+let mReceiptKey=null;
+function viewSessionReceipt(){if(mReceiptKey)viewReceiptImage(mReceiptKey);}
 function deleteCurrentInst(){
   if(!editId)return;
   delInst(editId);editId=null;clip=null;
@@ -2245,7 +2244,7 @@ async function importBotSessions(){
       // Firebase before marking the entry imported — otherwise a failed write
       // would flag it done and lose the booking forever
       const sl=syncCache['sessions'];
-      const sess={...botData,bot_key:key,date:botDate,status:session.status||'scheduled',recurring:0,day_of_week:null,id:S.nextId(sl)};
+      const sess={...botData,bot_key:key,receipt_key:session.receipt_key||null,date:botDate,status:session.status||'scheduled',recurring:0,day_of_week:null,id:S.nextId(sl)};
       sl.push(sess);
       const il=syncCache['instances'];
       const instId=S.nextId(il);
