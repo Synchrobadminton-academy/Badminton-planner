@@ -1,0 +1,51 @@
+name: fb-cleanup
+on: workflow_dispatch
+
+jobs:
+  cleanup:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Prune orphan sessions and flag junk bot entries
+        run: |
+          python3 - <<'EOF'
+          import json, urllib.request
+
+          FB = "https://synchroadmin-133f3-default-rtdb.asia-southeast1.firebasedatabase.app"
+
+          def get(path):
+              with urllib.request.urlopen(f"{FB}/{path}.json") as r:
+                  return json.load(r)
+
+          def put(path, value):
+              req = urllib.request.Request(
+                  f"{FB}/{path}.json", data=json.dumps(value).encode(),
+                  method="PUT", headers={"Content-Type": "application/json"})
+              urllib.request.urlopen(req)
+
+          def as_list(x):
+              if not x: return []
+              vals = x if isinstance(x, list) else list(x.values())
+              return [v for v in vals if v]
+
+          sessions = as_list(get("sessions"))
+          instances = as_list(get("instances"))
+          bookings = get("bookings") or {}
+
+          used = {i.get("session_id") for i in instances}
+          used |= {b.get("session_id") for b in bookings.values() if b}
+
+          keep = [s for s in sessions if s.get("id") in used]
+          removed = [s for s in sessions if s.get("id") not in used]
+          print(f"sessions: {len(sessions)} total, keeping {len(keep)}, removing {len(removed)} orphans")
+          print("removed sessions (for recovery if ever needed):")
+          print(json.dumps(removed))
+          put("sessions", keep)
+
+          bs = get("bot_sessions") or {}
+          for k, v in bs.items():
+              if v and not v.get("imported") and (not v.get("date") or not v.get("start_time") or not v.get("end_time")):
+                  put(f"bot_sessions/{k}/imported", True)
+                  print(f"flagged junk bot entry {k} (date={v.get('date')}) as imported")
+
+          print("done")
+          EOF
