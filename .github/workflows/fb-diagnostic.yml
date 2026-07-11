@@ -16,3 +16,9 @@ jobs:
           curl -s "$FB/instances.json" | jq '(if type=="array" then map(select(.!=null)) else to_entries|map(.value) end) | {count:length, recent:(sort_by(.date // "")|.[-12:]|map({id,session_id,date,start_time,end_time,venue_text,status}))}'
           echo "===== bookings (bot-linked only) ====="
           curl -s "$FB/bookings.json" | jq 'to_entries | map(select(.value.bot_sessions_key != null)) | map({key:.key, bot_key:.value.bot_sessions_key, date:.value.date, venue:.value.venue}) | .[-10:]'
+          echo "===== bot_sessions with student_name ====="
+          curl -s "$FB/bot_sessions.json" | jq 'to_entries | map(select(.value.student_name != null)) | map({key:.key, date:.value.date, imported:.value.imported, student:.value.student_name, venue:.value.venue_text, start:.value.start_time, end:.value.end_time})'
+          echo "===== attendance ====="
+          curl -s "$FB/attendance.json" | jq '.'
+          echo "===== newest 10 bot_sessions by key (arrival order) ====="
+          curl -s "$FB/bot_sessions.json" | jq 'to_entries | sort_by(.key) | .[-10:] | map({key:.key, date:.value.date, imported:.value.imported, student:.value.student_name, venue:.value.venue_text})'
