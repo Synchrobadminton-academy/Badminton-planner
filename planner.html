@@ -290,9 +290,6 @@ table.sched td.tslot.cell-target{background:rgba(37,99,235,.22)!important;outlin
 .br-card-name{font-weight:800;font-size:13px;margin-bottom:6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .br-card-amt{font-size:26px;font-weight:900;color:var(--green);line-height:1}
 .br-card-lbl{font-size:10px;color:var(--txm);margin-top:4px}
-.br-drag-item{display:flex;align-items:center;gap:10px;padding:10px 14px;background:var(--surf);border:1px solid var(--bdr);border-radius:8px;margin-bottom:6px;cursor:grab;user-select:none;touch-action:none}
-.br-drag-item.drag-over{border-color:var(--blue);background:var(--bluebg)}
-.br-drag-handle{color:var(--txf);font-size:16px;cursor:grab}
 .br-table{width:100%;border-collapse:collapse;font-size:12px}
 .br-table th{text-align:left;padding:9px 12px;background:var(--surf2);border-bottom:1px solid var(--bdr);font-weight:700;color:var(--txm);font-size:11px;text-transform:uppercase;letter-spacing:.04em;white-space:nowrap}
 .br-table td{padding:9px 12px;border-bottom:1px solid var(--bdr);vertical-align:middle;white-space:nowrap}
@@ -568,15 +565,6 @@ function checkPw(){
     <div class="card">
       <div class="card-hdr">Incentives — <span id="br-month-lbl"></span></div>
       <div class="card-body"><div id="br-summary" class="br-summary"><div class="empty">Loading…</div></div></div>
-    </div>
-    <div class="card">
-      <div class="card-hdr card-hdr-btn" onclick="toggleCard('br-order-body','br-order-chev')">
-        <span>Booker Order</span><span id="br-order-chev">▼</span>
-      </div>
-      <div class="card-body" id="br-order-body">
-        <div style="font-size:11px;color:var(--txm);margin-bottom:8px">Drag to reorder.</div>
-        <div id="br-order-list"></div>
-      </div>
     </div>
     <div class="card">
       <div class="card-hdr">All Payments — <span id="br-month-lbl2"></span></div>
@@ -2396,8 +2384,6 @@ function getCourtCost(b){
 function getIncentiveRate(b){return b.venue_type==='school'?5.00:2.50;}
 function calcDue(b){return getCourtCost(b)+getIncentiveRate(b)*(b.slots||1);}
 
-function getBookerOrder(){try{return JSON.parse(localStorage.getItem('booker-order')||'[]')}catch{return[]}}
-function saveBookerOrder(o){localStorage.setItem('booker-order',JSON.stringify(o))}
 
 // ── BOOKING RECORDS MONTH DROPDOWN ────────────────────────────
 function renderBRMonthDropdown(){
@@ -2429,23 +2415,17 @@ function renderBookingRecords(){
   // Filter by payment month. Court-booking receipts carry a booker (the
   // person to reimburse); academy programme entries have none and stay out.
   const all=Object.entries(brBookings).filter(([,b])=>b&&(b.booker||b.source!=='activesg')&&getPaymentDate(b).slice(0,7)===brSelectedMonth).map(([k,b])=>({...b,_key:k}));
-  const allBookers=[...new Set(Object.values(brBookings).filter(Boolean).map(b=>b.booker).filter(Boolean))];
-  let order=getBookerOrder();
-  allBookers.forEach(n=>{if(!order.includes(n))order.push(n);});
-  order=order.filter(n=>allBookers.includes(n));
-  saveBookerOrder(order);
 
-  // Due summary (court_cost + $10 bonus per slot)
-  const totals={};order.forEach(n=>totals[n]=0);
+  // Due summary per booker, largest amount first
+  const totals={};
   all.forEach(b=>{if(b.booker)totals[b.booker]=(totals[b.booker]||0)+calcDue(b);});
-  document.getElementById('br-summary').innerHTML=order.filter(n=>totals[n]>0||all.some(b=>b.booker===n)).map(n=>`
+  const names=Object.keys(totals).sort((a,b)=>totals[b]-totals[a]);
+  document.getElementById('br-summary').innerHTML=names.map(n=>`
     <div class="br-card">
       <div class="br-card-name">${esc(n)}</div>
-      <div class="br-card-amt">$${(totals[n]||0).toFixed(2)}</div>
+      <div class="br-card-amt">$${totals[n].toFixed(2)}</div>
       <div class="br-card-lbl">due</div>
     </div>`).join('')||'<div class="empty">No payments this month</div>';
-
-  renderBROrderList(order);
 
   // Table sorted by payment date desc
   const sorted=all.sort((a,b)=>getPaymentDate(b).localeCompare(getPaymentDate(a)));
@@ -2456,7 +2436,7 @@ function renderBookingRecords(){
       <td style="font-weight:600;max-width:160px;white-space:normal">${esc(b.venue||'')}</td>
       <td><b>Ct ${esc(b.court||'')}</b></td>
       <td>${b.time||''}</td>
-      <td>${esc(b.booker||'')}</td>
+      <td onclick="editBooker('${b._key}')" style="cursor:pointer" title="Tap to edit booker">${esc(b.booker||'')} <span style="color:var(--txf);font-size:11px">✏️</span></td>
       <td><span class="${b.venue_type==='school'?'br-badge-sc':'br-badge-sh'}">${b.venue_type==='school'?'School':'S.Hall'}</span></td>
       <td style="color:var(--txm)">$${getCourtCost(b).toFixed(2)}</td>
       <td style="font-weight:700;color:var(--green)">$${calcDue(b).toFixed(2)}</td>
@@ -2465,25 +2445,17 @@ function renderBookingRecords(){
     :'<tr><td colspan="10" style="padding:20px;text-align:center;color:var(--txf)">No payments recorded this month</td></tr>';
 }
 
-function renderBROrderList(order){
-  const list=document.getElementById('br-order-list');if(!list)return;
-  list.innerHTML=order.map((name,i)=>`
-    <div class="br-drag-item" draggable="true" data-i="${i}"
-      ondragstart="brDS(event)" ondragover="brDO(event)" ondrop="brDrop(event,${i})" ondragend="brDE()">
-      <span class="br-drag-handle">⠿</span>
-      <span style="font-weight:600;flex:1">${esc(name)}</span>
-      <span style="font-size:11px;color:var(--txm)">#${i+1}</span>
-    </div>`).join('');
-}
-let brDragI=null;
-function brDS(e){brDragI=+e.currentTarget.dataset.i;e.currentTarget.style.opacity='.4';}
-function brDO(e){e.preventDefault();e.currentTarget.classList.add('drag-over');}
-function brDE(){document.querySelectorAll('.br-drag-item').forEach(el=>{el.style.opacity='';el.classList.remove('drag-over');});}
-function brDrop(e,toI){
-  e.preventDefault();brDE();
-  if(brDragI===null||brDragI===toI)return;
-  const o=getBookerOrder();const[mv]=o.splice(brDragI,1);o.splice(toI,0,mv);
-  saveBookerOrder(o);brDragI=null;renderBookingRecords();
+async function editBooker(key){
+  const b=brBookings[key];if(!b)return;
+  const name=prompt('Booker for this booking:',b.booker||'');
+  if(name===null)return; // cancelled
+  const val=name.trim()||null;
+  try{
+    const r=await fetch(`${FIREBASE_URL}/bookings/${key}/booker.json`,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(val)});
+    if(!r.ok)throw new Error('HTTP '+r.status);
+    brBookings[key].booker=val;
+    renderBookingRecords();
+  }catch(e){console.error('editBooker:',e);alert('Failed to save booker — try again.');}
 }
 
 async function deleteBooking(key){
