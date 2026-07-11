@@ -214,6 +214,34 @@ def save_image_to_firebase(key: str, image_bytes: bytes, mime_type: str = "image
         return False
 
 
+def reply(message: types.Message, text: str) -> None:
+    """Reply in the chat; never let a reply failure break processing."""
+    try:
+        bot.reply_to(message, text)
+    except Exception as e:
+        log.warning("Reply failed: %s", e)
+
+
+def fmt_time(hhmm: str) -> str:
+    """'16:00' → '4pm', '09:30' → '9:30am'."""
+    try:
+        h, m = map(int, hhmm.split(":"))
+        ap = "pm" if h >= 12 else "am"
+        h12 = h % 12 or 12
+        return f"{h12}:{m:02d}{ap}" if m else f"{h12}{ap}"
+    except Exception:
+        return hhmm or "?"
+
+
+def fmt_date(yyyy_mm_dd: str) -> str:
+    """'2026-07-23' → 'Thu 23 Jul 2026'."""
+    try:
+        d = datetime.strptime(yyyy_mm_dd, "%Y-%m-%d")
+        return d.strftime("%a %-d %b %Y")
+    except Exception:
+        return yyyy_mm_dd or "?"
+
+
 @bot.message_handler(content_types=['photo'])
 def handle_photo(message: types.Message) -> None:
     chat_id = str(message.chat.id)
@@ -247,6 +275,7 @@ def handle_photo(message: types.Message) -> None:
     booking = extract_booking_from_image(image_bytes, caption=caption)
     if not booking:
         log.warning("Could not extract booking from photo sent by %s", sender)
+        reply(message, "⚠️ Couldn't read this receipt — please add the booking manually.")
         return
 
     booking.setdefault("class_type", "ActiveSG")
@@ -269,19 +298,23 @@ def handle_photo(message: types.Message) -> None:
                 bookings_to_save.append(b)
         else:
             log.warning("Failed to calculate weekly dates")
+            reply(message, "⚠️ Read the receipt but couldn't work out the weekly dates — please add the booking manually.")
             return
     else:
         if not booking.get("date"):
             log.warning("No date found in receipt")
+            reply(message, "⚠️ Couldn't find a date on this receipt — please add the booking manually.")
             return
         bookings_to_save = [booking]
 
+    saved = 0
     for i, b in enumerate(bookings_to_save):
         log.info("Saving booking for %s: %s–%s at %s", b.get("date"), b.get("start_time"), b.get("end_time"), b.get("venue_text"))
         key = save_booking_to_firebase(b)
         if not key:
             log.error("Failed to save booking for date %s", b.get("date"))
             continue
+        saved += 1
         log.info("Saved with key: %s", key)
 
         if i == 0:
@@ -289,6 +322,18 @@ def handle_photo(message: types.Message) -> None:
                 log.info("Image saved to booking_images/%s", key)
             else:
                 log.warning("Image upload failed for key %s", key)
+
+    times = f"{fmt_time(booking.get('start_time'))}–{fmt_time(booking.get('end_time'))}"
+    venue = booking.get("venue_text") or "unknown venue"
+    court = f" (Court {booking['court_no']})" if booking.get("court_no") else ""
+    if saved == 0:
+        reply(message, "⚠️ Read the receipt but couldn't save it — please try again or add the booking manually.")
+    elif len(bookings_to_save) > 1:
+        first, last = bookings_to_save[0]["date"], bookings_to_save[-1]["date"]
+        note = "" if saved == len(bookings_to_save) else f" ({len(bookings_to_save) - saved} failed to save)"
+        reply(message, f"✅ Saved {saved} weekly sessions: {times} — {venue}{court}\n{fmt_date(first)} to {fmt_date(last)}{note}")
+    else:
+        reply(message, f"✅ Saved: {fmt_date(booking['date'])}, {times} — {venue}{court}")
 
 
 def main() -> None:
