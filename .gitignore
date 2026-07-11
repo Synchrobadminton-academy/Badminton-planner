@@ -6,6 +6,10 @@ build/
 # Node
 node_modules/
 
+# Python
+__pycache__/
+*.pyc
+
 # SQLite database (local dev only)
 data/
 
