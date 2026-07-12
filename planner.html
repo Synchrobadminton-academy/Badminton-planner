@@ -1191,8 +1191,12 @@ function makeBlockDraggable(div,instId){
   });
   div.addEventListener('touchstart',e=>{
     if(e.target.closest('.sb-btns')||e.target.closest('.sb-resize'))return;
-    e.stopPropagation();selectInst(instId);startBlockMove(e.touches[0].clientX,e.touches[0].clientY,instId,true);
-  },{passive:false});
+    e.stopPropagation();
+    armTouchDrag(e,()=>selectInst(instId),(cx,cy)=>{
+      selectInst(instId);
+      startBlockMove(cx,cy,instId,true);
+    });
+  },{passive:true});
 }
 
 function startBlockMove(startX,startY,instId,isTouch){
@@ -1364,17 +1368,58 @@ function setupCalChipDrag(grid){
     }
   },{passive:true});
 }
+// Touch: hold a block still for a moment to pick it up; a quick swipe
+// scrolls the page instead of dragging the block
+const TOUCH_DRAG_HOLD_MS=350;
+function armTouchDrag(e,onTap,onArmed){
+  const t=e.touches[0];const sx=t.clientX,sy=t.clientY;
+  let armed=false,cancelled=false,curX=sx,curY=sy;
+  const watchMove=ev=>{
+    curX=ev.touches[0].clientX;curY=ev.touches[0].clientY;
+    if(!armed&&Math.hypot(curX-sx,curY-sy)>10){cancelled=true;cleanup();}
+  };
+  const watchEnd=()=>{cleanup();if(!armed&&!cancelled&&onTap)onTap();};
+  function cleanup(){
+    clearTimeout(timer);
+    document.removeEventListener('touchmove',watchMove);
+    document.removeEventListener('touchend',watchEnd);
+    document.removeEventListener('touchcancel',watchEnd);
+  }
+  const timer=setTimeout(()=>{
+    if(cancelled)return;
+    armed=true;cleanup();
+    if(navigator.vibrate)navigator.vibrate(30);
+    onArmed(curX,curY);
+  },TOUCH_DRAG_HOLD_MS);
+  document.addEventListener('touchmove',watchMove,{passive:true});
+  document.addEventListener('touchend',watchEnd);
+  document.addEventListener('touchcancel',watchEnd);
+}
+
 function startCalDrag(e){
   const chip=e.target.closest('.cal-chip[data-inst-id]');if(!chip)return;
   const isTouch=e.touches!=null;
-  const startX=isTouch?e.touches[0].clientX:e.clientX;
-  const startY=isTouch?e.touches[0].clientY:e.clientY;
   const instId=+chip.dataset.instId;const inst=getInsts().find(x=>x.id===instId);if(!inst)return;
+  if(isTouch){
+    armTouchDrag(e,()=>{
+      // Tap: select; double-tap: edit
+      const now=Date.now();
+      if(_calChipClickId===instId&&now-_calChipClickTime<400){_calChipClickId=null;_calChipClickTime=0;openEdit(instId);return;}
+      _calChipClickId=instId;_calChipClickTime=now;
+      selectCalChip(instId);
+    },(cx,cy)=>beginCalDrag(chip,inst,instId,cx,cy,true));
+    return; // no preventDefault — the page scrolls normally
+  }
+  beginCalDrag(chip,inst,instId,e.clientX,e.clientY,false);
+  e.preventDefault();e.stopPropagation();
+}
+
+function beginCalDrag(chip,inst,instId,startX,startY,isTouch){
   const rect=chip.getBoundingClientRect();
   const ghost=chip.cloneNode(true);
   ghost.style.cssText=`position:fixed;left:${rect.left}px;top:${rect.top}px;width:${rect.width}px;opacity:.75;pointer-events:none;z-index:1000;border-radius:4px;`;
   document.body.appendChild(ghost);chip.style.opacity='0.3';
-  let lastCell=null,targetDate=inst.date,hasMoved=false;
+  let lastCell=null,targetDate=inst.date,hasMoved=!!isTouch;
   function onMove(cx,cy){
     const dx=cx-startX,dy=cy-startY;
     if(Math.sqrt(dx*dx+dy*dy)>8)hasMoved=true;
@@ -1387,14 +1432,7 @@ function startCalDrag(e){
     document.removeEventListener('mousemove',mm);document.removeEventListener('mouseup',mu);
     document.removeEventListener('touchmove',tm);document.removeEventListener('touchend',tu);
     document.body.removeChild(ghost);chip.style.opacity='';if(lastCell)lastCell.classList.remove('drop-target');
-    if(!hasMoved){
-      if(isTouch){
-        const now=Date.now();
-        if(_calChipClickId===instId&&now-_calChipClickTime<400){_calChipClickId=null;_calChipClickTime=0;openEdit(instId);return;}
-        _calChipClickId=instId;_calChipClickTime=now;
-      }
-      selectCalChip(instId);return;
-    }
+    if(!hasMoved){selectCalChip(instId);return;}
     if(targetDate&&targetDate!==inst.date)updateInst(instId,{...inst,date:targetDate});
     renderMonth();
   }
@@ -1402,7 +1440,6 @@ function startCalDrag(e){
   const tm=e=>{e.preventDefault();onMove(e.touches[0].clientX,e.touches[0].clientY);};const tu=()=>onUp();
   if(isTouch){document.addEventListener('touchmove',tm,{passive:false});document.addEventListener('touchend',tu,{once:true});}
   else{document.addEventListener('mousemove',mm);document.addEventListener('mouseup',mu,{once:true});}
-  e.preventDefault();e.stopPropagation();
 }
 
 // ── DAY DETAIL ────────────────────────────────────────────────
