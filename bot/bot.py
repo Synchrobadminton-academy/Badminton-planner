@@ -289,7 +289,7 @@ def handle_photo(message: types.Message) -> None:
     is_programme = bool((booking.get("start_date") and booking.get("end_date")) or booking.get("students"))
     if is_programme and not caption.strip():
         log.info("Ignoring programme receipt from %s — no caption", sender)
-        reply(message, "⚠️ Programme image ignored — re-send it with a text caption so I have context.")
+        reply(message, "Programme image not recorded")
         return
 
     booking.setdefault("class_type", "ActiveSG")
