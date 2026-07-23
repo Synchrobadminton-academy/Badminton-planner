@@ -2479,7 +2479,7 @@ function renderBookingRecords(){
     ?sorted.map(b=>`<tr>
       <td>${getPaymentDate(b)}</td>
       <td>${getCourtDate(b)}</td>
-      <td style="font-weight:600;max-width:160px;white-space:normal">${esc(b.venue||'')}</td>
+      <td onclick="editVenue('${b._key}')" style="font-weight:600;max-width:160px;white-space:normal;cursor:pointer" title="Tap to edit venue">${esc(b.venue||'')} <span style="color:var(--txf);font-size:11px">✏️</span></td>
       <td><b>Ct ${esc(b.court||'')}</b></td>
       <td>${b.time||''}</td>
       <td onclick="editBooker('${b._key}')" style="cursor:pointer" title="Tap to edit booker">${esc(b.booker||'')} <span style="color:var(--txf);font-size:11px">✏️</span></td>
@@ -2502,6 +2502,37 @@ async function editBooker(key){
     brBookings[key].booker=val;
     renderBookingRecords();
   }catch(e){console.error('editBooker:',e);alert('Failed to save booker — try again.');}
+}
+
+async function editVenue(key){
+  const b=brBookings[key];if(!b)return;
+  const name=prompt('Venue for this booking (also updates the Schedule):',b.venue||'');
+  if(name===null)return; // cancelled
+  const val=name.trim();
+  if(!val)return;
+  try{
+    const r=await fetch(`${FIREBASE_URL}/bookings/${key}/venue.json`,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(val)});
+    if(!r.ok)throw new Error('HTTP '+r.status);
+    brBookings[key].venue=val;
+
+    // Propagate to the linked session + its instances so the Schedule matches
+    const sessions=S.get('sessions');
+    const sess=b.bot_sessions_key
+      ?sessions.find(s=>s&&s.bot_key===b.bot_sessions_key)
+      :(b.session_id?sessions.find(s=>s&&s.id===b.session_id):null);
+    if(sess){
+      const updatedSessions=sessions.map(s=>s.id===sess.id?{...s,venue_text:val}:s);
+      const ok1=await pushToFirebase('sessions',updatedSessions);
+      if(ok1)syncCache['sessions']=updatedSessions;
+      const insts=getInsts();
+      const updatedInsts=insts.map(i=>i.session_id===sess.id?{...i,venue_text:val}:i);
+      const ok2=await pushToFirebase('instances',updatedInsts);
+      if(ok2)syncCache['instances']=updatedInsts;
+      renderSched();renderMonth();
+      if(currentView==='dashboard')renderDashboard();
+    }
+    renderBookingRecords();
+  }catch(e){console.error('editVenue:',e);alert('Failed to save venue — try again.');}
 }
 
 async function deleteBooking(key){
