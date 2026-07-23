@@ -75,7 +75,10 @@ Rules — follow these exactly:
    - Example: slots at 10am, 11am, 12pm → start_time="10:00", end_time="13:00"
    - Example: single slot at 7pm → start_time="19:00", end_time="20:00"
 
-3. VENUE: Use the message caption first if provided, then fall back to the receipt. Extract ONLY the sports hall name (e.g. "Bukit Canberra Sport Hall", "Clementi Sport Hall") — not the full address.
+3. VENUE: Use the message caption first if provided, then fall back to the receipt. Extract the specific location/branch name
+   (e.g. "Bukit Canberra Sport Hall", "Bishan Clubhouse", "Clementi Sport Hall") — not the full address, and NOT a generic
+   facility/room type. ActiveSG receipts often show both a facility type ("Indoor Sports Hall", "Badminton Court") and the
+   actual branch/location name — always prefer the branch/location name, never the generic facility type.
 
 4. STUDENTS: Programme receipts often include a participant list (S/N + names).
    Extract EVERY participant name, in order, into the "students" array. If the
