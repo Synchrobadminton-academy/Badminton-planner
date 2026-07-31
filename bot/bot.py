@@ -41,6 +41,16 @@ ALLOWED_CHAT_ID = os.environ.get("ALLOWED_CHAT_ID")  # optional
 ALLOWED_TOPICS = set(
     int(x.strip()) for x in os.environ.get("ALLOWED_TOPICS", "").split(",") if x.strip()
 ) if os.environ.get("ALLOWED_TOPICS") else None
+# Optional: Firebase database secret so the bot keeps write access once the
+# database rules are locked down to authenticated users only
+FIREBASE_SECRET = os.environ.get("FIREBASE_SECRET")
+
+
+def fb_url(path: str) -> str:
+    url = f"{FIREBASE_URL}/{path}"
+    if FIREBASE_SECRET:
+        url += f"?auth={FIREBASE_SECRET}"
+    return url
 
 claude = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
 bot = telebot.TeleBot(TELEGRAM_BOT_TOKEN)
@@ -182,7 +192,7 @@ def extract_booking_from_image(image_bytes: bytes, mime_type: str = "image/jpeg"
 def save_booking_to_firebase(booking: dict) -> str | None:
     try:
         r = requests.post(
-            f"{FIREBASE_URL}/bot_sessions.json",
+            fb_url("bot_sessions.json"),
             json=booking,
             timeout=15,
         )
@@ -212,7 +222,7 @@ def save_image_to_firebase(key: str, image_bytes: bytes, mime_type: str = "image
     b64 = base64.b64encode(image_bytes).decode("utf-8")
     try:
         r = requests.put(
-            f"{FIREBASE_URL}/booking_images/{key}.json",
+            fb_url(f"booking_images/{key}.json"),
             json={"data": b64, "mime_type": mime_type},
             timeout=30,
         )

@@ -11,8 +11,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Print receipt image as base64
+        env:
+          FIREBASE_SECRET: ${{ secrets.FIREBASE_SECRET }}
         run: |
           FB=https://synchroadmin-133f3-default-rtdb.asia-southeast1.firebasedatabase.app
+          FBAUTH="${FIREBASE_SECRET:+?auth=$FIREBASE_SECRET}"
           echo "BEGIN_B64"
-          curl -s "$FB/booking_images/${{ inputs.key }}.json" | jq -r '.data' | fold -w 3000
+          curl -s "$FB/booking_images/${{ inputs.key }}.json$FBAUTH" | jq -r '.data' | fold -w 3000
           echo "END_B64"

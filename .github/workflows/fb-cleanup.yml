@@ -6,19 +6,23 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Prune orphan sessions and flag junk bot entries
+        env:
+          FIREBASE_SECRET: ${{ secrets.FIREBASE_SECRET }}
         run: |
           python3 - <<'EOF'
-          import json, urllib.request
+          import json, os, urllib.request
 
           FB = "https://synchroadmin-133f3-default-rtdb.asia-southeast1.firebasedatabase.app"
+          SECRET = os.environ.get("FIREBASE_SECRET") or ""
+          AUTH = f"?auth={SECRET}" if SECRET else ""
 
           def get(path):
-              with urllib.request.urlopen(f"{FB}/{path}.json") as r:
+              with urllib.request.urlopen(f"{FB}/{path}.json{AUTH}") as r:
                   return json.load(r)
 
           def put(path, value):
               req = urllib.request.Request(
-                  f"{FB}/{path}.json", data=json.dumps(value).encode(),
+                  f"{FB}/{path}.json{AUTH}", data=json.dumps(value).encode(),
                   method="PUT", headers={"Content-Type": "application/json"})
               urllib.request.urlopen(req)
 

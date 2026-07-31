@@ -1,0 +1,57 @@
+name: fb-backup
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 20 * * 0"   # weekly, Sunday 20:00 UTC (Monday 4am SGT)
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Snapshot planner data into /backups
+        env:
+          FIREBASE_SECRET: ${{ secrets.FIREBASE_SECRET }}
+        run: |
+          python3 - <<'EOF'
+          import json, os, urllib.request
+          from datetime import datetime, timezone
+
+          FB = "https://synchroadmin-133f3-default-rtdb.asia-southeast1.firebasedatabase.app"
+          SECRET = os.environ.get("FIREBASE_SECRET") or ""
+          AUTH = f"?auth={SECRET}" if SECRET else ""
+          KEEP = 4
+          # everything except booking_images (too large to duplicate weekly)
+          NODES = ["sessions", "instances", "bookings", "bot_sessions", "attendance",
+                   "coaches", "venues", "standards", "class-types", "combo-colors",
+                   "booker_coach_map"]
+
+          def get(path):
+              with urllib.request.urlopen(f"{FB}/{path}.json{AUTH}") as r:
+                  return json.load(r)
+
+          def put(path, value):
+              req = urllib.request.Request(
+                  f"{FB}/{path}.json{AUTH}", data=json.dumps(value).encode(),
+                  method="PUT", headers={"Content-Type": "application/json"})
+              urllib.request.urlopen(req)
+
+          def delete(path):
+              req = urllib.request.Request(f"{FB}/{path}.json{AUTH}", method="DELETE")
+              urllib.request.urlopen(req)
+
+          stamp = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+          snapshot = {}
+          for node in NODES:
+              data = get(node)
+              snapshot[node] = data
+              size = len(json.dumps(data)) if data is not None else 0
+              print(f"snapshotted {node}: {size} bytes")
+          put(f"backups/{stamp}", snapshot)
+          print(f"saved backup backups/{stamp}")
+
+          existing = sorted((get("backups") or {}).keys())
+          for old in existing[:-KEEP]:
+              delete(f"backups/{old}")
+              print(f"pruned old backup {old}")
+          print(f"backups kept: {existing[-KEEP:]}")
+          EOF
