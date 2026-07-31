@@ -313,8 +313,11 @@ table.sched td.tslot.cell-target{background:rgba(37,99,235,.22)!important;outlin
 <div id="pw-gate" style="display:none;position:fixed;inset:0;background:#0f172a;z-index:9999;align-items:center;justify-content:center;flex-direction:column;gap:20px">
   <img id="pw-logo" style="height:64px;border-radius:10px;background:#fff;padding:6px 10px;margin-bottom:8px" alt="Synchro">
   <div style="color:#fff;font-size:20px;font-weight:800;letter-spacing:.01em">Coach Planner</div>
-  <div style="color:#94a3b8;font-size:13px;margin-top:-8px">Enter password to continue</div>
+  <div id="pw-sub" style="color:#94a3b8;font-size:13px;margin-top:-8px">Enter password to continue</div>
   <div style="display:flex;flex-direction:column;gap:10px;width:260px">
+    <input id="pw-email" type="email" placeholder="Email" autocomplete="username"
+      style="display:none;padding:12px 14px;border-radius:10px;border:1.5px solid #334155;background:#1e293b;color:#fff;font-size:15px;outline:none;text-align:center"
+      onkeydown="if(event.key==='Enter')checkPw()">
     <input id="pw-input" type="password" placeholder="Password" autocomplete="current-password"
       style="padding:12px 14px;border-radius:10px;border:1.5px solid #334155;background:#1e293b;color:#fff;font-size:15px;outline:none;text-align:center;letter-spacing:.1em"
       onkeydown="if(event.key==='Enter')checkPw()">
@@ -325,14 +328,89 @@ table.sched td.tslot.cell-target{background:rgba(37,99,235,.22)!important;outlin
 
 <script>
 const PW='synchro123';
+// Set to the Firebase project's Web API key to switch the gate to real
+// Firebase Authentication (email/password sign-in). Empty = legacy password.
+const FIREBASE_API_KEY='';
+let fbIdToken=null;
+
+// Once signed in, every request to the Realtime Database carries the user's
+// ID token, so the database rules can require auth
+(function(){
+  const orig=window.fetch.bind(window);
+  window.fetch=(url,opts)=>{
+    if(typeof url==='string'&&url.includes('firebasedatabase.app')&&fbIdToken){
+      url+=(url.includes('?')?'&':'?')+'auth='+encodeURIComponent(fbIdToken);
+    }
+    return orig(url,opts);
+  };
+})();
+
+async function fbRefreshToken(){
+  const rt=localStorage.getItem('fb_refresh');
+  if(!rt)return false;
+  try{
+    const r=await fetch(`https://securetoken.googleapis.com/v1/token?key=${FIREBASE_API_KEY}`,{
+      method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},
+      body:'grant_type=refresh_token&refresh_token='+encodeURIComponent(rt)});
+    if(!r.ok)throw new Error('refresh failed');
+    const d=await r.json();
+    fbIdToken=d.id_token;
+    localStorage.setItem('fb_refresh',d.refresh_token);
+    return true;
+  }catch(e){return false;}
+}
+
+async function fbSignIn(email,password){
+  const r=await fetch(`https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=${FIREBASE_API_KEY}`,{
+    method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({email,password,returnSecureToken:true})});
+  if(!r.ok){
+    const e=await r.json().catch(()=>({}));
+    throw new Error(e.error?.message||'SIGN_IN_FAILED');
+  }
+  const d=await r.json();
+  fbIdToken=d.idToken;
+  localStorage.setItem('fb_refresh',d.refreshToken);
+}
+
 (function(){
   const gate=document.getElementById('pw-gate');
-  if(localStorage.getItem('cmp_auth')===PW){gate.style.display='none';}
-  else{gate.style.display='flex';}
+  if(FIREBASE_API_KEY){
+    document.getElementById('pw-email').style.display='';
+    document.getElementById('pw-sub').textContent='Sign in to continue';
+    gate.style.display='flex';
+    fbRefreshToken().then(ok=>{
+      if(ok){
+        gate.style.display='none';
+        setInterval(fbRefreshToken,50*60*1000);
+      }
+    });
+  }else if(localStorage.getItem('cmp_auth')===PW){
+    gate.style.display='none';
+  }else{
+    gate.style.display='flex';
+  }
 })();
-function checkPw(){
+
+async function checkPw(){
   const inp=document.getElementById('pw-input');
   const err=document.getElementById('pw-err');
+  if(FIREBASE_API_KEY){
+    const email=document.getElementById('pw-email').value.trim();
+    if(!email||!inp.value)return;
+    err.textContent='Signing in…';
+    try{
+      await fbSignIn(email,inp.value);
+      err.textContent='';
+      document.getElementById('pw-gate').style.display='none';
+      setInterval(fbRefreshToken,50*60*1000);
+    }catch(e){
+      err.textContent='Sign-in failed. Check email and password.';
+      inp.value='';
+      setTimeout(()=>err.textContent='',3000);
+    }
+    return;
+  }
   if(inp.value===PW){
     localStorage.setItem('cmp_auth',PW);
     document.getElementById('pw-gate').style.display='none';
