@@ -79,7 +79,8 @@ def fmt_date(dstr: str) -> str:
 def lesson_lines(lessons: list[dict], coach_names: dict) -> str:
     lines = []
     for i in sorted(lessons, key=lambda x: x.get("start_time") or ""):
-        court = f" — Court {i['court_no']}" if i.get("court_no") else ""
+        # Programme (activesg) sessions never show a court to parents
+        court = f" — Court {i['court_no']}" if i.get("court_no") and not i.get("programme") else ""
         venue = i.get("venue_text") or "venue TBC"
         names = [coach_names.get(cid, "").strip() for cid in (i.get("coach_ids") or [])]
         names = [n for n in names if n]
