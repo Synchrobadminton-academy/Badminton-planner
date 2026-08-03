@@ -46,6 +46,19 @@ def get_lessons() -> list[dict]:
     return [i for i in vals if i and i.get("status") != "cancelled" and i.get("date")]
 
 
+def get_coach_names() -> dict:
+    """Map coach id -> name; empty map if the fetch fails (coach line is optional)."""
+    try:
+        r = requests.get(fb_url("coaches.json"), timeout=15)
+        r.raise_for_status()
+        data = r.json() or []
+        vals = data if isinstance(data, list) else list(data.values())
+        return {c["id"]: c.get("name", "") for c in vals if c and c.get("id") is not None}
+    except Exception as e:
+        log.warning("parent bot: could not load coaches: %s", e)
+        return {}
+
+
 def fmt_time(hhmm: str) -> str:
     try:
         h, m = map(int, hhmm.split(":"))
@@ -63,12 +76,15 @@ def fmt_date(dstr: str) -> str:
         return dstr
 
 
-def lesson_lines(lessons: list[dict]) -> str:
+def lesson_lines(lessons: list[dict], coach_names: dict) -> str:
     lines = []
     for i in sorted(lessons, key=lambda x: x.get("start_time") or ""):
         court = f" — Court {i['court_no']}" if i.get("court_no") else ""
         venue = i.get("venue_text") or "venue TBC"
-        lines.append(f"• {fmt_time(i.get('start_time'))}–{fmt_time(i.get('end_time'))}: {venue}{court}")
+        names = [coach_names.get(cid, "").strip() for cid in (i.get("coach_ids") or [])]
+        names = [n for n in names if n]
+        coach = f" — Coach {' & '.join(names)}" if names else ""
+        lines.append(f"• {fmt_time(i.get('start_time'))}–{fmt_time(i.get('end_time'))}: {venue}{court}{coach}")
     return "\n".join(lines)
 
 
@@ -79,17 +95,18 @@ def build_answer() -> str:
         log.error("parent bot: failed to load lessons: %s", e)
         return "Sorry, I couldn't check the schedule right now — please try again in a minute."
 
+    coach_names = get_coach_names()
     today = datetime.now(TZ).date().isoformat()
     todays = [i for i in lessons if i["date"] == today]
     if todays:
-        return f"📍 Today's lessons ({fmt_date(today)}):\n{lesson_lines(todays)}"
+        return f"📍 Today's lessons ({fmt_date(today)}):\n{lesson_lines(todays, coach_names)}"
 
     upcoming = sorted({i["date"] for i in lessons if i["date"] > today})
     if upcoming:
         nxt = upcoming[0]
         nxt_lessons = [i for i in lessons if i["date"] == nxt]
         return (
-            f"No lessons today.\n\n📍 Next lessons ({fmt_date(nxt)}):\n{lesson_lines(nxt_lessons)}"
+            f"No lessons today.\n\n📍 Next lessons ({fmt_date(nxt)}):\n{lesson_lines(nxt_lessons, coach_names)}"
         )
     return "No upcoming lessons are scheduled yet — please check back later."
 
