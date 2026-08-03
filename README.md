@@ -41,6 +41,8 @@ Push to `gh-pages` → GitHub Pages redeploys the website.
 | `FIREBASE_URL` | Realtime Database URL (has a default) |
 | `ALLOWED_CHAT_ID` | Optional: restrict to one group chat |
 | `ALLOWED_TOPICS` | Optional: comma-separated topic IDs to accept photos from |
+| `FIREBASE_SECRET` | Optional: database secret once rules are locked down |
+| `PARENT_BOT_TOKEN` | Optional: enables the parent-facing lesson-info bot (separate bot from @BotFather) |
 
 ## Firebase data layout
 
