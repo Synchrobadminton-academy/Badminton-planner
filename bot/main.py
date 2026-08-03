@@ -14,12 +14,22 @@ log = logging.getLogger(__name__)
 
 import bot as receipt_bot
 
-if os.environ.get("PARENT_BOT_TOKEN"):
+parent_token = (os.environ.get("PARENT_BOT_TOKEN") or "").strip()
+
+if parent_token and parent_token == os.environ.get("TELEGRAM_BOT_TOKEN", "").strip():
+    log.error(
+        "PARENT_BOT_TOKEN is the SAME token as TELEGRAM_BOT_TOKEN — the parent "
+        "bot needs its own bot from @BotFather (/newbot). Running receipt bot only."
+    )
+    parent_token = ""
+
+if parent_token:
     import parent_bot
 
     threading.Thread(target=receipt_bot.main, daemon=True).start()
     log.info("Receipt bot running in background thread; starting parent bot")
     parent_bot.main()
 else:
-    log.info("PARENT_BOT_TOKEN not set — running receipt bot only")
+    if not os.environ.get("PARENT_BOT_TOKEN"):
+        log.info("PARENT_BOT_TOKEN not set — running receipt bot only")
     receipt_bot.main()
