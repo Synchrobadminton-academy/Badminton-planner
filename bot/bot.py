@@ -3,6 +3,9 @@
 Badminton receipt bot — reads court booking photos sent to a Telegram group,
 OCRs them with Claude, and saves the booking + image to Firebase.
 
+Also posts "weekly meeting fun facts" to the group once a week (and on demand
+via /funfacts) — see fun_facts.py.
+
 Requirements:
     pip install pyTelegramBotAPI anthropic requests
 
@@ -11,6 +14,10 @@ Environment variables (set in .env or your server):
     ANTHROPIC_API_KEY    — from console.anthropic.com
     FIREBASE_URL         — e.g. https://your-db.firebasedatabase.app
     ALLOWED_CHAT_ID      — Telegram group chat ID (optional, restricts to one group)
+    FUN_FACTS_CHAT_ID    — chat for the weekly fun-facts post (default: ALLOWED_CHAT_ID)
+    FUN_FACTS_TOPIC_ID   — optional topic (thread) ID for the weekly post
+    FUN_FACTS_DAY        — weekday of the weekly post, mon/tue/… (default mon)
+    FUN_FACTS_TIME       — time of the weekly post, 24h SGT (default 09:00)
 """
 
 import base64
@@ -18,12 +25,15 @@ import json
 import logging
 import os
 import re
+import threading
 from datetime import datetime, timedelta, date
 
 import anthropic
 import requests
 import telebot
 from telebot import types
+
+import fun_facts
 
 logging.basicConfig(
     format="%(asctime)s [%(levelname)s] %(message)s",
@@ -44,6 +54,10 @@ ALLOWED_TOPICS = set(
 # Optional: Firebase database secret so the bot keeps write access once the
 # database rules are locked down to authenticated users only
 FIREBASE_SECRET = os.environ.get("FIREBASE_SECRET")
+# Weekly meeting fun facts: where the scheduled post goes. Defaults to the
+# allowed group chat; without a chat id the schedule is off (/funfacts still works).
+FUN_FACTS_CHAT_ID = os.environ.get("FUN_FACTS_CHAT_ID") or ALLOWED_CHAT_ID
+FUN_FACTS_TOPIC_ID = os.environ.get("FUN_FACTS_TOPIC_ID")
 
 
 def fb_url(path: str) -> str:
@@ -261,6 +275,26 @@ def fmt_date(yyyy_mm_dd: str) -> str:
         return yyyy_mm_dd or "?"
 
 
+@bot.message_handler(commands=["funfacts", "funfact"])
+def handle_funfacts(message: types.Message) -> None:
+    """On-demand fun facts, e.g. pulled up live during the weekly meeting."""
+    if ALLOWED_CHAT_ID and str(message.chat.id) != ALLOWED_CHAT_ID:
+        log.info("Ignoring /funfacts from chat %s", message.chat.id)
+        return
+    log.info("/funfacts requested by %s", message.from_user.full_name if message.from_user else "unknown")
+    try:
+        reply(message, fun_facts.build_fun_facts())
+    except Exception as e:
+        log.error("/funfacts failed: %s", e)
+        reply(message, "⚠️ Couldn't put the fun facts together — please try again in a minute.")
+
+
+def send_fun_facts(text: str) -> None:
+    """Deliver the scheduled weekly post to the configured group chat/topic."""
+    kwargs = {"message_thread_id": int(FUN_FACTS_TOPIC_ID)} if FUN_FACTS_TOPIC_ID else {}
+    bot.send_message(int(FUN_FACTS_CHAT_ID), text, **kwargs)
+
+
 @bot.message_handler(content_types=['photo'])
 def handle_photo(message: types.Message) -> None:
     chat_id = str(message.chat.id)
@@ -391,6 +425,12 @@ def main() -> None:
         log.info("Webhook deleted (if it existed)")
     except Exception as e:
         log.warning("Webhook deletion: %s", e)
+
+    if FUN_FACTS_CHAT_ID:
+        threading.Thread(target=fun_facts.scheduler_loop, args=(send_fun_facts,), daemon=True).start()
+        log.info("Fun facts scheduler started (chat %s)", FUN_FACTS_CHAT_ID)
+    else:
+        log.info("Fun facts scheduler off — no FUN_FACTS_CHAT_ID or ALLOWED_CHAT_ID set")
 
     log.info("Bot started — listening for photos")
     bot.infinity_polling()
