@@ -87,5 +87,53 @@ jobs:
                   put(f"bookings/{k}/{fk}", fv)
               print(f"backfilled booking {k}: booker={fields['booker']} slots={fields['slots']} type={fields['venue_type']}")
 
+          # One-time: merge duplicate blocks (same date+time+venue) into one,
+          # combining courts ("01 & 04"), coach lists and attendance rosters
+          instances = as_list(get("instances"))
+          sessions = as_list(get("sessions"))
+          attendance = get("attendance") or {}
+          groups = {}
+          for i in instances:
+              if not i or i.get("status") == "cancelled": continue
+              k = (i.get("date"), i.get("start_time"), i.get("end_time"), (i.get("venue_text") or "").strip().lower())
+              groups.setdefault(k, []).append(i)
+          merged_any = False
+          drop_inst_ids, drop_sess_ids = set(), set()
+          for k, grp in groups.items():
+              if len(grp) < 2: continue
+              grp.sort(key=lambda x: x.get("id") or 0)
+              keep = grp[0]
+              courts, coaches = [], []
+              roster, seen_names = [], set()
+              for i in grp:
+                  for c in str(i.get("court_no") or "").split("&"):
+                      c = c.strip()
+                      if c and c not in courts: courts.append(c)
+                  for cid in (i.get("coach_ids") or []):
+                      if cid not in coaches: coaches.append(cid)
+                  for a in (attendance.get(str(i["id"])) or []):
+                      if a and a.get("name") and a["name"].strip().lower() not in seen_names:
+                          seen_names.add(a["name"].strip().lower())
+                          roster.append(a)
+              keep["court_no"] = " & ".join(courts)
+              keep["coach_ids"] = coaches
+              for i in grp[1:]:
+                  drop_inst_ids.add(i["id"])
+                  drop_sess_ids.add(i.get("session_id"))
+              if roster:
+                  fixed = [dict(a, id=n+1) for n, a in enumerate(roster)]
+                  put(f"attendance/{keep['id']}", fixed)
+              merged_any = True
+              print(f"merged {len(grp)} blocks -> {keep['date']} {keep['start_time']} {k[3]} Court {keep['court_no']}")
+          if merged_any:
+              kept_sess_refs = {i.get("session_id") for i in instances if i and i["id"] not in drop_inst_ids}
+              new_instances = [i for i in instances if i and i["id"] not in drop_inst_ids]
+              new_sessions = [s for s in sessions if s and not (s["id"] in drop_sess_ids and s["id"] not in kept_sess_refs)]
+              put("instances", new_instances)
+              put("sessions", new_sessions)
+              print(f"instances: {len(instances)} -> {len(new_instances)}; sessions: {len(sessions)} -> {len(new_sessions)}")
+          else:
+              print("no duplicate blocks to merge")
+
           print("done")
           EOF
