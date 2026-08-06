@@ -667,7 +667,7 @@ async function checkPw(){
     <div class="fg"><label>Notes (optional)</label><input type="text" id="m-notes" placeholder="e.g. *Spare*, 1 Hour only"></div>
     <div class="fg" id="m-receipt-wrap" style="display:none">
       <button type="button" id="m-receipt-btn" onclick="viewSessionReceipt()" class="btn btn-o" style="width:100%;justify-content:center">
-        📷 View Receipt
+        📷 View Receipts
       </button>
       <input type="hidden" id="m-rec" value="0">
     </div>
@@ -1589,7 +1589,55 @@ function openEdit(id){
 }
 function closeModal(){editId=null;document.getElementById('sess-modal').classList.remove('open')}
 let mReceiptKey=null;
-function viewSessionReceipt(){if(mReceiptKey)viewReceiptImage(mReceiptKey);}
+// A merged block ("Court 01 & 04") comes from several receipts — show every
+// receipt for this session's slot, labelled by court
+async function viewSessionReceipt(){
+  const inst=editId?getInsts().find(x=>x.id===editId):null;
+  if(!mReceiptKey&&!inst)return;
+  const modal=document.getElementById('img-modal');
+  const body=document.getElementById('img-modal-body');
+  modal.classList.add('open');
+  body.innerHTML='<div style="color:var(--txm);font-size:13px;padding:20px">Loading…</div>';
+  try{
+    if(!Object.keys(brBookings||{}).length){
+      const r=await fetch(`${FIREBASE_URL}/bookings.json`);
+      if(r.ok)brBookings=await r.json()||{};
+    }
+  }catch(e){}
+  const entries=[];
+  if(mReceiptKey)entries.push({key:mReceiptKey,label:''});
+  if(inst){
+    const t=`${inst.start_time}-${inst.end_time}`;
+    Object.entries(brBookings||{}).forEach(([bk,b])=>{
+      if(!b)return;
+      if((b.court_date||b.date)===inst.date&&(b.time||'')===t&&(b.venue||'')===(inst.venue_text||'')){
+        const k=b.bot_sessions_key||bk;
+        const lbl=b.court?`Court ${b.court}`:'';
+        const e=entries.find(x=>x.key===k);
+        if(e){if(!e.label)e.label=lbl;}
+        else entries.push({key:k,label:lbl});
+      }
+    });
+  }
+  if(!entries.length){
+    body.innerHTML='<div style="color:var(--txm);font-size:13px;padding:20px">Image not available.</div>';
+    return;
+  }
+  const results=await Promise.all(entries.map(async e=>{
+    try{
+      const r=await fetch(`${FIREBASE_URL}/booking_images/${e.key}.json`);
+      return{...e,src:extractImgSrc(await r.json())};
+    }catch(_){return{...e,src:null};}
+  }));
+  const shown=results.filter(r=>r.src);
+  if(!shown.length){
+    body.innerHTML='<div style="color:var(--txm);font-size:13px;padding:20px">Image not available.</div>';
+    return;
+  }
+  body.innerHTML=shown.map(r=>`
+    ${r.label?`<div style="font-weight:800;font-size:13px;margin:10px 0 6px">${esc(r.label)}</div>`:''}
+    <img src="${r.src}" alt="Receipt" style="max-width:100%;border-radius:8px;margin-bottom:10px">`).join('');
+}
 function deleteCurrentInst(){
   if(!editId)return;
   delInst(editId);editId=null;clip=null;
