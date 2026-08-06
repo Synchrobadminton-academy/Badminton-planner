@@ -666,9 +666,7 @@ async function checkPw(){
     </div>
     <div class="fg"><label>Notes (optional)</label><input type="text" id="m-notes" placeholder="e.g. *Spare*, 1 Hour only"></div>
     <div class="fg" id="m-receipt-wrap" style="display:none">
-      <button type="button" id="m-receipt-btn" onclick="viewSessionReceipt()" class="btn btn-o" style="width:100%;justify-content:center">
-        📷 View Receipts
-      </button>
+      <div id="m-receipt-btns" style="display:flex;flex-direction:column;gap:8px"></div>
       <input type="hidden" id="m-rec" value="0">
     </div>
     <div class="mact">
@@ -1559,6 +1557,7 @@ function openModal(date,day,startH,endH){
   document.getElementById('m-rec').value='0';
   mReceiptKey=null;
   document.getElementById('m-receipt-wrap').style.display='none';
+  document.getElementById('m-receipt-btns').innerHTML='';
   document.getElementById('m-del-btn').style.display='none';
   document.getElementById('vsugg').innerHTML=getVenues().map(v=>`<option>${esc(v)}</option>`).join('');
   updateSessionDatalist();
@@ -1581,7 +1580,9 @@ function openEdit(id){
   // Bot-imported sessions carry their receipt's image key — offer to view it
   const _sess=S.get('sessions').find(s=>s&&s.id===inst.session_id);
   mReceiptKey=(_sess&&(_sess.receipt_key||_sess.bot_key))||null;
-  document.getElementById('m-receipt-wrap').style.display=mReceiptKey?'':'none';
+  document.getElementById('m-receipt-wrap').style.display='none';
+  document.getElementById('m-receipt-btns').innerHTML='';
+  renderSessionReceiptButtons(inst,mReceiptKey);
   document.getElementById('m-del-btn').style.display='';
   document.getElementById('vsugg').innerHTML=getVenues().map(v=>`<option>${esc(v)}</option>`).join('');
   document.getElementById('sess-modal').classList.add('open');
@@ -1589,15 +1590,9 @@ function openEdit(id){
 }
 function closeModal(){editId=null;document.getElementById('sess-modal').classList.remove('open')}
 let mReceiptKey=null;
-// A merged block ("Court 01 & 04") comes from several receipts — show every
-// receipt for this session's slot, labelled by court
-async function viewSessionReceipt(){
-  const inst=editId?getInsts().find(x=>x.id===editId):null;
-  if(!mReceiptKey&&!inst)return;
-  const modal=document.getElementById('img-modal');
-  const body=document.getElementById('img-modal-body');
-  modal.classList.add('open');
-  body.innerHTML='<div style="color:var(--txm);font-size:13px;padding:20px">Loading…</div>';
+// A merged block ("Court 01 & 04") comes from several receipts — offer one
+// View Receipt button per receipt, labelled by court
+async function sessionReceiptEntries(inst,firstKey){
   try{
     if(!Object.keys(brBookings||{}).length){
       const r=await fetch(`${FIREBASE_URL}/bookings.json`);
@@ -1605,7 +1600,7 @@ async function viewSessionReceipt(){
     }
   }catch(e){}
   const entries=[];
-  if(mReceiptKey)entries.push({key:mReceiptKey,label:''});
+  if(firstKey)entries.push({key:firstKey,label:''});
   if(inst){
     const t=`${inst.start_time}-${inst.end_time}`;
     Object.entries(brBookings||{}).forEach(([bk,b])=>{
@@ -1619,24 +1614,20 @@ async function viewSessionReceipt(){
       }
     });
   }
-  if(!entries.length){
-    body.innerHTML='<div style="color:var(--txm);font-size:13px;padding:20px">Image not available.</div>';
-    return;
-  }
-  const results=await Promise.all(entries.map(async e=>{
-    try{
-      const r=await fetch(`${FIREBASE_URL}/booking_images/${e.key}.json`);
-      return{...e,src:extractImgSrc(await r.json())};
-    }catch(_){return{...e,src:null};}
-  }));
-  const shown=results.filter(r=>r.src);
-  if(!shown.length){
-    body.innerHTML='<div style="color:var(--txm);font-size:13px;padding:20px">Image not available.</div>';
-    return;
-  }
-  body.innerHTML=shown.map(r=>`
-    ${r.label?`<div style="font-weight:800;font-size:13px;margin:10px 0 6px">${esc(r.label)}</div>`:''}
-    <img src="${r.src}" alt="Receipt" style="max-width:100%;border-radius:8px;margin-bottom:10px">`).join('');
+  return entries;
+}
+
+async function renderSessionReceiptButtons(inst,firstKey){
+  const instId=inst?inst.id:null;
+  const entries=await sessionReceiptEntries(inst,firstKey);
+  if(editId!==instId)return; // a different session was opened meanwhile
+  const wrap=document.getElementById('m-receipt-wrap');
+  const box=document.getElementById('m-receipt-btns');
+  if(!wrap||!box||!entries.length)return;
+  box.innerHTML=entries.map((e,i)=>
+    `<button type="button" class="btn btn-o" style="width:100%;justify-content:center" onclick="viewReceiptImage('${e.key}')">📷 View Receipt${e.label?' — '+esc(e.label):(entries.length>1?' '+(i+1):'')}</button>`
+  ).join('');
+  wrap.style.display='';
 }
 function deleteCurrentInst(){
   if(!editId)return;
