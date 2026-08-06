@@ -42,15 +42,8 @@ function check(label, actual, expected) {
   else { failures++; console.log(`FAIL  ${label}\n      expected ${e}\n      got      ${a}`); }
 }
 
-(async () => {
-  const browser = await chromium.launch(
-    process.env.PW_CHROMIUM ? { executablePath: process.env.PW_CHROMIUM } : {}
-  );
-  const page = await browser.newPage();
-  const errors = [];
-  page.on('pageerror', e => errors.push(e.message));
-
-  // Mock Firebase Auth endpoints and the Realtime Database REST interface
+// Mock Firebase Auth endpoints and the Realtime Database REST interface
+async function mockFirebase(page) {
   await page.route(/googleapis\.com/, route =>
     route.fulfill({ status: 200, contentType: 'application/json', body: '{}' }));
   await page.route(/firebasedatabase\.app/, async route => {
@@ -78,6 +71,16 @@ function check(label, actual, expected) {
     }
     return route.fulfill({ status: 200, body: 'null' });
   });
+}
+
+(async () => {
+  const browser = await chromium.launch(
+    process.env.PW_CHROMIUM ? { executablePath: process.env.PW_CHROMIUM } : {}
+  );
+  const page = await browser.newPage();
+  const errors = [];
+  page.on('pageerror', e => errors.push(e.message));
+  await mockFirebase(page);
 
   await page.goto('file://' + path.resolve(__dirname, '..', 'planner.html'));
   await page.waitForTimeout(4500); // boot + first import cycle
@@ -136,6 +139,31 @@ function check(label, actual, expected) {
     await page.evaluate(() => document.querySelectorAll('#img-modal-body img').length), 1);
 
   check('no page errors', errors, []);
+
+  // ── Mobile: bottom tab bar replaces the hamburger sidebar ────
+  const mob = await browser.newPage({ viewport: { width: 390, height: 844 }, hasTouch: true });
+  const mobErrors = [];
+  mob.on('pageerror', e => mobErrors.push(e.message));
+  await mockFirebase(mob);
+  await mob.goto('file://' + path.resolve(__dirname, '..', 'planner.html'));
+  await mob.waitForTimeout(2500);
+  await mob.evaluate(() => { document.getElementById('pw-gate').style.display = 'none'; });
+  check('mobile shows bottom tab bar, hides sidebar + hamburger',
+    await mob.evaluate(() => ({
+      nav: getComputedStyle(document.getElementById('bottom-nav')).display,
+      sidebar: getComputedStyle(document.getElementById('sidebar')).display,
+      ham: getComputedStyle(document.querySelector('.ham-btn')).display,
+      tabs: document.querySelectorAll('#bottom-nav .bn-item').length,
+    })), { nav: 'flex', sidebar: 'none', ham: 'none', tabs: 6 });
+  await mob.tap('#bottom-nav .bn-item[data-view="schedule"]');
+  await mob.waitForTimeout(400);
+  check('tapping a bottom tab switches view and highlights it',
+    await mob.evaluate(() => ({
+      view: document.querySelector('.view.active')?.id,
+      active: document.querySelector('#bottom-nav .bn-item.active')?.dataset.view,
+    })), { view: 'view-schedule', active: 'schedule' });
+  check('no page errors on mobile', mobErrors, []);
+
   await browser.close();
 
   console.log(failures ? `\n${failures} check(s) FAILED` : '\nAll checks passed');
