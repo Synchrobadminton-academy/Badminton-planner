@@ -2,3 +2,4 @@ pyTelegramBotAPI==4.14.0
 anthropic>=0.32.0
 requests==2.31.0
 tzdata
+Pillow>=10.0

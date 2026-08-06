@@ -14,6 +14,7 @@ Environment variables (set in .env or your server):
 """
 
 import base64
+import io
 import json
 import logging
 import os
@@ -24,6 +25,11 @@ import anthropic
 import requests
 import telebot
 from telebot import types
+
+try:
+    from PIL import Image
+except ImportError:  # Pillow missing — bot still works, images just stay full size
+    Image = None
 
 logging.basicConfig(
     format="%(asctime)s [%(levelname)s] %(message)s",
@@ -218,6 +224,32 @@ def calculate_weekly_dates(start_date_str: str, end_date_str: str) -> list[str]:
         return []
 
 
+def downscale_image(image_bytes: bytes) -> tuple[bytes, str]:
+    """Re-encode a receipt photo as a compact JPEG (max 1280px, quality 80).
+
+    Cuts storage and download size several-fold with no visible loss for
+    receipts. Returns (bytes, mime_type); on any failure — or if the
+    re-encode isn't actually smaller — returns the original bytes.
+    """
+    if Image is None:
+        return image_bytes, "image/jpeg"
+    try:
+        img = Image.open(io.BytesIO(image_bytes))
+        if img.mode != "RGB":
+            img = img.convert("RGB")
+        img.thumbnail((1280, 1280))
+        out = io.BytesIO()
+        img.save(out, format="JPEG", quality=80, optimize=True)
+        small = out.getvalue()
+        if len(small) < len(image_bytes):
+            log.info("Image downscaled %d -> %d bytes", len(image_bytes), len(small))
+            return small, "image/jpeg"
+        return image_bytes, "image/jpeg"
+    except Exception as e:
+        log.warning("Image downscale failed, keeping original: %s", e)
+        return image_bytes, "image/jpeg"
+
+
 def save_image_to_firebase(key: str, image_bytes: bytes, mime_type: str = "image/jpeg") -> bool:
     b64 = base64.b64encode(image_bytes).decode("utf-8")
     try:
@@ -291,7 +323,9 @@ def handle_photo(message: types.Message) -> None:
         log.error("Failed to download photo: %s", e)
         return
 
-    booking = extract_booking_from_image(image_bytes, caption=caption)
+    image_bytes, mime_type = downscale_image(image_bytes)
+
+    booking = extract_booking_from_image(image_bytes, mime_type, caption=caption)
     if not booking:
         log.warning("Could not extract booking from photo sent by %s", sender)
         reply(message, "⚠️ Couldn't read this receipt — please add the booking manually.")
@@ -365,7 +399,7 @@ def handle_photo(message: types.Message) -> None:
 
         if i == 0:
             receipt_key = key
-            if save_image_to_firebase(key, image_bytes):
+            if save_image_to_firebase(key, image_bytes, mime_type):
                 log.info("Image saved to booking_images/%s", key)
             else:
                 log.warning("Image upload failed for key %s", key)
