@@ -327,10 +327,8 @@ table.sched td.tslot.cell-target{background:rgba(37,99,235,.22)!important;outlin
 </div>
 
 <script>
-const PW='synchro123';
-// Set to the Firebase project's Web API key to switch the gate to real
-// Firebase Authentication (email/password sign-in). Empty = legacy password.
 const FIREBASE_API_KEY='AIzaSyA4HtrwgNBkAE4uRYCyiNE12qdUUtTAFVQ';
+localStorage.removeItem('cmp_auth'); // legacy shared-password token, no longer used
 let fbIdToken=null;
 
 // Once signed in, every request to the Realtime Database carries the user's
@@ -375,49 +373,32 @@ async function fbSignIn(email,password){
 
 (function(){
   const gate=document.getElementById('pw-gate');
-  if(FIREBASE_API_KEY){
-    document.getElementById('pw-email').style.display='';
-    document.getElementById('pw-sub').textContent='Sign in to continue';
-    gate.style.display='flex';
-    fbRefreshToken().then(ok=>{
-      if(ok){
-        gate.style.display='none';
-        setInterval(fbRefreshToken,50*60*1000);
-      }
-    });
-  }else if(localStorage.getItem('cmp_auth')===PW){
-    gate.style.display='none';
-  }else{
-    gate.style.display='flex';
-  }
+  document.getElementById('pw-email').style.display='';
+  document.getElementById('pw-sub').textContent='Sign in to continue';
+  gate.style.display='flex';
+  fbRefreshToken().then(ok=>{
+    if(ok){
+      gate.style.display='none';
+      setInterval(fbRefreshToken,50*60*1000);
+    }
+  });
 })();
 
 async function checkPw(){
   const inp=document.getElementById('pw-input');
   const err=document.getElementById('pw-err');
-  if(FIREBASE_API_KEY){
-    const email=document.getElementById('pw-email').value.trim();
-    if(!email||!inp.value)return;
-    err.textContent='Signing in…';
-    try{
-      await fbSignIn(email,inp.value);
-      err.textContent='';
-      document.getElementById('pw-gate').style.display='none';
-      setInterval(fbRefreshToken,50*60*1000);
-    }catch(e){
-      err.textContent='Sign-in failed. Check email and password.';
-      inp.value='';
-      setTimeout(()=>err.textContent='',3000);
-    }
-    return;
-  }
-  if(inp.value===PW){
-    localStorage.setItem('cmp_auth',PW);
+  const email=document.getElementById('pw-email').value.trim();
+  if(!email||!inp.value)return;
+  err.textContent='Signing in…';
+  try{
+    await fbSignIn(email,inp.value);
+    err.textContent='';
     document.getElementById('pw-gate').style.display='none';
-  }else{
-    err.textContent='Incorrect password. Try again.';
-    inp.value='';inp.focus();
-    setTimeout(()=>err.textContent='',2000);
+    setInterval(fbRefreshToken,50*60*1000);
+  }catch(e){
+    err.textContent='Sign-in failed. Check email and password.';
+    inp.value='';
+    setTimeout(()=>err.textContent='',3000);
   }
 }
 </script>
@@ -448,8 +429,6 @@ async function checkPw(){
     <div class="folder-items" id="fitems-coaches">
       <div class="tab-item active" data-view="dashboard" onclick="showView('dashboard')"><span class="tab-icon">🏠</span>Dashboard</div>
       <div class="tab-item" data-view="schedule" onclick="showView('schedule')"><span class="tab-icon">📅</span>Schedule</div>
-      <div class="tab-item" data-view="attendance" onclick="showView('attendance')"><span class="tab-icon">✅</span>Attendance</div>
-      <div class="tab-item" data-view="courts" onclick="showView('courts')"><span class="tab-icon">🏸</span>Courts</div>
     </div>
     <div class="sb-divider"></div>
     <!-- ADMIN FOLDER -->
@@ -459,7 +438,6 @@ async function checkPw(){
     </div>
     <div class="folder-items" id="fitems-admin">
       <div class="tab-item" data-view="tracker" onclick="showView('tracker')"><span class="tab-icon">📊</span>Tracker</div>
-      <div class="tab-item" data-view="analytics" onclick="showView('analytics')"><span class="tab-icon">📈</span>Analytics</div>
       <div class="tab-item" data-view="coaches" onclick="showView('coaches')"><span class="tab-icon">⚙️</span>Calendar Settings</div>
       <div class="tab-item" data-view="bookings" onclick="showView('bookings')"><span class="tab-icon">🗓</span>Booking Records</div>
       <div class="tab-item" data-view="receipts" onclick="showView('receipts')"><span class="tab-icon">🧾</span>Receipts</div>
@@ -513,17 +491,6 @@ async function checkPw(){
 </div>
 
 <!-- ATTENDANCE -->
-<div class="view" id="view-attendance"></div>
-
-<!-- COURTS -->
-<div class="view" id="view-courts">
-  <div class="main-inner">
-    <div class="page-hdr"><h1 class="page-title">Courts</h1></div>
-    <div id="courts-day-grid" class="courts-day-grid"></div>
-    <div id="courts-detail"></div>
-  </div>
-</div>
-
 <!-- TRACKER -->
 <div class="view" id="view-tracker">
   <div class="page-hdr">
@@ -664,14 +631,6 @@ async function checkPw(){
       <button class="btn btn-o btn-sm" onclick="loadBookingsFromFirebase()">↻ Refresh</button>
     </div>
     <div id="receipts-list"><div class="empty" style="padding:40px 0">Loading…</div></div>
-  </div>
-</div>
-
-<!-- ANALYTICS (blank for now) -->
-<div class="view" id="view-analytics">
-  <div class="main-inner">
-    <div class="page-hdr"><h1 class="page-title">Analytics</h1></div>
-    <div class="empty" style="padding:40px 0">Nothing here yet.</div>
   </div>
 </div>
 
@@ -838,7 +797,6 @@ async function syncLoop(){
     if(currentView==='dashboard')renderDashboard();
     else if(currentView==='schedule')renderSched();
     else if(currentView==='coaches')renderCoaches();
-    else if(currentView==='courts')renderCourts();
   }finally{
     syncInProgress=false;
     if(statusEl){statusEl.style.background='#10b981';}
@@ -1026,9 +984,7 @@ function showView(v){
   if(v==='schedule')renderSched();
   if(v==='coaches')renderCoaches();
   if(v==='tracker')renderTracker();
-  if(v==='attendance'){attDetailId=null;renderAttendance();}
   if(v==='bookings')loadBookingsFromFirebase();
-  if(v==='courts'){renderCourts();loadBookingsFromFirebase();}
   if(v==='receipts'){renderReceipts();loadBookingsFromFirebase();loadReceiptsTab();}
 }
 
@@ -1929,7 +1885,7 @@ function renderDashboard(){
       const color=getBlockColor(inst);const acc=color||'#0B5FD8';
       const att=getAttendance(inst.id);const cn=coachNames(inst.coach_ids);
       const statusTxt=inst.status==='completed'?'✅ Done':'⏰ Upcoming';
-      cardsHtml+=`<div class="dash-card" style="border-top-color:${acc}" onclick="attDetailId=${inst.id};showView('attendance')">
+      cardsHtml+=`<div class="dash-card" style="border-top-color:${acc}" onclick="openEdit(${inst.id})">
         <div class="dash-card-time">${fmt12(inst.start_time)} – ${fmt12(inst.end_time)}</div>
         <div class="dash-card-venue">${esc(inst.venue_text||'—')}${inst.court_no?' · Ct '+esc(inst.court_no):''}</div>
         ${inst.class_type||inst.standard?`<div class="dash-card-meta">${esc([inst.class_type,inst.standard].filter(Boolean).join(' · '))}</div>`:''}
@@ -2006,148 +1962,9 @@ function renderDashboard(){
 
 
 
-// ── ATTENDANCE VIEW ───────────────────────────────────────────
-let attDetailId=null;
-let attShowAll=false;
-let attFilterMonth=new Date().toISOString().slice(0,7);
-
-function attMonthDropdownHtml(){
-  const all=getInsts().filter(i=>i.status!=='cancelled');
-  const months=new Set(all.map(i=>i.date.slice(0,7)));
-  const now=new Date();
-  months.add(`${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`);
-  const sorted=[...months].sort((a,b)=>b.localeCompare(a));
-  if(!attFilterMonth||!sorted.includes(attFilterMonth))attFilterMonth=sorted[0]||attFilterMonth;
-  return`<select style="padding:5px 10px;border-radius:8px;border:1px solid var(--bdr);background:var(--surf);color:var(--tx);font-size:12px;font-weight:700;cursor:pointer" onchange="attFilterMonth=this.value;renderAttendance()">${
-    sorted.map(ym=>{
-      const[y,m]=ym.split('-').map(Number);
-      const lbl=new Date(y,m-1,1).toLocaleString('default',{month:'long',year:'numeric'});
-      return`<option value="${ym}"${ym===attFilterMonth?' selected':''}>${lbl}</option>`;
-    }).join('')
-  }</select>`;
-}
-
-function renderAttendance(){
-  const el=document.getElementById('view-attendance');
-  if(attDetailId!==null){renderAttDetail(attDetailId,el);return;}
-
-  const todayStr=ds(new Date());
-  let insts=getInsts().filter(i=>i.status!=='cancelled');
-
-  if(attShowAll){
-    insts=insts.filter(i=>i.date.slice(0,7)===attFilterMonth)
-      .sort((a,b)=>a.date.localeCompare(b.date)||a.start_time.localeCompare(b.start_time));
-  } else {
-    insts=insts.filter(i=>i.date===todayStr)
-      .sort((a,b)=>a.start_time.localeCompare(b.start_time));
-  }
-
-  let html=`<div class="page-hdr"><h1 class="page-title">Attendance</h1>
-    <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
-      ${attShowAll?attMonthDropdownHtml():''}
-      <label style="display:flex;align-items:center;gap:6px;font-size:12px;font-weight:700;cursor:pointer">
-        <input type="checkbox" id="att-show-all"${attShowAll?' checked':''} onchange="attShowAll=this.checked;renderAttendance()">
-        Show all
-      </label>
-    </div>
-  </div>`;
-
-  if(!insts.length){
-    el.innerHTML=html+`<div class="card"><div class="empty">${attShowAll?'No classes this month.':'No classes scheduled for today.'}</div></div>`;return;
-  }
-  html+=`<div class="card" style="overflow:hidden;padding:0">`;
-  insts.forEach(inst=>{
-    const rawColor=getBlockColor(inst);
-    const dotColor=rawColor&&rawColor!==''?rawColor:'var(--bdr)';
-    const cn=coachNames(inst.coach_ids);
-    const att=getAttendance(inst.id);
-    const statusIcon=inst.status==='completed'?'✅':'⏰';
-    html+=`<div class="att-list-item" onclick="attDetailId=${inst.id};renderAttendance()">
-      <div class="att-color-dot" style="background:${dotColor}"></div>
-      <div class="att-list-info">
-        <div class="att-list-title">${statusIcon} ${esc(inst.venue_text||'(No venue)')}${inst.court_no?' · Ct '+esc(inst.court_no):''}</div>
-        <div class="att-list-sub">${inst.date} · ${fmt12(inst.start_time)}–${fmt12(inst.end_time)}${cn?' · '+esc(cn):''}</div>
-        ${inst.class_type||inst.standard?`<div class="att-list-sub">${esc([inst.class_type,inst.standard].filter(Boolean).join(' · '))}</div>`:''}
-      </div>
-      <span class="att-badge${att.length?' has-att':''}">${att.length?`${att.length}`:'—'}</span>
-      <span style="color:var(--txf);font-size:18px;line-height:1">›</span>
-    </div>`;
-  });
-  html+='</div>';
-  el.innerHTML=html;
-}
-
-function renderAttDetail(instId,elArg){
-  const el=elArg||document.getElementById('view-attendance');
-  const inst=getInsts().find(x=>x.id===instId);
-  if(!inst){attDetailId=null;renderAttendance();return;}
-  const att=getAttendance(instId);
-  const rawColor=getBlockColor(inst);
-  const color=rawColor&&rawColor!==''?rawColor:'#3b82f6';
-  const cn=coachNames(inst.coach_ids);
-  const total=att.length;
-
-  let listHtml='';
-  if(!att.length){
-    listHtml=`<li style="padding:20px 16px;text-align:center;color:var(--txf);font-size:12px">No students yet. Add a name below.</li>`;
-  } else {
-    att.forEach(a=>{
-      listHtml+=`<li class="att-check-item">
-        <span class="att-name">${esc(a.name)}</span>
-        <button class="att-del" onclick="removeAtt(${instId},${a.id})" title="Remove">✕</button>
-      </li>`;
-    });
-  }
-
-  el.innerHTML=`
-    <button class="att-back-btn" onclick="attDetailId=null;renderAttendance()">‹ Back to Attendance</button>
-    <div class="att-class-card" style="border-left-color:${esc(color)}">
-      <div style="font-weight:800;font-size:15px;margin-bottom:3px">${esc(inst.venue_text||'(No venue)')}${inst.court_no?' · Court '+esc(inst.court_no):''}</div>
-      ${inst.class_type||inst.standard?`<div style="font-size:12px;color:var(--txm);margin-bottom:2px">${esc([inst.class_type,inst.standard].filter(Boolean).join(' · '))}</div>`:''}
-      <div style="font-size:12px;color:var(--txm)">${inst.date} · ${fmt12(inst.start_time)}–${fmt12(inst.end_time)}</div>
-      ${cn?`<div style="font-size:12px;font-weight:700;margin-top:4px">${esc(cn)}</div>`:''}
-      <div style="font-size:11px;color:var(--txm);margin-top:6px;padding-top:6px;border-top:1px solid var(--bdr)">${total} attending</div>
-    </div>
-    <div class="card" style="overflow:hidden;padding:0">
-      <div class="card-hdr" style="display:flex;justify-content:space-between;align-items:center">
-        <span>Students</span>
-        <span style="font-size:11px;color:var(--txm);font-weight:500">${total} attending</span>
-      </div>
-      <ul class="att-check-list">${listHtml}</ul>
-      <div class="att-add-row">
-        <input class="att-add-input" id="att-inp-${instId}" type="text" placeholder="Add student name…"
-          onkeydown="if(event.key==='Enter'){event.preventDefault();addAtt(${instId})}">
-        <button class="btn btn-p" onclick="addAtt(${instId})">+ Add</button>
-      </div>
-    </div>`;
-  // Auto-focus the input
-  setTimeout(()=>{const inp=document.getElementById('att-inp-'+instId);if(inp)inp.focus();},80);
-}
-
-function toggleAtt(instId,itemId){
-  const att=getAttendance(instId);const i=att.findIndex(a=>a.id===itemId);
-  if(i>=0){att[i].present=!att[i].present;saveAttendance(instId,att);}
-  renderAttDetail(instId);
-}
-function removeAtt(instId,itemId){
-  saveAttendance(instId,getAttendance(instId).filter(a=>a.id!==itemId));
-  renderAttDetail(instId);
-}
-function addAtt(instId){
-  const inp=document.getElementById('att-inp-'+instId);
-  const name=inp?.value.trim();if(!name)return;
-  const att=getAttendance(instId);
-  att.push({id:attNextId(att),name,present:true});
-  saveAttendance(instId,att);
-  renderAttDetail(instId);
-  setTimeout(()=>{const ni=document.getElementById('att-inp-'+instId);if(ni)ni.focus();},80);
-}
-
-
-// ── BOOKING RECORDS & COURTS ──────────────────────────────────
+// ── BOOKING RECORDS ───────────────────────────────────────────
 let brBookings={};
 let brSelectedMonth=new Date().toISOString().slice(0,7);
-let courtsSelectedDate=null;
 
 async function loadBookingsFromFirebase(){
   try{
@@ -2156,7 +1973,6 @@ async function loadBookingsFromFirebase(){
     const res=await fetch(`${FIREBASE_URL}/bookings.json`);
     brBookings=res.ok?(await res.json()||{}):{};
     if(currentView==='bookings')renderBookingRecords();
-    if(currentView==='courts')renderCourts();
     if(currentView==='receipts')renderReceipts();
   }catch(e){console.error('Firebase error:',e);}
 }
@@ -2314,7 +2130,10 @@ async function importBotSessions(){
       // imported before bot_key existed
       return s.date>=todayStr&&!sessList.some(x=>x.bot_key===key||(
         x.date===s.date&&x.start_time===s.start_time&&
-        (x.venue_text||'')===(s.venue_text||'')&&(x.court_no||'')===(s.court_no||'')
+        (x.venue_text||'')===(s.venue_text||'')&&(
+          (x.court_no||'')===(s.court_no||'')||
+          String(x.court_no||'').split('&').map(t=>t.trim()).includes(String(s.court_no||'').trim())
+        )
       ));
     });
     if(!entries.length)return;
@@ -2333,6 +2152,49 @@ async function importBotSessions(){
           .concat(session.student_name?[session.student_name]:[])
           .map(s=>String(s||'').trim()).filter(Boolean)
       )];
+
+      // Court receipt for the same venue, date and time as an existing block:
+      // combine the courts into one box ("01 & 04") instead of a second box
+      if(!students.length&&session.court_no){
+        const same=getInsts().find(i=>i.status!=='cancelled'&&i.date===botDate&&
+          i.start_time===session.start_time&&i.end_time===session.end_time&&
+          (i.venue_text||'')===(session.venue_text||''));
+        if(same){
+          const courts=String(same.court_no||'').split('&').map(s=>s.trim()).filter(Boolean);
+          const newCourt=String(session.court_no).trim();
+          if(!courts.includes(newCourt)){
+            const combined=courts.concat(newCourt).join(' & ');
+            syncCache['instances']=getInsts().map(i=>i.id===same.id?{...i,court_no:combined}:i);
+            syncCache['sessions']=S.get('sessions').map(s=>s.id===same.session_id?{...s,court_no:combined}:s);
+            const ok1=await pushToFirebase('instances',syncCache['instances']);
+            const ok2=await pushToFirebase('sessions',syncCache['sessions']);
+            if(!ok1||!ok2){console.error('importBotSessions: court merge write failed for',key,'— will retry');continue;}
+          }
+          // Still record the booking itself (each receipt is its own payment)
+          const hasBk=Object.values(brBookings||{}).some(b=>b&&b.bot_sessions_key===key);
+          if(!hasBk){
+            const mergedBooking={
+              date:botDate,time:`${session.start_time||''}-${session.end_time||''}`,
+              venue:session.venue_text||'',court:session.court_no||'',court_date:botDate,
+              class_type:session.class_type||'ActiveSG',source:'activesg',
+              color:session.color||'#f59e0b',status:session.status||'scheduled',
+              coach_ids:session.coach_ids||[],notes:session.notes||'',
+              booker:session.booker||null,
+              payment_date:session.payment_date||fbKeyDate(key)||ds(new Date()),
+              venue_type:session.venue_type||(/school|primary|secondary/i.test(session.venue_text||'')?'school':'sports_hall'),
+              slots:session.slots||Math.max(1,Math.round(compHrs(session.start_time,session.end_time))),
+              bot_sessions_key:key
+            };
+            try{
+              const r=await fetch(`${FIREBASE_URL}/bookings.json`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(mergedBooking)});
+              if(r.ok){const d=await r.json();if(d&&d.name)brBookings[d.name]=mergedBooking;}
+            }catch(e){console.error('court merge booking save:',e);}
+          }
+          await fetch(`${FIREBASE_URL}/bot_sessions/${key}/imported.json`,{method:'PUT',headers:{'Content-Type':'application/json'},body:'true'});
+          count++;
+          continue;
+        }
+      }
 
       // Programme receipt whose class already exists on the calendar for this
       // slot: just add the participants to that class's attendance roster
@@ -2438,8 +2300,7 @@ async function importBotSessions(){
       if(res.ok)brBookings=await res.json()||{};
       renderSched();renderMonth();
       // Update all potentially affected views
-      if(currentView==='courts')renderCourts();
-      if(currentView==='bookings')renderBookingRecords();
+        if(currentView==='bookings')renderBookingRecords();
       if(currentView==='receipts')renderReceipts();
       if(currentView==='dashboard')renderDashboard();
     }
@@ -2617,72 +2478,10 @@ async function deleteBooking(key){
   await fetch(`${FIREBASE_URL}/bookings/${key}.json`,{method:'DELETE'});
   delete brBookings[key];
   if(currentView==='bookings')renderBookingRecords();
-  if(currentView==='courts')renderCourts();
   if(currentView==='receipts')renderReceipts();
 }
 
-// ── COURTS ────────────────────────────────────────────────────
-function renderCourts(){
-  const today=new Date();today.setHours(0,0,0,0);
-  const todayStr=ds(today);
-  const allB=Object.values(brBookings).filter(Boolean);
-  const grid=document.getElementById('courts-day-grid');if(!grid)return;
-  grid.innerHTML=Array.from({length:15},(_,i)=>{
-    const d=new Date(today);d.setDate(today.getDate()+i);
-    const dStr=ds(d);
-    const dayB=allB.filter(b=>getCourtDate(b)===dStr);
-    const isToday=dStr===todayStr;
-    const isActive=courtsSelectedDate===dStr;
-    return`<div class="court-day-card${isToday?' today':''}${isActive?' active':''}" onclick="showCourtDay('${dStr}')">
-      <div class="court-day-name">${DAYS[d.getDay()]}</div>
-      <div class="court-day-num">${d.getDate()}</div>
-      <div class="court-day-month">${MONTHS[d.getMonth()].slice(0,3)}</div>
-      <div class="court-day-count${!dayB.length?' none':''}">${dayB.length?`${dayB.length} court${dayB.length>1?'s':''}`:'—'}</div>
-    </div>`;
-  }).join('');
-  if(courtsSelectedDate)showCourtDay(courtsSelectedDate,false);
-}
-
-function showCourtDay(ds,updateGrid=true){
-  courtsSelectedDate=ds;
-  if(updateGrid)renderCourts();
-  const allB=Object.entries(brBookings).filter(([,b])=>b&&getCourtDate(b)===ds).map(([k,b])=>({...b,_key:k}));
-  const d=new Date(ds+'T00:00:00');
-  const detail=document.getElementById('courts-detail');
-  if(!allB.length){
-    detail.innerHTML=`<div class="card" style="margin-top:14px"><div class="card-body"><div class="empty">No courts booked for ${DAYS[d.getDay()]} ${d.getDate()} ${MONTHS[d.getMonth()]}.</div></div></div>`;
-    return;
-  }
-  const sorted=allB.sort((a,b)=>(a.time||'').localeCompare(b.time||''));
-  detail.innerHTML=`<div class="card" style="margin-top:14px">
-    <div class="card-hdr">${DAYS[d.getDay()]}, ${d.getDate()} ${MONTHS[d.getMonth()]} ${d.getFullYear()}</div>
-    <div class="card-body" style="padding:0">
-      ${sorted.map(b=>`<div class="court-booking-item" style="padding:14px 16px;flex-direction:column;align-items:stretch">
-        <div style="display:flex;align-items:center;gap:14px">
-          <div class="court-num">Ct ${esc(b.court||'?')}</div>
-          <div style="flex:1">
-            <div style="font-weight:700;font-size:13px">${esc(b.venue||'')}</div>
-            <div style="color:var(--txm);font-size:12px;margin-top:2px">${b.time||''}${b.source==='activesg'?' · <span style="color:#d97706;font-weight:700">ActiveSG</span>':` · ${esc(b.booker||'')} · <span class="${b.venue_type==='school'?'br-badge-sc':'br-badge-sh'}">${b.venue_type==='school'?'School':'Sports Hall'}</span>`}</div>
-            <div style="display:flex;gap:6px;margin-top:6px;flex-wrap:wrap">
-              <button onclick="markNoLesson('${b._key}',${!b.no_lesson})" style="background:none;border:1px solid ${b.no_lesson?'#ef4444':'var(--bdr)'};border-radius:6px;padding:3px 10px;font-size:11px;font-weight:700;cursor:pointer;color:${b.no_lesson?'#ef4444':'var(--tx)'}">
-                ${b.no_lesson?'❌ No Lesson':'Mark No Lesson'}
-              </button>
-            </div>
-          </div>
-        </div>
-        <div id="rcpt-img-wrap-${b._key}" style="margin-top:10px">
-          <div id="rcpt-img-loading-${b._key}" style="font-size:11px;color:var(--txm)">Loading receipt…</div>
-          <img id="rcpt-thumb-${b._key}" style="display:none;max-width:100%;border-radius:8px;margin-top:6px;cursor:pointer;max-height:280px;object-fit:contain;border:1px solid var(--bdr)" onclick="viewReceiptImage('${b._key}')" alt="Receipt">
-          <div id="rcpt-btn-wrap-${b._key}" style="margin-top:6px;display:none">
-            <button onclick="viewReceiptImage('${b._key}')" style="background:none;border:1px solid var(--bdr);border-radius:6px;padding:4px 12px;font-size:11px;font-weight:700;cursor:pointer;color:var(--tx)">📷 Show Receipt</button>
-          </div>
-        </div>
-      </div>`).join('')}
-    </div>
-  </div>`;
-  loadCourtImages(sorted);
-}
-
+// ── RECEIPT IMAGE VIEWER ─────────────────────────────────────
 function extractImgSrc(data){
   // Handle: object with data field, or raw base64 string
   if(!data)return null;
@@ -2694,64 +2493,6 @@ function extractImgSrc(data){
   const mime=data.mime_type||data.type||'image/jpeg';
   return`data:${mime};base64,${b64}`;
 }
-
-function loadCourtImages(bookings){
-  bookings.forEach(b=>{
-    const img=document.getElementById('rcpt-thumb-'+b._key);
-    const loading=document.getElementById('rcpt-img-loading-'+b._key);
-    if(!img)return;
-    // Use bot_sessions_key if available (for bot-imported bookings), otherwise use booking key
-    const imgKey=b.bot_sessions_key||b._key;
-    fetch(`${FIREBASE_URL}/booking_images/${imgKey}.json`)
-      .then(r=>r.json())
-      .then(data=>{
-        if(loading)loading.remove();
-        const src=extractImgSrc(data);
-        if(src){
-          img.src=src;
-          img.style.display='block';
-        }
-        // Always show button
-        const btnWrap=document.getElementById('rcpt-btn-wrap-'+b._key);
-        if(btnWrap)btnWrap.style.display='block';
-      })
-      .catch(()=>{
-        if(loading)loading.remove();
-        const btnWrap=document.getElementById('rcpt-btn-wrap-'+b._key);
-        if(btnWrap)btnWrap.style.display='block';
-      });
-  });
-}
-
-function uploadReceiptImage(key,input){
-  const file=input.files[0];
-  if(!file)return;
-  const statusEl=document.getElementById('rcpt-upload-status-'+key);
-  if(statusEl)statusEl.textContent='Uploading…';
-  const reader=new FileReader();
-  reader.onload=function(e){
-    const dataUrl=e.target.result;  // "data:image/jpeg;base64,..."
-    const comma=dataUrl.indexOf(',');
-    const mime=dataUrl.slice(5,dataUrl.indexOf(';'));
-    const b64=dataUrl.slice(comma+1);
-    fetch(`${FIREBASE_URL}/booking_images/${key}.json`,{
-      method:'PUT',
-      headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({data:b64,mime_type:mime})
-    }).then(r=>{
-      if(!r.ok)throw new Error('Upload failed');
-      if(statusEl)statusEl.textContent='Saved!';
-      // Show the image inline immediately
-      const img=document.getElementById('rcpt-thumb-'+key);
-      if(img){img.src=dataUrl;img.style.display='block';}
-      setTimeout(()=>{if(statusEl)statusEl.textContent='';},3000);
-    }).catch(()=>{
-      if(statusEl)statusEl.textContent='Upload failed';
-    });
-  };
-  reader.readAsDataURL(file);
-}
-
 function viewReceiptImage(key){
   const modal=document.getElementById('img-modal');
   const body=document.getElementById('img-modal-body');
@@ -2771,15 +2512,6 @@ function viewReceiptImage(key){
 function closeImgModal(){
   document.getElementById('img-modal').classList.remove('open');
   document.getElementById('img-modal-body').innerHTML='';
-}
-
-function markNoLesson(key,val){
-  fetch(`${FIREBASE_URL}/bookings/${key}/no_lesson.json`,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(val)})
-    .then(()=>{
-      if(brBookings[key])brBookings[key].no_lesson=val;
-      showCourtDay(courtsSelectedDate,false);
-      if(currentView==='dashboard')renderDashboard();
-    });
 }
 
 // ── BOOKER → COACH LOOKUP (used by Receipts) ──────────────────
@@ -2820,7 +2552,6 @@ function confirmDelete(){
   ]).then(()=>{
     delete brBookings[key];
     renderReceipts();
-    renderCourts();
     renderBookingRecords();
   }).catch(e=>console.error('Delete receipt error:',e));
 }
