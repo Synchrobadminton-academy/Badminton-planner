@@ -42,6 +42,9 @@ function check(label, actual, expected) {
   else { failures++; console.log(`FAIL  ${label}\n      expected ${e}\n      got      ${a}`); }
 }
 
+// Every write is recorded so tests can assert PATCH vs PUT behaviour
+const writes = [];
+
 // Mock Firebase Auth endpoints and the Realtime Database REST interface
 async function mockFirebase(page) {
   await page.route(/googleapis\.com/, route =>
@@ -56,7 +59,18 @@ async function mockFirebase(page) {
       return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(node ?? null) });
     }
     const body = req.postData();
-    if (method === 'PUT' || method === 'PATCH') {
+    if (method !== 'GET') writes.push({ method, path: parts.join('/'), body });
+    if (method === 'PATCH') {
+      // Real RTDB semantics: merge keys at the path; null deletes a key
+      let node = db;
+      for (let i = 0; i < parts.length - 1; i++) { if (node[parts[i]] === undefined) node[parts[i]] = {}; node = node[parts[i]]; }
+      const last = parts[parts.length - 1];
+      if (node[last] === undefined || node[last] === null || Array.isArray(node[last])) node[last] = {};
+      const obj = JSON.parse(body);
+      for (const k in obj) { if (obj[k] === null) delete node[last][k]; else node[last][k] = obj[k]; }
+      return route.fulfill({ status: 200, contentType: 'application/json', body });
+    }
+    if (method === 'PUT') {
       let node = db;
       for (let i = 0; i < parts.length - 1; i++) { if (node[parts[i]] === undefined) node[parts[i]] = {}; node = node[parts[i]]; }
       node[parts[parts.length - 1]] = JSON.parse(body);
@@ -137,6 +151,41 @@ async function mockFirebase(page) {
   await page.waitForTimeout(600);
   check('clicking a button opens exactly one full-size image',
     await page.evaluate(() => document.querySelectorAll('#img-modal-body img').length), 1);
+
+  // ── Per-record storage ───────────────────────────────────────
+  check('sessions + instances stored one record per "r<id>" key',
+    !Array.isArray(db.sessions) && !Array.isArray(db.instances) &&
+    Object.keys(db.sessions).every(k => k[0] === 'r') &&
+    Object.keys(db.instances).every(k => k[0] === 'r'), true);
+
+  writes.length = 0;
+  const sessCountBefore = Object.values(db.sessions).filter(Boolean).length;
+  await page.evaluate(() => {
+    const l = S.get('sessions');
+    l[0].notes = 'edited-by-test';
+    S.set('sessions', l);
+  });
+  await page.waitForTimeout(400);
+  const sessWrites = writes.filter(w => w.path === 'sessions');
+  check('editing one lesson sends a PATCH touching only that record',
+    { method: sessWrites[0]?.method, keys: Object.keys(JSON.parse(sessWrites[0]?.body || '{}')).length },
+    { method: 'PATCH', keys: 1 });
+  check('other records untouched after the edit',
+    { count: Object.values(db.sessions).filter(Boolean).length,
+      edited: Object.values(db.sessions).some(s => s && s.notes === 'edited-by-test') },
+    { count: sessCountBefore, edited: true });
+
+  check('bulk delete from a broken client is blocked',
+    await page.evaluate(async () => {
+      const snap = {}; for (let i = 1; i <= 10; i++) snap[i] = JSON.stringify({ id: i });
+      fbServer['instances'] = snap; fbShape['instances'] = 'keyed';
+      return await pushRecords('instances', [{ id: 1 }]); // would delete 9 of 10
+    }), false);
+  check('saving before data has loaded is refused',
+    await page.evaluate(async () => {
+      delete fbServer['instances'];
+      return await pushRecords('instances', [{ id: 99, date: '2030-01-01' }]);
+    }), false);
 
   check('no page errors', errors, []);
 

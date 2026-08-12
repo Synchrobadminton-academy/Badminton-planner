@@ -691,6 +691,13 @@ const syncKeys=['coaches','venues','instances','sessions','standards','class-typ
 
 const pendingWrites=new Set();
 
+// Sessions and instances are stored one record per key ("r<id>") and saved
+// with PATCH diffs, so a device that failed to load data can never replace
+// the whole list — the failure that wiped the schedule twice
+const recordKeys=['sessions','instances'];
+const fbShape={};   // per record-key: 'keyed' ("r<id>" records) or 'legacy' (positional list)
+const fbServer={};  // per record-key: id -> JSON of the record as last seen on the server
+
 async function fetchFirebaseData(){
   try{
     for(const k of syncKeys){
@@ -705,24 +712,71 @@ async function fetchFirebaseData(){
         }else{
           syncCache[k]=[];
         }
+        if(recordKeys.includes(k)){
+          fbShape[k]=(!data||(!Array.isArray(data)&&Object.keys(data).every(x=>x[0]==='r')))?'keyed':'legacy';
+          const snap={};
+          syncCache[k].forEach(rec=>{if(rec&&rec.id!=null)snap[rec.id]=JSON.stringify(rec)});
+          fbServer[k]=snap;
+        }
       }
     }
     return true;
   }catch(e){console.error('fetchFirebaseData error:',e);return false;}
 }
 
+function saveFailedUI(key,e){
+  console.error('pushToFirebase error for',key,e);
+  const s=document.getElementById('sync-status');if(s)s.style.background='#ef4444';
+  const l=document.getElementById('sync-label');if(l)l.textContent='⚠️ Save failed';
+}
+
 async function pushToFirebase(key,value){
+  if(recordKeys.includes(key))return pushRecords(key,value);
   pendingWrites.add(key);
   try{
     const r=await fetch(`${FIREBASE_URL}/${key}.json`,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(value)});
     if(!r.ok)throw new Error('HTTP '+r.status);
     return true;
-  }catch(e){
-    console.error('pushToFirebase error for',key,e);
-    const s=document.getElementById('sync-status');if(s)s.style.background='#ef4444';
-    const l=document.getElementById('sync-label');if(l)l.textContent='⚠️ Save failed';
-    return false;
-  }
+  }catch(e){saveFailedUI(key,e);return false;}
+  finally{pendingWrites.delete(key);}
+}
+
+async function pushRecords(key,list){
+  pendingWrites.add(key);
+  try{
+    list=(list||[]).filter(r=>r&&r.id!=null);
+    // Never write before the node has been read — a blind write is how data gets lost
+    if(!fbServer[key])throw new Error('refusing to save before first successful load');
+    if(fbShape[key]==='legacy'){
+      // One-time conversion from the old positional list to keyed records,
+      // merging server state with what we're saving so nothing is dropped
+      const merged={};
+      for(const id in fbServer[key])merged['r'+id]=JSON.parse(fbServer[key][id]);
+      list.forEach(r=>{merged['r'+r.id]=r});
+      const r=await fetch(`${FIREBASE_URL}/${key}.json`,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(merged)});
+      if(!r.ok)throw new Error('HTTP '+r.status);
+      fbShape[key]='keyed';
+      const snap={};Object.values(merged).forEach(rec=>{snap[rec.id]=JSON.stringify(rec)});
+      fbServer[key]=snap;
+      return true;
+    }
+    const cur={};list.forEach(r=>{cur[r.id]=JSON.stringify(r)});
+    const patch={};let dels=0;
+    for(const id in cur)if(fbServer[key][id]!==cur[id])patch['r'+id]=JSON.parse(cur[id]);
+    for(const id in fbServer[key])if(!(id in cur)){patch['r'+id]=null;dels++;}
+    // A save may drop a couple of records (user deleted a lesson) but never a
+    // large share of them at once — that pattern is a broken client, not an edit
+    const total=Object.keys(fbServer[key]).length;
+    if(dels>5&&dels>0.2*total)throw new Error(`blocked suspicious bulk delete of ${dels}/${total} ${key}`);
+    if(!Object.keys(patch).length)return true;
+    const r=await fetch(`${FIREBASE_URL}/${key}.json`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify(patch)});
+    if(!r.ok)throw new Error('HTTP '+r.status);
+    for(const pk in patch){
+      const id=pk.slice(1);
+      if(patch[pk]===null)delete fbServer[key][id];else fbServer[key][id]=JSON.stringify(patch[pk]);
+    }
+    return true;
+  }catch(e){saveFailedUI(key,e);return false;}
   finally{pendingWrites.delete(key);}
 }
 
