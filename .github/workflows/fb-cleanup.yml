@@ -38,12 +38,16 @@ jobs:
           used = {i.get("session_id") for i in instances}
           used |= {b.get("session_id") for b in bookings.values() if b}
 
+          def keyed(records):
+              # storage format: one record per "r<id>" key (see planner.html pushRecords)
+              return {f"r{r['id']}": r for r in records if r.get("id") is not None}
+
           keep = [s for s in sessions if s.get("id") in used]
           removed = [s for s in sessions if s.get("id") not in used]
           print(f"sessions: {len(sessions)} total, keeping {len(keep)}, removing {len(removed)} orphans")
           print("removed sessions (for recovery if ever needed):")
           print(json.dumps(removed))
-          put("sessions", keep)
+          put("sessions", keyed(keep))
 
           bs = get("bot_sessions") or {}
           for k, v in bs.items():
@@ -129,8 +133,8 @@ jobs:
               kept_sess_refs = {i.get("session_id") for i in instances if i and i["id"] not in drop_inst_ids}
               new_instances = [i for i in instances if i and i["id"] not in drop_inst_ids]
               new_sessions = [s for s in sessions if s and not (s["id"] in drop_sess_ids and s["id"] not in kept_sess_refs)]
-              put("instances", new_instances)
-              put("sessions", new_sessions)
+              put("instances", keyed(new_instances))
+              put("sessions", keyed(new_sessions))
               print(f"instances: {len(instances)} -> {len(new_instances)}; sessions: {len(sessions)} -> {len(new_sessions)}")
           else:
               print("no duplicate blocks to merge")
