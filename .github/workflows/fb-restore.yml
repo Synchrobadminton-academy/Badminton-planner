@@ -1,0 +1,113 @@
+name: fb-restore
+on: workflow_dispatch
+
+# Restores lessons lost between 3-9 Aug 2026 by merging the 2026-08-02 backup
+# into the live sessions/instances lists. Only slots missing from live data are
+# added (matched on date+start+end+venue, with courts combined the way the
+# importer does). A safety snapshot of the current live data is written to
+# /backups/pre-restore-2026-08-12 before anything changes.
+
+jobs:
+  restore:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Merge 2026-08-02 backup into live data
+        env:
+          FIREBASE_SECRET: ${{ secrets.FIREBASE_SECRET }}
+        run: |
+          python3 - <<'EOF'
+          import json, os, urllib.request
+
+          FB = "https://synchroadmin-133f3-default-rtdb.asia-southeast1.firebasedatabase.app"
+          AUTH = "?auth=" + os.environ["FIREBASE_SECRET"] if os.environ.get("FIREBASE_SECRET") else ""
+
+          def get(path):
+              with urllib.request.urlopen(f"{FB}/{path}.json{AUTH}") as r:
+                  return json.load(r)
+
+          def put(path, data):
+              req = urllib.request.Request(f"{FB}/{path}.json{AUTH}",
+                  data=json.dumps(data).encode(), method="PUT",
+                  headers={"Content-Type": "application/json"})
+              with urllib.request.urlopen(req) as r:
+                  r.read()
+
+          def as_list(node):
+              if node is None: return []
+              if isinstance(node, list): return [x for x in node if x]
+              return [x for x in node.values() if x]
+
+          live_s = as_list(get("sessions"))
+          live_i = as_list(get("instances"))
+          live_att = get("attendance") or {}
+          bk_s = as_list(get("backups/2026-08-02/sessions"))
+          bk_i = as_list(get("backups/2026-08-02/instances"))
+          print(f"live: {len(live_s)} sessions / {len(live_i)} instances; "
+                f"backup: {len(bk_s)} sessions / {len(bk_i)} instances")
+
+          # Safety snapshot of everything we are about to modify
+          put("backups/pre-restore-2026-08-12",
+              {"sessions": live_s, "instances": live_i, "attendance": live_att})
+          print("safety snapshot written to backups/pre-restore-2026-08-12")
+
+          def slot(i):
+              return (i.get("date"), i.get("start_time"), i.get("end_time"),
+                      str(i.get("venue_text") or "").strip().lower())
+
+          live_slots = {slot(i) for i in live_i}
+          live_ids = {i.get("id") for i in live_i}
+          bk_sess_by_id = {s.get("id"): s for s in bk_s}
+
+          # Group missing backup instances by slot; multiple courts in the same
+          # slot become one block with courts combined ("01 & 04")
+          groups = {}
+          for inst in bk_i:
+              if slot(inst) in live_slots: continue
+              groups.setdefault(slot(inst), []).append(inst)
+
+          next_iid = max([i.get("id", 0) for i in live_i] or [0]) + 1
+          next_sid = max([s.get("id", 0) for s in live_s] or [0]) + 1
+          restored, att_moves = [], []
+
+          for key, insts in sorted(groups.items()):
+              base = dict(insts[0])
+              courts = []
+              for x in insts:
+                  for c in str(x.get("court_no") or "").split("&"):
+                      c = c.strip()
+                      if c and c not in courts: courts.append(c)
+              base["court_no"] = " & ".join(courts)
+              old_id = base.get("id")
+              sess = dict(bk_sess_by_id.get(base.get("session_id")) or {})
+              if not sess:
+                  sess = {k: base.get(k) for k in ("date","start_time","end_time",
+                          "venue_text","court_no","class_type","standard","coach_ids",
+                          "color","notes")}
+                  sess.update(status="scheduled", recurring=0, day_of_week=None)
+              sess["court_no"] = base["court_no"]
+              sess["id"] = next_sid
+              base["id"] = next_iid
+              base["session_id"] = next_sid
+              live_s.append(sess); live_i.append(base); restored.append(base)
+              # Orphaned roster from the wiped instance: relink it, unless a new
+              # live instance has since reused that id (ambiguous — leave it)
+              if old_id is not None and old_id not in live_ids:
+                  roster = live_att.get(str(old_id))
+                  if roster:
+                      att_moves.append((str(old_id), str(next_iid), roster))
+              next_sid += 1; next_iid += 1
+
+          if not restored:
+              print("nothing to restore — live data already covers the backup"); raise SystemExit
+
+          put("sessions", live_s)
+          put("instances", live_i)
+          for old, new, roster in att_moves:
+              put(f"attendance/{new}", roster)
+              put(f"attendance/{old}", None)
+
+          dates = sorted(i["date"] for i in restored if i.get("date"))
+          print(f"restored {len(restored)} lessons ({dates[0]} to {dates[-1]}), "
+                f"relinked {len(att_moves)} attendance rosters")
+          print(f"live now: {len(live_s)} sessions / {len(live_i)} instances")
+          EOF
