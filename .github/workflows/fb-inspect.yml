@@ -1,0 +1,25 @@
+name: fb-inspect
+on: workflow_dispatch
+
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Date ranges and backup contents
+        env:
+          FIREBASE_SECRET: ${{ secrets.FIREBASE_SECRET }}
+        run: |
+          FB=https://synchroadmin-133f3-default-rtdb.asia-southeast1.firebasedatabase.app
+          FBAUTH="${FIREBASE_SECRET:+?auth=$FIREBASE_SECRET}"
+          echo "===== live sessions: count + every date ====="
+          curl -s "$FB/sessions.json$FBAUTH" | jq '(if type=="array" then map(select(.!=null)) else to_entries|map(.value) end) | {count:length, dates:(map(.date)|sort)}'
+          echo "===== live instances: count + every date ====="
+          curl -s "$FB/instances.json$FBAUTH" | jq '(if type=="array" then map(select(.!=null)) else to_entries|map(.value) end) | {count:length, dates:(map(.date)|sort)}'
+          echo "===== backups available ====="
+          curl -s "$FB/backups.json?shallow=true${FIREBASE_SECRET:+&auth=$FIREBASE_SECRET}" | jq 'keys'
+          echo "===== per-backup counts ====="
+          for d in $(curl -s "$FB/backups.json?shallow=true${FIREBASE_SECRET:+&auth=$FIREBASE_SECRET}" | jq -r 'keys[]'); do
+            echo "--- backup $d ---"
+            curl -s "$FB/backups/$d/sessions.json$FBAUTH" | jq '(if type=="array" then map(select(.!=null)) else to_entries|map(.value) end) | {sessions:length, min_date:(map(.date)|sort|first), max_date:(map(.date)|sort|last)}'
+            curl -s "$FB/backups/$d/instances.json$FBAUTH" | jq '(if type=="array" then map(select(.!=null)) else to_entries|map(.value) end) | {instances:length, min_date:(map(.date)|sort|first), max_date:(map(.date)|sort|last)}'
+          done
