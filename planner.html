@@ -2096,8 +2096,27 @@ async function importReceiptSessions(){
         notes:`Court ${b.court||''} · ${b.booker||''}`.trim().replace(/·\s*$/,'')
       };
       let sessId=b.session_id;
-      const sessExists=sessId&&syncCache['sessions'].find(s=>s&&s.id===sessId);
-      if(!sessExists){
+      // Trust the stored session link only if that session actually belongs on
+      // this booking's date. After the data restore renumbered sessions, stale
+      // links pointed at unrelated lessons — and this loop then dragged those
+      // lessons onto the booking's date, scrambling past blocks.
+      if(sessId){
+        const insts0=getInsts();
+        const linkOk=insts0.some(i=>i.session_id===sessId&&i.date===courtDate)||
+          syncCache['sessions'].some(s=>s&&s.id===sessId&&s.date===courtDate);
+        if(!linkOk)sessId=null;
+      }
+      if(!sessId){
+        // Before creating anything, adopt an existing block at this exact slot
+        const vkey=String(b.venue||'').trim().toLowerCase();
+        const match=getInsts().find(i=>i.date===courtDate&&i.start_time===times.start&&i.end_time===times.end&&String(i.venue_text||'').trim().toLowerCase()===vkey);
+        if(match&&match.session_id!=null){
+          const link=await fetch(`${FIREBASE_URL}/bookings/${key}/session_id.json`,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(match.session_id)});
+          if(link.ok&&brBookings[key])brBookings[key].session_id=match.session_id;
+          continue;
+        }
+      }
+      if(!sessId){
         // Create the session, then link it to the booking — and only keep it
         // if both writes are confirmed, otherwise every failed link used to
         // leave an orphan session behind and re-create it each cycle
@@ -2119,15 +2138,17 @@ async function importReceiptSessions(){
       }
       // Re-read instances fresh each iteration so we see updates from prior iterations
       const curInsts=getInsts();
-      const existingInst=curInsts.find(i=>i.session_id===sessId);
+      // Only ever touch the instance on this booking's own date — never move a
+      // block from another date onto this one
+      const existingInst=curInsts.find(i=>i.session_id===sessId&&i.date===courtDate);
       if(!existingInst){
-        // No instance yet — create one
+        // No instance on this date yet — create one
         addOneOff(sessId,instData,courtDate);
         count++;
-      } else if(existingInst.date!==courtDate||existingInst.start_time!==instData.start_time||existingInst.end_time!==instData.end_time){
-        // Instance has wrong date or wrong time — fix in place
-        const fixed=curInsts.map(i=>i.session_id===sessId
-          ?{...i,date:courtDate,start_time:instData.start_time,end_time:instData.end_time,hours:compHrs(instData.start_time,instData.end_time)}
+      } else if(existingInst.start_time!==instData.start_time||existingInst.end_time!==instData.end_time){
+        // Wrong time on the right date — fix the times in place
+        const fixed=curInsts.map(i=>i.id===existingInst.id
+          ?{...i,start_time:instData.start_time,end_time:instData.end_time,hours:compHrs(instData.start_time,instData.end_time)}
           :i);
         S.set('instances',fixed);
         count++;

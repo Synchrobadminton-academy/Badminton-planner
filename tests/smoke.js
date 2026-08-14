@@ -13,12 +13,23 @@ const path = require('path');
 const base = new Date();
 base.setDate(base.getDate() + 11);
 const D = base.toISOString().slice(0, 10);
+const base2 = new Date();
+base2.setDate(base2.getDate() + 13);
+const D2 = base2.toISOString().slice(0, 10); // stale-link booking's real date
 const PAY = new Date().toISOString().slice(0, 10);
 
 const db = {
   coaches: [{ id: 1, name: 'James', role: 'main', color: '#10b981' }],
   venues: [], standards: [], 'class-types': [], 'combo-colors': {}, booker_coach_map: {},
-  sessions: [], instances: [],
+  // A past lesson plus an old court booking whose stored session_id wrongly
+  // points at it (stale link, as after the data restore renumbered sessions).
+  // The import loop must NOT drag the past lesson onto the booking's date.
+  sessions: [
+    { id: 7, date: '2026-07-20', start_time: '16:00', end_time: '18:00', venue_text: 'Woodland Sport Hall', court_no: '03', class_type: 'Training', status: 'scheduled', recurring: 0, coach_ids: [], color: '#f59e0b', notes: '' },
+  ],
+  instances: [
+    { id: 7, session_id: 7, date: '2026-07-20', start_time: '16:00', end_time: '18:00', venue_text: 'Woodland Sport Hall', court_no: '03', class_type: 'Training', status: 'scheduled', hours: 2, coach_ids: [], color: '#f59e0b', notes: '' },
+  ],
   bot_sessions: {
     // two receipts, same venue/date/time, different courts — must merge to one block
     '-C1': { date: D, start_time: '16:00', end_time: '18:00', venue_text: 'Bishan Sport Hall', court_no: '01', class_type: 'ActiveSG', booker: 'Twu Eng', payment_date: PAY, venue_type: 'sports_hall', slots: 2 },
@@ -28,7 +39,10 @@ const db = {
     // programme receipt — must seed an attendance roster
     '-P1': { date: D, start_time: '10:00', end_time: '11:00', venue_text: 'Yio Chu Kang Primary School', class_type: 'Academy', students: ['Alice Tan', 'Ben Lim'] },
   },
-  bookings: {}, attendance: {},
+  bookings: {
+    '-BSTALE': { date: D2, court_date: D2, time: '16:00-18:00', venue: 'Choa Chu Kang Sport Hall', court: '09', booker: 'Old Booker', session_id: 7, slots: 2 },
+  },
+  attendance: {},
   booking_images: {
     '-C1': { data: 'aGVsbG8x', mime_type: 'image/jpeg' },
     '-C2': { data: 'aGVsbG8y', mime_type: 'image/jpeg' },
@@ -114,13 +128,19 @@ async function mockFirebase(page) {
   const insts = await page.evaluate(() => S.get('instances').map(i =>
     `${i.date} ${i.start_time}-${i.end_time} ${i.venue_text} | ${i.court_no || ''}`).sort());
   check('instances: merged block + separate slot + programme class', insts, [
+    `2026-07-20 16:00-18:00 Woodland Sport Hall | 03`,
     `${D} 10:00-11:00 Yio Chu Kang Primary School | `,
     `${D} 14:00-15:00 Bishan Sport Hall | 02`,
     `${D} 16:00-18:00 Bishan Sport Hall | 01 & 04`,
+    `${D2} 16:00-18:00 Choa Chu Kang Sport Hall | 09`,
   ]);
+  check('stale booking link: past lesson untouched, booking relinked to its own block',
+    { pastKept: insts.includes('2026-07-20 16:00-18:00 Woodland Sport Hall | 03'),
+      relinked: db.bookings['-BSTALE'].session_id !== 7 && db.bookings['-BSTALE'].session_id != null },
+    { pastKept: true, relinked: true });
   check('one payment record per receipt',
     Object.values(db.bookings).map(b => `${b.booker}:${b.court}`).sort(),
-    ['Derrick:04', 'Twu Eng:01', 'jin:02']);
+    ['Derrick:04', 'Old Booker:09', 'Twu Eng:01', 'jin:02']);
   check('all bot entries flagged imported',
     Object.values(db.bot_sessions).every(v => v.imported === true), true);
 
