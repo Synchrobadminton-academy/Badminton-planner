@@ -1,0 +1,24 @@
+name: fb-query
+on:
+  workflow_dispatch:
+    inputs:
+      dates:
+        description: comma-separated court dates to dump bookings for (YYYY-MM-DD)
+        required: true
+
+jobs:
+  query:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Dump bookings and bot entries for the given dates
+        env:
+          FIREBASE_SECRET: ${{ secrets.FIREBASE_SECRET }}
+          DATES: ${{ inputs.dates }}
+        run: |
+          FB=https://synchroadmin-133f3-default-rtdb.asia-southeast1.firebasedatabase.app
+          FBAUTH="${FIREBASE_SECRET:+?auth=$FIREBASE_SECRET}"
+          DF=$(echo "$DATES" | jq -R 'split(",")')
+          echo "===== bookings on $DATES ====="
+          curl -s "$FB/bookings.json$FBAUTH" | jq --argjson d "$DF" 'to_entries | map(select((.value.court_date // .value.date) as $x | $d | index($x))) | map({key:.key, bot_key:.value.bot_sessions_key, session_id:.value.session_id, date:(.value.court_date // .value.date), venue:.value.venue, court:.value.court, time:.value.time, booker:.value.booker, payment_date:.value.payment_date, slots:.value.slots, source:.value.source})'
+          echo "===== bot_sessions on $DATES ====="
+          curl -s "$FB/bot_sessions.json$FBAUTH" | jq --argjson d "$DF" 'to_entries | map(select(.value.date as $x | $d | index($x))) | map({key:.key, date:.value.date, start:.value.start_time, end:.value.end_time, venue:.value.venue_text, court:.value.court_no, booker:.value.booker, imported:.value.imported, receipt_key:.value.receipt_key})'
