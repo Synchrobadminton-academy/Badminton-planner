@@ -184,6 +184,11 @@ def extract_booking_from_image(image_bytes: bytes, mime_type: str = "image/jpeg"
         raw = re.sub(r"^```[a-z]*\n?", "", raw).rstrip("`").strip()
         result = json.loads(raw)
 
+        # The model sometimes returns multiple courts as a list — the planner
+        # expects one string joined with " & "
+        if isinstance(result.get("court_no"), list):
+            result["court_no"] = " & ".join(str(c) for c in result["court_no"])
+
         # Resolve MM-DD fields to full YYYY-MM-DD
         if result.get("date"):
             result["date"] = fix_year(result["date"])

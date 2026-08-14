@@ -1,0 +1,51 @@
+name: fb-revert-r36
+on: workflow_dispatch
+
+# One-off: fb-fix-slot matched too broadly (date+venue only) and overwrote the
+# unrelated 26 Aug 5-7pm Bukit Canberra lesson (instance r36 / session r38).
+# Restores that record's fields from the pre-restore snapshot.
+
+jobs:
+  revert:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Restore instance r36 / session r38 from snapshot
+        env:
+          FIREBASE_SECRET: ${{ secrets.FIREBASE_SECRET }}
+        run: |
+          python3 - <<'EOF'
+          import json, os, urllib.request
+
+          FB = "https://synchroadmin-133f3-default-rtdb.asia-southeast1.firebasedatabase.app"
+          AUTH = "?auth=" + os.environ["FIREBASE_SECRET"] if os.environ.get("FIREBASE_SECRET") else ""
+
+          def get(path):
+              with urllib.request.urlopen(f"{FB}/{path}.json{AUTH}") as r:
+                  return json.load(r)
+
+          def patch(path, data):
+              req = urllib.request.Request(f"{FB}/{path}.json{AUTH}",
+                  data=json.dumps(data).encode(), method="PATCH",
+                  headers={"Content-Type": "application/json"})
+              with urllib.request.urlopen(req) as r:
+                  r.read()
+
+          def as_list(node):
+              if node is None: return []
+              if isinstance(node, list): return [x for x in node if x]
+              return [x for x in node.values() if x]
+
+          FIELDS = ("date", "start_time", "end_time", "venue_text", "court_no", "hours", "notes")
+          snap_i = as_list(get("backups/pre-restore-2026-08-12/instances"))
+          snap_s = as_list(get("backups/pre-restore-2026-08-12/sessions"))
+
+          inst = next((i for i in snap_i if i.get("id") == 36), None)
+          sess = next((s for s in snap_s if s.get("id") == 38), None)
+          if not inst or not sess:
+              raise SystemExit("snapshot records not found — aborting, nothing changed")
+
+          patch("instances/r36", {k: inst.get(k) for k in FIELDS})
+          patch("sessions/r38", {k: sess.get(k) for k in FIELDS if k != "hours"})
+          print(f"r36 restored to {inst.get('date')} {inst.get('start_time')}-{inst.get('end_time')} "
+                f"{inst.get('venue_text')} Ct {inst.get('court_no')} (notes: {inst.get('notes')!r})")
+          EOF
