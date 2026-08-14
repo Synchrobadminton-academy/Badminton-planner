@@ -70,7 +70,7 @@ OCR_PROMPT = """Extract badminton court booking details from this receipt image.
   "start_time": "HH:MM (24-hour)",
   "end_time": "HH:MM (24-hour)",
   "venue_text": "sports hall name only",
-  "court_no": "court number(s)",
+  "court_no": "court number(s), joined with ' & ' when the booking covers several courts",
   "class_type": "ActiveSG",
   "coach_ids": [],
   "students": ["EVERY participant name if the receipt lists participants, else null"],
@@ -83,13 +83,17 @@ Rules — follow these exactly:
    - Single booking → set "date" as MM-DD, leave start_date and end_date null
    - Recurring weekly programme with a date range → set start_date and end_date as MM-DD, leave date null
 
-2. TIME SLOTS: ActiveSG receipts list individual 1-hour slots (e.g. "3:00 pm", "4:00 pm"). These are consecutive — merge them into one block:
+2. TIME SLOTS: ActiveSG receipts list individual 1-hour slots (e.g. "3:00 pm", "4:00 pm"), each with its own court. The slots may be printed in any order. Merge them into one block:
    - start_time = the EARLIEST slot time
    - end_time = the LATEST slot time + 1 hour
    - Example: slots at 3pm and 4pm → start_time="15:00", end_time="17:00"
    - Example: slots at 4pm and 5pm → start_time="16:00", end_time="18:00"
    - Example: slots at 10am, 11am, 12pm → start_time="10:00", end_time="13:00"
    - Example: single slot at 7pm → start_time="19:00", end_time="20:00"
+   - The slots may be on DIFFERENT courts (e.g. "4:00 pm Court 05" and "5:00 pm Court 06").
+     Still merge into one block: court_no lists every distinct court joined with " & "
+     (e.g. "05 & 06"), and notes must spell out which court covers which hour
+     (e.g. "Court 05: 4-5pm, Court 06: 5-6pm").
 
 3. VENUE: Use the message caption first if provided, then fall back to the receipt. Extract the specific location/branch name
    (e.g. "Bukit Canberra Sport Hall", "Bishan Clubhouse", "Clementi Sport Hall") — not the full address, and NOT a generic

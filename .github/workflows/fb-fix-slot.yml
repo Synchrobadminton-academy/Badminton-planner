@@ -1,0 +1,71 @@
+name: fb-fix-slot
+on: workflow_dispatch
+
+# One-off: the 26 Aug Bukit Canberra receipt covered two consecutive hours on
+# different courts (Court 05 4-5pm, Court 06 5-6pm) but was read as a single
+# 4-5pm hour on "05,06". Corrects the schedule block and the payment record to
+# 16:00-18:00, courts "05 & 06", 2 slots.
+
+jobs:
+  fix:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Correct the 26 Aug Bukit Canberra booking
+        env:
+          FIREBASE_SECRET: ${{ secrets.FIREBASE_SECRET }}
+        run: |
+          python3 - <<'EOF'
+          import json, os, urllib.request
+
+          FB = "https://synchroadmin-133f3-default-rtdb.asia-southeast1.firebasedatabase.app"
+          AUTH = "?auth=" + os.environ["FIREBASE_SECRET"] if os.environ.get("FIREBASE_SECRET") else ""
+
+          def get(path):
+              with urllib.request.urlopen(f"{FB}/{path}.json{AUTH}") as r:
+                  return json.load(r)
+
+          def patch(path, data):
+              req = urllib.request.Request(f"{FB}/{path}.json{AUTH}",
+                  data=json.dumps(data).encode(), method="PATCH",
+                  headers={"Content-Type": "application/json"})
+              with urllib.request.urlopen(req) as r:
+                  r.read()
+
+          NOTES = "Court 05: 4-5pm, Court 06: 5-6pm"
+          DATE, VENUE = "2026-08-26", "bukit canberra sport hall"
+
+          def is_target(rec, date_field, venue_field):
+              return (rec and rec.get(date_field) == DATE and
+                      str(rec.get(venue_field) or "").strip().lower() == VENUE)
+
+          insts = get("instances") or {}
+          items = insts.items() if isinstance(insts, dict) else enumerate(insts)
+          fixed = 0
+          sess_ids = set()
+          for k, i in list(items):
+              if not is_target(i, "date", "venue_text"): continue
+              patch(f"instances/{k}", {"start_time": "16:00", "end_time": "18:00",
+                    "court_no": "05 & 06", "hours": 2, "notes": NOTES})
+              if i.get("session_id") is not None: sess_ids.add(i["session_id"])
+              fixed += 1
+              print(f"instance {k}: {i.get('start_time')}-{i.get('end_time')} Ct {i.get('court_no')} -> 16:00-18:00 Ct 05 & 06")
+
+          sess = get("sessions") or {}
+          items = sess.items() if isinstance(sess, dict) else enumerate(sess)
+          for k, s in list(items):
+              if not s: continue
+              if s.get("id") in sess_ids or is_target(s, "date", "venue_text"):
+                  patch(f"sessions/{k}", {"start_time": "16:00", "end_time": "18:00",
+                        "court_no": "05 & 06", "notes": NOTES})
+                  print(f"session {k} updated")
+
+          bookings = get("bookings") or {}
+          for k, b in bookings.items():
+              if not is_target(b, "court_date", "venue"): continue
+              patch(f"bookings/{k}", {"time": "16:00-18:00", "court": "05 & 06",
+                    "slots": 2, "notes": NOTES})
+              print(f"booking {k}: slots {b.get('slots')} -> 2, time {b.get('time')} -> 16:00-18:00")
+              fixed += 1
+
+          print(f"done — {fixed} records corrected" if fixed else "WARNING: nothing matched")
+          EOF
