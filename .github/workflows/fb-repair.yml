@@ -1,0 +1,113 @@
+name: fb-repair
+on: workflow_dispatch
+
+# Repairs the damage caused by stale booking->session links after the
+# 2026-08-12 restore: rebuilds sessions/instances deterministically from the
+# pre-restore snapshot + the 2026-08-02 backup (same merge as fb-restore, but
+# written in the new keyed "r<id>" format), then relinks every non-activesg
+# booking to the lesson at its own date/venue so the links can never again
+# point at an unrelated block.
+
+jobs:
+  repair:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Rebuild lessons and relink bookings
+        env:
+          FIREBASE_SECRET: ${{ secrets.FIREBASE_SECRET }}
+        run: |
+          python3 - <<'EOF'
+          import json, os, urllib.request
+
+          FB = "https://synchroadmin-133f3-default-rtdb.asia-southeast1.firebasedatabase.app"
+          AUTH = "?auth=" + os.environ["FIREBASE_SECRET"] if os.environ.get("FIREBASE_SECRET") else ""
+
+          def get(path):
+              with urllib.request.urlopen(f"{FB}/{path}.json{AUTH}") as r:
+                  return json.load(r)
+
+          def put(path, data):
+              req = urllib.request.Request(f"{FB}/{path}.json{AUTH}",
+                  data=json.dumps(data).encode(), method="PUT",
+                  headers={"Content-Type": "application/json"})
+              with urllib.request.urlopen(req) as r:
+                  r.read()
+
+          def as_list(node):
+              if node is None: return []
+              if isinstance(node, list): return [x for x in node if x]
+              return [x for x in node.values() if x]
+
+          # Snapshot the current (damaged) state before touching anything
+          cur_s = as_list(get("sessions")); cur_i = as_list(get("instances"))
+          put("backups/pre-repair-2026-08-12", {"sessions": cur_s, "instances": cur_i})
+          print(f"snapshotted damaged state: {len(cur_s)} sessions / {len(cur_i)} instances")
+
+          # Rebuild = pre-restore snapshot + missing slots from the 2 Aug backup
+          # (identical algorithm and ordering to fb-restore, so ids match too)
+          live_s = as_list(get("backups/pre-restore-2026-08-12/sessions"))
+          live_i = as_list(get("backups/pre-restore-2026-08-12/instances"))
+          bk_s = as_list(get("backups/2026-08-02/sessions"))
+          bk_i = as_list(get("backups/2026-08-02/instances"))
+
+          def slot(i):
+              return (i.get("date"), i.get("start_time"), i.get("end_time"),
+                      str(i.get("venue_text") or "").strip().lower())
+
+          live_slots = {slot(i) for i in live_i}
+          bk_sess_by_id = {s.get("id"): s for s in bk_s}
+          groups = {}
+          for inst in bk_i:
+              if slot(inst) in live_slots: continue
+              groups.setdefault(slot(inst), []).append(inst)
+
+          next_iid = max([i.get("id", 0) for i in live_i] or [0]) + 1
+          next_sid = max([s.get("id", 0) for s in live_s] or [0]) + 1
+          for key, insts in sorted(groups.items()):
+              base = dict(insts[0]); courts = []
+              for x in insts:
+                  for c in str(x.get("court_no") or "").split("&"):
+                      c = c.strip()
+                      if c and c not in courts: courts.append(c)
+              base["court_no"] = " & ".join(courts)
+              sess = dict(bk_sess_by_id.get(base.get("session_id")) or {})
+              if not sess:
+                  sess = {k: base.get(k) for k in ("date","start_time","end_time",
+                          "venue_text","court_no","class_type","standard","coach_ids",
+                          "color","notes")}
+                  sess.update(status="scheduled", recurring=0, day_of_week=None)
+              sess["court_no"] = base["court_no"]
+              sess["id"] = next_sid
+              base["id"] = next_iid
+              base["session_id"] = next_sid
+              live_s.append(sess); live_i.append(base)
+              next_sid += 1; next_iid += 1
+
+          put("sessions", {f"r{s['id']}": s for s in live_s})
+          put("instances", {f"r{i['id']}": i for i in live_i})
+          print(f"rebuilt: {len(live_s)} sessions / {len(live_i)} instances (keyed format)")
+
+          # Relink non-activesg bookings to the lesson at their own date/venue
+          bookings = get("bookings") or {}
+          relinked = unlinked = ok = 0
+          for bkey, b in bookings.items():
+              if not b or b.get("source") == "activesg": continue
+              date = str(b.get("court_date") or b.get("date") or "").strip()
+              if not date or len(date) != 10 or date[4] != "-":
+                  continue  # non-ISO legacy date: leave for the site to handle
+              vkey = str(b.get("venue") or "").strip().lower()
+              cands = [i for i in live_i if i.get("date") == date and
+                       str(i.get("venue_text") or "").strip().lower() == vkey]
+              if len(cands) > 1 and b.get("time"):
+                  timed = [i for i in cands if str(i.get("start_time") or "") and str(i["start_time"]) in str(b["time"])]
+                  if timed: cands = timed
+              if cands:
+                  sid = cands[0].get("session_id")
+                  if b.get("session_id") != sid:
+                      put(f"bookings/{bkey}/session_id", sid); relinked += 1
+                  else:
+                      ok += 1
+              elif b.get("session_id") is not None:
+                  put(f"bookings/{bkey}/session_id", None); unlinked += 1
+          print(f"bookings: {ok} already correct, {relinked} relinked, {unlinked} cleared (no matching lesson)")
+          EOF
