@@ -64,6 +64,7 @@ bot = telebot.TeleBot(TELEGRAM_BOT_TOKEN)
 OCR_PROMPT = """Extract badminton court booking details from this receipt image. Return ONLY a valid JSON object, no markdown, no explanation.
 
 {
+  "is_receipt": "true ONLY if this image is an actual booking confirmation, payment receipt or programme registration receipt — false for anything else",
   "date": "MM-DD (single booking) OR null if recurring weekly",
   "start_date": "MM-DD OR null if single booking",
   "end_date": "MM-DD OR null if single booking",
@@ -78,6 +79,12 @@ OCR_PROMPT = """Extract badminton court booking details from this receipt image.
 }
 
 Rules — follow these exactly:
+
+0. IS THIS A RECEIPT? Set "is_receipt" to true only for genuine booking
+   confirmations, payment receipts or programme registration receipts (e.g.
+   ActiveSG booking screens). Training posters, class announcements, schedules,
+   flyers, chat screenshots, group photos or anything else → "is_receipt": false
+   and leave every other field null.
 
 1. DATES: Output only MM-DD (month and day, no year). The year will be calculated separately.
    - Single booking → set "date" as MM-DD, leave start_date and end_date null
@@ -339,6 +346,12 @@ def handle_photo(message: types.Message) -> None:
         log.warning("Could not extract booking from photo sent by %s", sender)
         reply(message, "⚠️ Couldn't read this receipt — please add the booking manually.")
         return
+
+    # Not a receipt at all (poster, announcement, random photo) — stay silent
+    if str(booking.get("is_receipt")).lower() == "false":
+        log.info("Ignoring non-receipt image from %s", sender)
+        return
+    booking.pop("is_receipt", None)
 
     # Programme receipts (date range / participant list) need a caption for
     # context — without one, ignore the image entirely
