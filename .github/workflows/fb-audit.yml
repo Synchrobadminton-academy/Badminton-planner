@@ -1,0 +1,102 @@
+name: fb-audit
+on:
+  workflow_dispatch:
+    inputs:
+      month:
+        description: month to audit (YYYY-MM)
+        required: true
+        default: "2026-08"
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Recompute booking-record dues with the site's formula
+        env:
+          FIREBASE_SECRET: ${{ secrets.FIREBASE_SECRET }}
+          MONTH: ${{ inputs.month }}
+        run: |
+          python3 - <<'EOF'
+          import json, os, re, urllib.request
+          from datetime import date
+
+          FB = "https://synchroadmin-133f3-default-rtdb.asia-southeast1.firebasedatabase.app"
+          AUTH = "?auth=" + os.environ["FIREBASE_SECRET"] if os.environ.get("FIREBASE_SECRET") else ""
+          MONTH = os.environ["MONTH"]
+
+          def get(path):
+              with urllib.request.urlopen(f"{FB}/{path}.json{AUTH}") as r:
+                  return json.load(r)
+
+          # Mirrors planner.html: isPeak / calcCourtRate / getIncentiveRate / calcDue
+          SG_PH = {'2025-01-01','2025-01-29','2025-01-30','2025-04-18','2025-05-01','2025-05-12',
+                   '2025-06-06','2025-08-09','2025-10-20','2025-12-25','2026-01-01','2026-02-17',
+                   '2026-02-18','2026-04-03','2026-05-01','2026-05-31','2026-06-16','2026-08-09',
+                   '2026-10-28','2026-12-25'}
+
+          def start_hour(t):
+              m = re.search(r'(\d{1,2})(?::(\d{2}))?\s*(am|pm)?', t or '', re.I)
+              if not m: return None
+              h = int(m.group(1)); ap = (m.group(3) or '').lower()
+              if ap == 'pm' and h != 12: h += 12
+              elif ap == 'am' and h == 12: h = 0
+              elif not ap and h < 8: h += 12
+              return h
+
+          def is_peak(d, t):
+              if not d: return True, "no date"
+              y, mo, dy = map(int, d.split("-"))
+              wd = date(y, mo, dy).weekday()  # Mon=0 .. Sun=6
+              if wd >= 5: return True, "weekend"
+              if d in SG_PH: return True, "public holiday"
+              h = start_hour(t)
+              if h is None: return True, "unparsable time"
+              return (h >= 18), (f"weekday {h}:00 >= 6pm" if h >= 18 else f"weekday {h}:00 off-peak")
+
+          def pay_date(b):
+              return b.get("payment_date") or (b.get("created_at") or "")[:10] or b.get("date") or ""
+
+          def court_date(b):
+              return b.get("court_date") or b.get("date") or ""
+
+          bookings = get("bookings") or {}
+          rows = []
+          for k, b in bookings.items():
+              if not b: continue
+              if not (b.get("booker") or b.get("source") != "activesg"): continue
+              cd = court_date(b); pd = pay_date(b)
+              slots = b.get("slots") or 1
+              peak, why = is_peak(cd, b.get("time"))
+              rate = 7.40 if peak else 3.50
+              inc = 5.00 if b.get("venue_type") == "school" else 2.50
+              rows.append({"key": k, "booker": b.get("booker") or "(none)", "pay": pd, "court": cd,
+                           "venue": b.get("venue") or "", "ct": b.get("court") or "",
+                           "time": b.get("time") or "", "slots": slots, "vt": b.get("venue_type") or "",
+                           "peak": peak, "why": why, "cost": rate * slots,
+                           "inc": inc * slots, "due": rate * slots + inc * slots})
+
+          def show(title, sel, keyfn):
+              print(f"\n===== {title} =====")
+              tot = {}
+              for r in sorted(sel, key=lambda r: (r["booker"], r[keyfn])):
+                  tot[r["booker"]] = tot.get(r["booker"], 0) + r["due"]
+                  print(f'  {r["booker"]:<10} pay {r["pay"]} court {r["court"]} {r["time"]:<12} '
+                        f'{r["venue"][:26]:<26} Ct {r["ct"]:<8} slots {r["slots"]} '
+                        f'{"PEAK" if r["peak"] else "off "} ({r["why"]}) cost ${r["cost"]:.2f} '
+                        f'inc ${r["inc"]:.2f} due ${r["due"]:.2f}')
+              print("  --- totals ---")
+              for n, v in sorted(tot.items(), key=lambda x: -x[1]):
+                  print(f"  {n:<10} ${v:.2f}")
+
+          show(f"BY PAYMENT MONTH {MONTH}  (what the website's cards show)",
+               [r for r in rows if r["pay"][:7] == MONTH], "pay")
+          show(f"BY COURT MONTH {MONTH}  (what a court-date sheet would show)",
+               [r for r in rows if r["court"][:7] == MONTH], "court")
+
+          # Anything straddling the boundary explains a court-date vs payment-date gap
+          print(f"\n===== STRADDLERS (paid in {MONTH}, played outside — or vice versa) =====")
+          for r in rows:
+              if (r["pay"][:7] == MONTH) != (r["court"][:7] == MONTH):
+                  print(f'  {r["booker"]:<10} pay {r["pay"]} court {r["court"]} '
+                        f'{r["venue"][:26]:<26} due ${r["due"]:.2f}')
+          EOF
