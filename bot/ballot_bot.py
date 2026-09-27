@@ -72,7 +72,8 @@ DEFAULT_CONFIG = {
     "lead_days": 14,
     "post_hour": 9,          # local hour to post at
     "sessions": {
-        "5": {"label": "Saturday", "start": 15, "end": 17, "venue_key": None},
+        "5": {"label": "Saturday", "start": 15, "end": 17,
+              "venue_key": "canberra primary school (dus)"},
         "6": {"label": "Sunday", "start": 9, "end": 11,
               "venue_key": "canberra primary school (dus)"},
     },
@@ -250,7 +251,7 @@ def compose(day: datetime, start_h: int, end_h: int, venue: dict) -> str:
         f"Date: {day.strftime('%A')}, {ordinal(day.day)} {day.strftime('%b %Y')}\n"
         f"Time: {fmt_hour(start_h)} to {fmt_hour(end_h)}\n"
         f"Venue: {venue['name']}\n\n"
-        f"Portal:{url}\n\n"
+        f"Portal: {url}\n\n"
         "The more parents who drop in a ballot, the higher our chances of "
         "locking in the court for the kids!\n\n"
         "Thank you so much for your support! 🙏🏻✨"
