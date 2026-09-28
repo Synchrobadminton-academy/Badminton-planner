@@ -68,6 +68,7 @@ DEFAULT_VENUES = {
 # Mon=0 .. Sun=6.  A session with no venue_key is skipped until one is set.
 DEFAULT_CONFIG = {
     "chat_id": None,
+    "topic_id": None,        # forum topic (message_thread_id), None = normal group
     "autopost": False,
     "lead_days": 14,
     "post_hour": 9,          # local hour to post at
@@ -342,13 +343,22 @@ def next_occurrences(cfg: dict, venues: dict, count: int = 4) -> list:
     return out
 
 
-def post_session(chat_id, target: datetime, session: dict, venue: dict) -> bool:
+def send(chat_id, text, topic_id=None):
+    """Send into a forum topic when one is configured, else the plain chat."""
+    kwargs = {"disable_web_page_preview": True}
+    if topic_id:
+        kwargs["message_thread_id"] = int(topic_id)
+    return bot.send_message(chat_id, text, **kwargs)
+
+
+def post_session(chat_id, target: datetime, session: dict, venue: dict, topic_id=None) -> bool:
     text = compose(target, int(session["start"]), int(session["end"]), venue)
     try:
-        bot.send_message(chat_id, text, disable_web_page_preview=True)
+        send(chat_id, text, topic_id)
         return True
     except Exception as e:
-        log.error("ballot bot: auto-post failed: %s", e)
+        log.error("ballot bot: auto-post to chat %s topic %s failed: %s",
+                  chat_id, topic_id, e)
         return False
 
 
@@ -367,7 +377,8 @@ def scheduler_loop():
                     stamp = target.strftime("%Y-%m-%d")
                     if not fb_get(f"ballot_posted/{stamp}"):
                         venue = load_venues().get(s["venue_key"])
-                        if venue and post_session(cfg["chat_id"], target, s, venue):
+                        if venue and post_session(cfg["chat_id"], target, s, venue,
+                                                  cfg.get("topic_id")):
                             fb_put(f"ballot_posted/{stamp}", now.isoformat())
                             log.info("ballot bot: auto-posted ballot for %s", stamp)
                 elif s:
@@ -426,8 +437,11 @@ def cmd_addvenue(message):
 def cmd_here(message):
     cfg = load_config()
     cfg["chat_id"] = message.chat.id
+    # In a forum group this is the topic the command was sent in
+    cfg["topic_id"] = getattr(message, "message_thread_id", None)
     if save_config(cfg):
-        bot.reply_to(message, "Got it — weekly ballot messages will be posted in this chat.\n"
+        where = f"this topic ({cfg['topic_id']})" if cfg["topic_id"] else "this chat"
+        bot.reply_to(message, f"Got it — weekly ballot messages will be posted in {where}.\n"
                               "Turn them on with /autopost on.")
     else:
         bot.reply_to(message, "Couldn't save that — please try again.")
@@ -489,12 +503,22 @@ def cmd_setschedule(message):
         bot.reply_to(message, "Couldn't save that — please try again.")
 
 
+def _where(cfg, message):
+    if not cfg.get("chat_id"):
+        return "not set — send /here where you want them"
+    here = cfg["chat_id"] == message.chat.id and \
+        cfg.get("topic_id") == getattr(message, "message_thread_id", None)
+    if here:
+        return "this topic" if cfg.get("topic_id") else "this chat"
+    return f"chat {cfg['chat_id']}" + (f", topic {cfg['topic_id']}" if cfg.get("topic_id") else "")
+
+
 @bot.message_handler(commands=["schedule"])
 def cmd_schedule(message):
     cfg, venues = load_config(), load_venues()
     lines = [f"Auto-post: *{'on' if cfg.get('autopost') else 'off'}*",
              f"Posts: {cfg.get('lead_days', 14)} days ahead, from {cfg.get('post_hour', 9)}am",
-             f"Posting to: {'this chat' if cfg.get('chat_id') == message.chat.id else (cfg.get('chat_id') or 'not set — send /here')}",
+             f"Posting to: {_where(cfg, message)}",
              ""]
     for dow in sorted((cfg.get("sessions") or {}).keys()):
         s = cfg["sessions"][dow]
@@ -522,8 +546,8 @@ def cmd_next(message):
                      parse_mode="Markdown")
         return
     bot.reply_to(message, header, parse_mode="Markdown")
-    bot.send_message(message.chat.id, compose(target, int(s["start"]), int(s["end"]), v),
-                     disable_web_page_preview=True)
+    send(message.chat.id, compose(target, int(s["start"]), int(s["end"]), v),
+         getattr(message, "message_thread_id", None))
 
 
 @bot.message_handler(commands=["ballot"])
@@ -539,7 +563,8 @@ def cmd_ballot(message):
     day, sh, eh, venue = parsed
     log.info("ballot: %s %s-%s %s (%d slots)", day.date(), sh, eh, venue["name"], eh - sh)
     # Plain text with no preview card so it can be copied/forwarded verbatim
-    bot.send_message(message.chat.id, compose(day, sh, eh, venue), disable_web_page_preview=True)
+    send(message.chat.id, compose(day, sh, eh, venue),
+         getattr(message, "message_thread_id", None))
 
 
 def main() -> None:
