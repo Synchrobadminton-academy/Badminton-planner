@@ -43,6 +43,10 @@ Push to `gh-pages` → GitHub Pages redeploys the website.
 | `ALLOWED_TOPICS` | Optional: comma-separated topic IDs to accept photos from |
 | `FIREBASE_SECRET` | Optional: database secret once rules are locked down |
 | `PARENT_BOT_TOKEN` | Optional: enables the parent-facing lesson-info bot (separate bot from @BotFather) |
+| `BALLOT_BOT_TOKEN` | Optional: enables the ballot request bot (its own bot from @BotFather) |
+
+Each bot needs its **own** token — reusing one makes Telegram reject both with
+409 Conflict, so `main.py` drops any duplicate and logs an error.
 
 ## Firebase data layout
 
