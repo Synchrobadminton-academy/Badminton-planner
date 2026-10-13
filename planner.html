@@ -206,6 +206,7 @@ table.sched td.tslot.cell-target{background:rgba(37,99,235,.22)!important;outlin
 .bottom-nav{display:flex;position:fixed;left:0;right:0;bottom:0;z-index:180;background:var(--surf);border-top:1px solid var(--bdr);padding-bottom:env(safe-area-inset-bottom);box-shadow:0 -1px 6px rgba(0,0,0,.08)}
 .bn-item{flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;padding:8px 0 7px;font-size:9.5px;font-weight:600;color:var(--txm);cursor:pointer;user-select:none;-webkit-tap-highlight-color:transparent}
 .bn-item .bn-ico{font-size:19px;line-height:1}
+@media(max-width:520px){.bn-item{font-size:8.5px;letter-spacing:-.2px}.bn-item .bn-ico{font-size:17px}}
 .bn-item.active{color:var(--blue)}
 .main-inner{padding-bottom:calc(76px + env(safe-area-inset-bottom))}
 #clip-bar{bottom:calc(66px + env(safe-area-inset-bottom))}
@@ -385,6 +386,7 @@ async function checkPw(){
       <div class="tab-item" data-view="coaches" onclick="showView('coaches')"><span class="tab-icon">⚙️</span>Calendar Settings</div>
       <div class="tab-item" data-view="bookings" onclick="showView('bookings')"><span class="tab-icon">🗓</span>Booking Records</div>
       <div class="tab-item" data-view="receipts" onclick="showView('receipts')"><span class="tab-icon">🧾</span>Receipts</div>
+      <div class="tab-item" data-view="ballot" onclick="showView('ballot')"><span class="tab-icon">🎟️</span>Ballot Bot</div>
     </div>
   </div>
 </aside>
@@ -400,6 +402,7 @@ async function checkPw(){
   <div class="bn-item" data-view="coaches" onclick="showView('coaches')"><span class="bn-ico">⚙️</span>Settings</div>
   <div class="bn-item" data-view="bookings" onclick="showView('bookings')"><span class="bn-ico">🗓</span>Bookings</div>
   <div class="bn-item" data-view="receipts" onclick="showView('receipts')"><span class="bn-ico">🧾</span>Receipts</div>
+  <div class="bn-item" data-view="ballot" onclick="showView('ballot')"><span class="bn-ico">🎟️</span>Ballot</div>
 </nav>
 
 <!-- MAIN CONTENT -->
@@ -585,6 +588,57 @@ async function checkPw(){
       <button class="btn btn-o btn-sm" onclick="loadBookingsFromFirebase()">↻ Refresh</button>
     </div>
     <div id="receipts-list"><div class="empty" style="padding:40px 0">Loading…</div></div>
+  </div>
+</div>
+
+<!-- BALLOT BOT -->
+<div class="view" id="view-ballot">
+  <div class="main-inner">
+    <div class="page-hdr">
+      <h1 class="page-title">Ballot Bot</h1>
+      <button class="btn btn-o btn-sm" onclick="loadBallot()">↻ Refresh</button>
+    </div>
+
+    <div class="card">
+      <div class="card-hdr">Status</div>
+      <div class="card-body"><div id="bl-status"><div class="empty">Loading…</div></div></div>
+    </div>
+
+    <div class="card">
+      <div class="card-hdr">Weekly schedule — which days it asks parents to ballot</div>
+      <div style="overflow-x:auto">
+        <table class="br-table">
+          <thead><tr><th>Day</th><th>On</th><th>From</th><th>To</th><th>Venue</th></tr></thead>
+          <tbody id="bl-days"><tr><td colspan="5" style="padding:20px;text-align:center;color:var(--txf)">Loading…</td></tr></tbody>
+        </table>
+      </div>
+      <div class="card-body" style="padding-top:0">
+        <div style="font-size:11.5px;color:var(--txf)">Changes save straight away. The bot re-reads this every 15 minutes — no redeploy needed.</div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-hdr">Coming up — check a link before it goes out</div>
+      <div style="overflow-x:auto">
+        <table class="br-table">
+          <thead><tr><th>Posts on</th><th>Session</th><th>Time</th><th>Venue</th><th>Status</th><th></th></tr></thead>
+          <tbody id="bl-next"><tr><td colspan="6" style="padding:20px;text-align:center;color:var(--txf)">Loading…</td></tr></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-hdr">Venues</div>
+      <div class="card-body">
+        <div id="bl-venues"></div>
+        <div class="form-row" style="margin-top:12px">
+          <div class="fg"><label>Venue name</label><input id="bl-vname" placeholder="e.g. Yishun Sport Hall"></div>
+          <div class="fg"><label>Any ActiveSG ballot link for that venue</label><input id="bl-vlink" placeholder="https://activesg.gov.sg/facility-bookings/ballots/review?..."></div>
+        </div>
+        <button class="btn btn-p btn-sm" onclick="addBallotVenue()">+ Add venue</button>
+        <div id="bl-vmsg" style="font-size:12px;margin-top:8px"></div>
+      </div>
+    </div>
   </div>
 </div>
 
@@ -991,6 +1045,184 @@ function showView(v){
   if(v==='tracker')renderTracker();
   if(v==='bookings')loadBookingsFromFirebase();
   if(v==='receipts'){renderReceipts();loadBookingsFromFirebase();loadReceiptsTab();}
+  if(v==='ballot')loadBallot();
+}
+
+// ── BALLOT BOT ────────────────────────────────────────────────
+// Defaults mirror bot/ballot_bot.py — keep the two in sync. Once anything is
+// saved here, Firebase is the single source of truth for both.
+const BL_VENUES_DEFAULT={
+  'canberra primary school (dus)':{name:'Canberra Primary School (DUS)',venueId:'EhVMAAEMSQPdrpKw4yIaD',activityId:'YLONatwvqJfikKOmB5N9U'},
+  'bukit canberra sport hall':{name:'Bukit Canberra Sport Hall',venueId:'wpSdUk0uledoInNjK3Kaw',activityId:'YLONatwvqJfikKOmB5N9U'}
+};
+const BL_CFG_DEFAULT={chat_id:null,topic_id:null,autopost:false,lead_days:14,post_hour:9,sessions:{
+  '1':{label:'Tuesday',start:20,end:22,venue_key:'bukit canberra sport hall'},
+  '2':{label:'Wednesday',start:20,end:22,venue_key:'bukit canberra sport hall'},
+  '5':{label:'Saturday',start:15,end:17,venue_key:'canberra primary school (dus)'},
+  '6':{label:'Sunday',start:9,end:11,venue_key:'canberra primary school (dus)'}}};
+// The bot keys sessions by Python's weekday numbering (Mon=0 … Sun=6)
+const BL_DOW=['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday'];
+const jsDayToPy=d=>(d+6)%7;
+let blCfg=null,blVenues={},blPosted={};
+
+function blHour(h){h=+h;return`${(h%12)||12}${h<12?'am':'pm'}`}
+function blOrd(n){return n+(11<=n%100&&n%100<=13?'th':({1:'st',2:'nd',3:'rd'})[n%10]||'th')}
+// Singapore is UTC+8 year-round, so a slot's epoch ms is fixed regardless of
+// where the browser is — this must match timeslots() in ballot_bot.py
+function blSlots(d,sh,eh){const o=[];for(let h=+sh;h<+eh;h++)o.push(Date.UTC(d.getFullYear(),d.getMonth(),d.getDate(),h-8,0,0));return o}
+function blUrl(slots,v){return`https://activesg.gov.sg/facility-bookings/ballots/review?${slots.map(s=>'timeslot='+s).join('&')}&venueId=${v.venueId}&activityId=${v.activityId}`}
+function blCompose(d,sh,eh,v){
+  const MON=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  return'Hi Parents,Friends and family! 👋\n\nTo keep our kids playing and active, we’re looking to secure badminton court slots for our upcoming class!\n\n'
+    +'Could a few of you kindly lend a hand with the ActiveSG ballot/booking for this slot?\n\n'
+    +`Date: ${BL_DOW[jsDayToPy(d.getDay())]}, ${blOrd(d.getDate())} ${MON[d.getMonth()]} ${d.getFullYear()}\n`
+    +`Time: ${blHour(sh)} to ${blHour(eh)}\nVenue: ${v.name}\n\nPortal: ${blUrl(blSlots(d,sh,eh),v)}\n\n`
+    +'The more parents who drop in a ballot, the higher our chances of locking in the court for the kids!\n\nThank you so much for your support! 🙏🏻✨';
+}
+function blDateStr(d){return`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`}
+
+async function loadBallot(){
+  try{
+    const grab=p=>fetch(`${FIREBASE_URL}/${p}.json`).then(r=>r.ok?r.json():null).catch(()=>null);
+    const[c,v,p]=await Promise.all([grab('ballot_config'),grab('ballot_venues'),grab('ballot_posted')]);
+    blVenues={...BL_VENUES_DEFAULT,...(v||{})};
+    blPosted=p||{};
+    blCfg={...BL_CFG_DEFAULT,...(c||{}),sessions:{...BL_CFG_DEFAULT.sessions}};
+    if(c&&c.sessions)for(const k in c.sessions)blCfg.sessions[k]={...(blCfg.sessions[k]||{}),...c.sessions[k]};
+  }catch(e){console.error('loadBallot:',e);}
+  renderBallot();
+}
+
+async function saveBallotCfg(){
+  try{
+    const r=await fetch(`${FIREBASE_URL}/ballot_config.json`,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(blCfg)});
+    if(!r.ok)throw new Error('HTTP '+r.status);
+    return true;
+  }catch(e){console.error('saveBallotCfg:',e);alert('Could not save — check your connection and try again.');return false;}
+}
+
+function blUpcoming(n){
+  const out=[],today=new Date();today.setHours(0,0,0,0);
+  const lead=+((blCfg||{}).lead_days)||14;
+  for(let i=0;i<90&&out.length<n;i++){
+    const t=new Date(today);t.setDate(today.getDate()+i+lead);
+    const s=blCfg.sessions[String(jsDayToPy(t.getDay()))];
+    if(!s||s.off)continue;
+    const post=new Date(today);post.setDate(today.getDate()+i);
+    out.push({post,target:t,s,v:blVenues[s.venue_key]});
+  }
+  return out;
+}
+
+function renderBallot(){
+  if(!blCfg)return;
+  const on=!!blCfg.autopost;
+  const where=blCfg.chat_id?(blCfg.topic_id?`chat ${blCfg.chat_id}, topic ${blCfg.topic_id}`:`chat ${blCfg.chat_id}`):'not set';
+  document.getElementById('bl-status').innerHTML=`
+    <div style="display:flex;flex-wrap:wrap;gap:18px;align-items:center">
+      <div><div style="font-size:11px;color:var(--txf);font-weight:700">AUTO-POST</div>
+        <div style="font-weight:800;color:${on?'var(--green)':'var(--txm)'}">${on?'ON':'OFF'}</div></div>
+      <div><div style="font-size:11px;color:var(--txf);font-weight:700">POSTS TO</div>
+        <div style="font-weight:700">${esc(where)}</div></div>
+      <div><div style="font-size:11px;color:var(--txf);font-weight:700">HOW FAR AHEAD</div>
+        <div><input type="number" min="1" max="60" value="${+blCfg.lead_days||14}" style="width:62px"
+          onchange="blCfg.lead_days=Math.max(1,Math.min(60,+this.value||14));saveBallotCfg().then(renderBallot)"> days</div></div>
+      <div><div style="font-size:11px;color:var(--txf);font-weight:700">POSTS FROM</div>
+        <div><input type="number" min="0" max="23" value="${+blCfg.post_hour||9}" style="width:62px"
+          onchange="blCfg.post_hour=Math.max(0,Math.min(23,+this.value||9));saveBallotCfg().then(renderBallot)"> :00</div></div>
+      <button class="btn ${on?'btn-red':'btn-p'} btn-sm" onclick="blCfg.autopost=!blCfg.autopost;saveBallotCfg().then(renderBallot)"
+        ${blCfg.chat_id?'':'disabled title="Send /here in the Telegram topic first"'}>${on?'Turn off':'Turn on'}</button>
+    </div>
+    ${blCfg.chat_id?'':'<div style="margin-top:10px;font-size:12px;color:var(--txm)">Send <b>/here</b> to the bot inside the Telegram topic you want the messages in — that tells it where to post.</div>'}`;
+
+  const vOpts=k=>Object.entries(blVenues).map(([key,v])=>`<option value="${esc(key)}"${key===k?' selected':''}>${esc(v.name)}</option>`).join('');
+  document.getElementById('bl-days').innerHTML=BL_DOW.map((name,dow)=>{
+    const s=blCfg.sessions[String(dow)]||null;
+    const active=!!s&&!s.off;
+    const hrs=h=>Array.from({length:24},(_,i)=>`<option value="${i}"${i===+h?' selected':''}>${blHour(i)}</option>`).join('');
+    return`<tr${active?'':' style="opacity:.45"'}>
+      <td style="font-weight:700">${name}</td>
+      <td><input type="checkbox" ${active?'checked':''} onchange="blToggleDay(${dow},this.checked)"></td>
+      <td>${active?`<select onchange="blSetDay(${dow},'start',this.value)">${hrs(s.start)}</select>`:'—'}</td>
+      <td>${active?`<select onchange="blSetDay(${dow},'end',this.value)">${hrs(s.end)}</select>`:'—'}</td>
+      <td>${active?`<select onchange="blSetDay(${dow},'venue_key',this.value)">${vOpts(s.venue_key)}</select>`:'—'}</td>
+    </tr>`;
+  }).join('');
+
+  const up=blUpcoming(10);
+  document.getElementById('bl-next').innerHTML=up.length?up.map((u,i)=>{
+    const done=blPosted[blDateStr(u.target)];
+    const bad=!u.v;
+    return`<tr>
+      <td>${u.post.toDateString().slice(0,10)}</td>
+      <td style="font-weight:700">${u.target.toDateString().slice(0,10)}</td>
+      <td>${blHour(u.s.start)}–${blHour(u.s.end)}</td>
+      <td>${bad?'<span style="color:var(--red)">no venue</span>':esc(u.v.name)}</td>
+      <td>${done?'<span style="color:var(--green);font-weight:700">sent</span>':'<span style="color:var(--txf)">pending</span>'}</td>
+      <td style="white-space:nowrap">${bad?'':
+        `<a class="btn btn-o btn-sm" href="${blUrl(blSlots(u.target,u.s.start,u.s.end),u.v)}" target="_blank" rel="noopener">Open</a>
+         <button class="btn btn-o btn-sm" onclick="blCopy(${i})">Copy message</button>`}</td>
+    </tr>`;
+  }).join(''):'<tr><td colspan="6" style="padding:20px;text-align:center;color:var(--txf)">No days switched on</td></tr>';
+  blUpCache=up;
+
+  document.getElementById('bl-venues').innerHTML=Object.values(blVenues).map(v=>
+    `<div style="display:flex;justify-content:space-between;gap:10px;padding:6px 0;border-bottom:1px solid var(--bdr)">
+      <span style="font-weight:700">${esc(v.name)}</span>
+      <span style="font-size:11px;color:var(--txf);font-family:monospace">${esc(v.venueId)}</span>
+    </div>`).join('');
+}
+
+let blUpCache=[];
+function blCopy(i){
+  const u=blUpCache[i];if(!u||!u.v)return;
+  const text=blCompose(u.target,u.s.start,u.s.end,u.v);
+  navigator.clipboard?.writeText(text).then(
+    ()=>alert('Message copied — paste it into Telegram.'),
+    ()=>prompt('Copy this message:',text));
+}
+
+function blToggleDay(dow,on){
+  const k=String(dow);
+  if(on){
+    const existing=blCfg.sessions[k]||{};
+    blCfg.sessions[k]={label:BL_DOW[dow],start:existing.start??20,end:existing.end??22,
+      venue_key:existing.venue_key||Object.keys(blVenues)[0],off:false};
+  }else{
+    // Keep the times/venue so switching back on restores them
+    blCfg.sessions[k]={...(blCfg.sessions[k]||{label:BL_DOW[dow],start:20,end:22,venue_key:Object.keys(blVenues)[0]}),off:true};
+  }
+  saveBallotCfg().then(renderBallot);
+}
+
+function blSetDay(dow,field,val){
+  const s=blCfg.sessions[String(dow)];if(!s)return;
+  s[field]=(field==='venue_key')?val:+val;
+  if(+s.end<=+s.start){alert('End time must be after the start time.');renderBallot();return;}
+  saveBallotCfg().then(renderBallot);
+}
+
+async function addBallotVenue(){
+  const msg=document.getElementById('bl-vmsg');
+  const name=document.getElementById('bl-vname').value.trim();
+  const link=document.getElementById('bl-vlink').value.trim();
+  const fail=t=>{msg.style.color='var(--red)';msg.textContent=t;};
+  if(!name)return fail('Give the venue a name.');
+  let venueId,activityId;
+  try{
+    const q=new URL(link).searchParams;
+    venueId=q.get('venueId');activityId=q.get('activityId');
+  }catch(e){return fail('That doesn’t look like a link.');}
+  if(!venueId||!activityId)return fail('That link has no venueId/activityId — copy a ballot link from ActiveSG.');
+  const key=name.toLowerCase().replace(/\s+/g,' ').trim();
+  try{
+    const r=await fetch(`${FIREBASE_URL}/ballot_venues/${encodeURIComponent(key)}.json`,
+      {method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({name,venueId,activityId})});
+    if(!r.ok)throw new Error('HTTP '+r.status);
+    document.getElementById('bl-vname').value='';document.getElementById('bl-vlink').value='';
+    msg.style.color='var(--green)';msg.textContent=`Saved “${name}”.`;
+    loadBallot();
+  }catch(e){fail('Could not save — try again.');}
 }
 
 // ── SCHED TOGGLE ──────────────────────────────────────────────

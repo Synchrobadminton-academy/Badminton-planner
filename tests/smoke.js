@@ -122,7 +122,7 @@ async function mockFirebase(page) {
 
   check('sidebar tabs',
     await page.evaluate(() => Array.from(document.querySelectorAll('.tab-item')).map(t => t.dataset.view)),
-    ['dashboard', 'schedule', 'tracker', 'coaches', 'bookings', 'receipts']);
+    ['dashboard', 'schedule', 'tracker', 'coaches', 'bookings', 'receipts', 'ballot']);
 
   // ── Court import + merge ─────────────────────────────────────
   const insts = await page.evaluate(() => S.get('instances').map(i =>
@@ -207,6 +207,27 @@ async function mockFirebase(page) {
       return await pushRecords('instances', [{ id: 99, date: '2030-01-01' }]);
     }), false);
 
+  // ── Ballot tab ───────────────────────────────────────────────
+  await page.evaluate(() => showView('ballot'));
+  await page.waitForTimeout(800);
+  check('ballot tab opens', await page.evaluate(() => document.querySelector('.view.active').id),
+    'view-ballot');
+  // The generated links must stay byte-identical to the Telegram bot's
+  check('ballot links match the bot exactly', await page.evaluate(() => ({
+      tue: blUrl(blSlots(new Date(2026, 9, 27), 20, 22), blVenues['bukit canberra sport hall']),
+      sun: blUrl(blSlots(new Date(2026, 9, 11), 9, 11), blVenues['canberra primary school (dus)']),
+    })), {
+      tue: 'https://activesg.gov.sg/facility-bookings/ballots/review?timeslot=1793102400000&timeslot=1793106000000&venueId=wpSdUk0uledoInNjK3Kaw&activityId=YLONatwvqJfikKOmB5N9U',
+      sun: 'https://activesg.gov.sg/facility-bookings/ballots/review?timeslot=1791680400000&timeslot=1791684000000&venueId=EhVMAAEMSQPdrpKw4yIaD&activityId=YLONatwvqJfikKOmB5N9U',
+    });
+  check('upcoming ballots are the configured days, lead_days ahead',
+    await page.evaluate(() => ({
+      days: [...new Set(blUpcoming(8).map(u => u.target.getDay()))].sort(),
+      leads: [...new Set(blUpcoming(8).map(u => Math.round((u.target - u.post) / 86400000)))],
+    })), { days: [0, 2, 3, 6], leads: [14] });
+  check('auto-post stays disabled until /here sets a chat',
+    await page.evaluate(() => document.querySelector('#bl-status button').disabled), true);
+
   check('no page errors', errors, []);
 
   // ── Mobile: bottom tab bar replaces the hamburger sidebar ────
@@ -223,7 +244,8 @@ async function mockFirebase(page) {
       sidebar: getComputedStyle(document.getElementById('sidebar')).display,
       ham: getComputedStyle(document.querySelector('.ham-btn')).display,
       tabs: document.querySelectorAll('#bottom-nav .bn-item').length,
-    })), { nav: 'flex', sidebar: 'none', ham: 'none', tabs: 6 });
+      overflows: document.getElementById('bottom-nav').scrollWidth > window.innerWidth + 1,
+    })), { nav: 'flex', sidebar: 'none', ham: 'none', tabs: 7, overflows: false });
   await mob.tap('#bottom-nav .bn-item[data-view="schedule"]');
   await mob.waitForTimeout(400);
   check('tapping a bottom tab switches view and highlights it',
