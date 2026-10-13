@@ -343,7 +343,7 @@ def next_occurrences(cfg: dict, venues: dict, count: int = 4) -> list:
     for i in range(0, 60):
         target = today + timedelta(days=i + lead)
         s = (cfg.get("sessions") or {}).get(str(target.weekday()))
-        if not s:
+        if not s or s.get("off"):
             continue
         v = venues.get(s.get("venue_key") or "")
         out.append((today + timedelta(days=i), target, s, v))
@@ -382,7 +382,7 @@ def scheduler_loop():
                 target = (now + timedelta(days=int(cfg.get("lead_days", 14)))).replace(
                     hour=0, minute=0, second=0, microsecond=0)
                 s = (cfg.get("sessions") or {}).get(str(target.weekday()))
-                if s and s.get("venue_key"):
+                if s and s.get("venue_key") and not s.get("off"):
                     stamp = target.strftime("%Y-%m-%d")
                     if not fb_get(f"ballot_posted/{stamp}"):
                         venue = load_venues().get(s["venue_key"])
@@ -390,7 +390,7 @@ def scheduler_loop():
                                                   cfg.get("topic_id")):
                             fb_put(f"ballot_posted/{stamp}", now.isoformat())
                             log.info("ballot bot: auto-posted ballot for %s", stamp)
-                elif s:
+                elif s and not s.get("off"):
                     log.info("ballot bot: %s session has no venue set — skipping",
                              s.get("label", target.strftime("%A")))
         except Exception as e:
