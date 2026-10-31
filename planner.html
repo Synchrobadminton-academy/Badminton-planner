@@ -1053,13 +1053,14 @@ function showView(v){
 // saved here, Firebase is the single source of truth for both.
 const BL_VENUES_DEFAULT={
   'canberra primary school (dus)':{name:'Canberra Primary School (DUS)',venueId:'EhVMAAEMSQPdrpKw4yIaD',activityId:'YLONatwvqJfikKOmB5N9U'},
-  'bukit canberra sport hall':{name:'Bukit Canberra Sport Hall',venueId:'wpSdUk0uledoInNjK3Kaw',activityId:'YLONatwvqJfikKOmB5N9U'}
+  'bukit canberra sport hall':{name:'Bukit Canberra Sport Hall',venueId:'wpSdUk0uledoInNjK3Kaw',activityId:'YLONatwvqJfikKOmB5N9U'},
+  'sembawang primary school':{name:'Sembawang Primary School',venueId:'JMJsnnXCzfV7wkG2fCU4N',activityId:'YLONatwvqJfikKOmB5N9U'}
 };
 const BL_CFG_DEFAULT={chat_id:null,topic_id:null,autopost:false,lead_days:14,post_hour:9,sessions:{
   '1':{label:'Tuesday',start:20,end:22,venue_key:'bukit canberra sport hall'},
   '2':{label:'Wednesday',start:20,end:22,venue_key:'bukit canberra sport hall'},
-  '5':{label:'Saturday',start:15,end:17,venue_key:'canberra primary school (dus)'},
-  '6':{label:'Sunday',start:9,end:11,venue_key:'canberra primary school (dus)'}}};
+  '5':{label:'Saturday',start:15,end:17,venue_key:'sembawang primary school'},
+  '6':{label:'Sunday',start:9,end:11,venue_key:'sembawang primary school'}}};
 // The bot keys sessions by Python's weekday numbering (Mon=0 … Sun=6)
 const BL_DOW=['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday'];
 const jsDayToPy=d=>(d+6)%7;

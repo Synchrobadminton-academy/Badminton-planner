@@ -216,9 +216,11 @@ async function mockFirebase(page) {
   check('ballot links match the bot exactly', await page.evaluate(() => ({
       tue: blUrl(blSlots(new Date(2026, 9, 27), 20, 22), blVenues['bukit canberra sport hall']),
       sun: blUrl(blSlots(new Date(2026, 9, 11), 9, 11), blVenues['canberra primary school (dus)']),
+      sat: blUrl(blSlots(new Date(2026, 10, 14), 15, 17), blVenues['sembawang primary school']),
     })), {
       tue: 'https://activesg.gov.sg/facility-bookings/ballots/review?timeslot=1793102400000&timeslot=1793106000000&venueId=wpSdUk0uledoInNjK3Kaw&activityId=YLONatwvqJfikKOmB5N9U',
       sun: 'https://activesg.gov.sg/facility-bookings/ballots/review?timeslot=1791680400000&timeslot=1791684000000&venueId=EhVMAAEMSQPdrpKw4yIaD&activityId=YLONatwvqJfikKOmB5N9U',
+      sat: 'https://activesg.gov.sg/facility-bookings/ballots/review?timeslot=1794639600000&timeslot=1794643200000&venueId=JMJsnnXCzfV7wkG2fCU4N&activityId=YLONatwvqJfikKOmB5N9U',
     });
   check('upcoming ballots are the configured days, lead_days ahead',
     await page.evaluate(() => ({
