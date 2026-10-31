@@ -1,0 +1,84 @@
+name: fb-ballot
+on:
+  workflow_dispatch:
+    inputs:
+      apply:
+        description: "write changes (false = just show current state)"
+        required: true
+        default: "false"
+
+# Registers the Sembawang Primary School ballot venue and points the weekend
+# sessions (Sat/Sun) at it. The bot's code defaults already say Sembawang, but
+# once /ballot_config exists in Firebase the stored copy wins — so an existing
+# setup has to be updated here too.
+
+jobs:
+  ballot:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Show and optionally update the ballot config
+        env:
+          FIREBASE_SECRET: ${{ secrets.FIREBASE_SECRET }}
+          APPLY: ${{ inputs.apply }}
+        run: |
+          python3 - <<'EOF'
+          import json, os, urllib.request
+
+          FB = "https://synchroadmin-133f3-default-rtdb.asia-southeast1.firebasedatabase.app"
+          AUTH = "?auth=" + os.environ["FIREBASE_SECRET"] if os.environ.get("FIREBASE_SECRET") else ""
+          APPLY = os.environ.get("APPLY", "false").strip().lower() == "true"
+
+          VENUE_KEY = "sembawang primary school"
+          VENUE = {"name": "Sembawang Primary School",
+                   "venueId": "JMJsnnXCzfV7wkG2fCU4N",
+                   "activityId": "YLONatwvqJfikKOmB5N9U"}
+
+          def get(path):
+              with urllib.request.urlopen(f"{FB}/{path}.json{AUTH}") as r:
+                  return json.load(r)
+
+          def put(path, value):
+              req = urllib.request.Request(f"{FB}/{path}.json{AUTH}",
+                  data=json.dumps(value).encode(), method="PUT",
+                  headers={"Content-Type": "application/json"})
+              with urllib.request.urlopen(req) as r:
+                  r.read()
+
+          cfg = get("ballot_config")
+          venues = get("ballot_venues") or {}
+          print("=== current ballot_venues ===")
+          print(json.dumps(venues, indent=2) if venues else "(none stored — bot is using its code defaults)")
+          print("\n=== current ballot_config ===")
+          print(json.dumps(cfg, indent=2) if cfg else "(none stored — bot is using its code defaults)")
+
+          if not APPLY:
+              print("\nDry run. Re-run with apply=true to write the changes below:")
+              print(f"  • add venue '{VENUE_KEY}' -> {VENUE['venueId']}")
+              print("  • point Saturday (5) and Sunday (6) at it")
+              raise SystemExit
+
+          put(f"ballot_venues/{VENUE_KEY}", VENUE)
+          print(f"\nvenue '{VENUE['name']}' registered")
+
+          if not cfg:
+              print("no stored config — the bot's code defaults already use Sembawang "
+                    "for the weekend, nothing else to change")
+              raise SystemExit
+
+          sessions = cfg.get("sessions") or {}
+          changed = []
+          for dow, label in (("5", "Saturday"), ("6", "Sunday")):
+              s = sessions.get(dow)
+              if not s:
+                  continue
+              if s.get("venue_key") != VENUE_KEY:
+                  changed.append(f"{label}: {s.get('venue_key')} -> {VENUE_KEY}")
+                  s["venue_key"] = VENUE_KEY
+                  sessions[dow] = s
+          if changed:
+              cfg["sessions"] = sessions
+              put("ballot_config", cfg)
+              print("updated:", "; ".join(changed))
+          else:
+              print("weekend sessions already point at Sembawang — nothing to change")
+          EOF

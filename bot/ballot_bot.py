@@ -68,6 +68,11 @@ DEFAULT_VENUES = {
         "venueId": "wpSdUk0uledoInNjK3Kaw",
         "activityId": "YLONatwvqJfikKOmB5N9U",
     },
+    "sembawang primary school": {
+        "name": "Sembawang Primary School",
+        "venueId": "JMJsnnXCzfV7wkG2fCU4N",
+        "activityId": "YLONatwvqJfikKOmB5N9U",
+    },
 }
 
 # Mon=0 .. Sun=6.  A session with no venue_key is skipped until one is set.
@@ -83,9 +88,9 @@ DEFAULT_CONFIG = {
         "2": {"label": "Wednesday", "start": 20, "end": 22,
               "venue_key": "bukit canberra sport hall"},
         "5": {"label": "Saturday", "start": 15, "end": 17,
-              "venue_key": "canberra primary school (dus)"},
+              "venue_key": "sembawang primary school"},
         "6": {"label": "Sunday", "start": 9, "end": 11,
-              "venue_key": "canberra primary school (dus)"},
+              "venue_key": "sembawang primary school"},
     },
 }
 
