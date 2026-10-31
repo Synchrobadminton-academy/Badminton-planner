@@ -365,6 +365,19 @@ def send(chat_id, text, topic_id=None):
     return bot.send_message(chat_id, text, **kwargs)
 
 
+def last_due(cfg: dict, venues: dict, back_days: int = 8):
+    """The session the scheduler most recently posted, or should have today."""
+    today = datetime.now(TZ).replace(hour=0, minute=0, second=0, microsecond=0)
+    lead = int(cfg.get("lead_days", 14))
+    for back in range(0, back_days):
+        day = today - timedelta(days=back)
+        target = day + timedelta(days=lead)
+        s = (cfg.get("sessions") or {}).get(str(target.weekday()))
+        if s and not s.get("off"):
+            return day, target, s, venues.get(s.get("venue_key") or "")
+    return None
+
+
 def post_session(chat_id, target: datetime, session: dict, venue: dict, topic_id=None) -> bool:
     text = compose(target, int(session["start"]), int(session["end"]), venue)
     try:
@@ -413,7 +426,8 @@ HELP = (
     "`/here` — post the weekly messages in this chat\n"
     "`/setschedule sat 3-5pm <venue>` — set the Saturday venue\n"
     "`/autopost on` — start posting automatically\n"
-    "`/schedule` — show the schedule · `/next` — preview what's next\n\n"
+    "`/schedule` — show the schedule · `/next` — preview what's next\n"
+    "`/resend` — post the latest message again\n\n"
     "*Venues:*\n"
     "`/venues` · `/addvenue <name> = <ActiveSG ballot link>`"
 )
@@ -562,6 +576,27 @@ def cmd_next(message):
     bot.reply_to(message, header, parse_mode="Markdown")
     send(message.chat.id, compose(target, int(s["start"]), int(s["end"]), v),
          getattr(message, "message_thread_id", None))
+
+
+@bot.message_handler(commands=["resend", "again"])
+def cmd_resend(message):
+    """Post the most recent scheduled message again, no typing needed."""
+    cfg, venues = load_config(), load_venues()
+    found = last_due(cfg, venues)
+    if not found:
+        bot.reply_to(message, "Nothing was due in the past week — send one by hand with "
+                              "`/ballot 14 Nov 2026, 3-5pm, sembawang`.", parse_mode="Markdown")
+        return
+    _, target, s, v = found
+    if not v:
+        bot.reply_to(message, f"{target.strftime('%a %-d %b')} has no venue set — "
+                              "pick one in the Ballot tab or with /setschedule.")
+        return
+    topic = getattr(message, "message_thread_id", None)
+    send(message.chat.id, compose(target, int(s["start"]), int(s["end"]), v), topic)
+    # Claim the slot so the scheduler doesn't post the same one again later today
+    fb_put(f"ballot_posted/{target.strftime('%Y-%m-%d')}", datetime.now(TZ).isoformat())
+    log.info("ballot bot: resent %s by request", target.date())
 
 
 @bot.message_handler(commands=["ballot"])
