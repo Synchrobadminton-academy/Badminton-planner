@@ -41,6 +41,8 @@ const db = {
   },
   bookings: {
     '-BSTALE': { date: D2, court_date: D2, time: '16:00-18:00', venue: 'Choa Chu Kang Sport Hall', court: '09', booker: 'Old Booker', session_id: 7, slots: 2 },
+    // refunded by /refund: row stays, but the booker is no longer owed for it
+    '-BREFUND': { date: D2, court_date: D2, time: '09:00-11:00', venue: 'Yishun Sport Hall', court: '01', booker: 'Refund Tester', slots: 2, payment_date: PAY, source: 'activesg', refunded: true, refunded_at: '2026-11-24 10:00', refunded_by: 'Twu Eng' },
   },
   attendance: {},
   booking_images: {
@@ -140,7 +142,7 @@ async function mockFirebase(page) {
     { pastKept: true, relinked: true });
   check('one payment record per receipt',
     Object.values(db.bookings).map(b => `${b.booker}:${b.court}`).sort(),
-    ['Derrick:04', 'Old Booker:09', 'Twu Eng:01', 'jin:02']);
+    ['Derrick:04', 'Old Booker:09', 'Refund Tester:01', 'Twu Eng:01', 'jin:02']);
   check('all bot entries flagged imported',
     Object.values(db.bot_sessions).every(v => v.imported === true), true);
 
@@ -229,6 +231,19 @@ async function mockFirebase(page) {
     })), { days: [0, 2, 3, 6], leads: [14] });
   check('auto-post stays disabled until /here sets a chat',
     await page.evaluate(() => document.querySelector('#bl-status button').disabled), true);
+
+  // ── Refunds ──────────────────────────────────────────────────
+  await page.evaluate(() => { brSelectMonth(new Date().toISOString().slice(0, 7)); });
+  await page.waitForTimeout(600);
+  check('refunded booking is not charged to its booker',
+    await page.evaluate(() => Array.from(document.querySelectorAll('#br-summary .br-card-name'))
+      .map(e => e.textContent).includes('Refund Tester')), false);
+  check('refunded booking still shows, marked Refunded',
+    await page.evaluate(() => {
+      const row = Array.from(document.querySelectorAll('#br-tbody tr'))
+        .find(r => r.textContent.includes('Yishun Sport Hall'));
+      return { listed: !!row, badge: !!row?.querySelector('.br-badge-rf') };
+    }), { listed: true, badge: true });
 
   check('no page errors', errors, []);
 
