@@ -376,23 +376,46 @@ def booking_label(b: dict) -> str:
     return f"{mark}{b.get('venue') or 'Unknown venue'}{court} · {when}"
 
 
-def cancel_blocks_for(b: dict) -> int:
-    """Cancel the lesson block(s) matching this booking's slot."""
+def matching_blocks(b: dict) -> list:
+    """(key, instance) for every lesson block in this booking's slot."""
     day = b.get("court_date") or b.get("date")
     start, _, end = str(b.get("time") or "").partition("-")
     venue = str(b.get("venue") or "").strip().lower()
     node = fb_get("instances", {}) or {}
     items = node.items() if isinstance(node, dict) else enumerate(node)
-    done = 0
-    for k, inst in list(items):
-        if not inst or inst.get("status") == "cancelled":
+    return [(str(k), inst) for k, inst in list(items)
+            if inst and inst.get("date") == day
+            and str(inst.get("start_time") or "") == start
+            and str(inst.get("end_time") or "") == end
+            and str(inst.get("venue_text") or "").strip().lower() == venue]
+
+
+def cancel_blocks_for(b: dict) -> dict:
+    """Cancel this booking's lesson block(s); returns {key: status before}."""
+    before = {}
+    for k, inst in matching_blocks(b):
+        prev = inst.get("status") or "scheduled"   # read before the write
+        if prev == "cancelled":
             continue
-        if (inst.get("date") == day
-                and str(inst.get("start_time") or "") == start
-                and str(inst.get("end_time") or "") == end
-                and str(inst.get("venue_text") or "").strip().lower() == venue):
-            if fb_patch(f"instances/{k}", {"status": "cancelled"}):
+        if fb_patch(f"instances/{k}", {"status": "cancelled"}):
+            before[k] = prev
+    return before
+
+
+def restore_blocks_for(b: dict) -> int:
+    """Put back exactly the blocks this refund cancelled."""
+    saved = b.get("refund_blocks")
+    done = 0
+    if isinstance(saved, dict) and saved:
+        for k, prev in saved.items():
+            if fb_patch(f"instances/{k}", {"status": prev or "scheduled"}):
                 done += 1
+        return done
+    # Refunded before we recorded which blocks were cancelled: fall back to the
+    # slot, and only revive blocks that are actually cancelled
+    for k, inst in matching_blocks(b):
+        if inst.get("status") == "cancelled" and fb_patch(f"instances/{k}", {"status": "scheduled"}):
+            done += 1
     return done
 
 
@@ -410,6 +433,16 @@ def cmd_refund(message: types.Message) -> None:
                    "Send /cancel to stop.")
 
 
+@bot.message_handler(commands=["undorefund"])
+def cmd_undorefund(message: types.Message) -> None:
+    if not refund_allowed(message):
+        return
+    refund_pending[(message.chat.id, message.from_user.id)] = {"step": "undo_date"}
+    reply(message, "Which date was the refunded court booked for?\n"
+                   "Send it as DDMMYY — e.g. 141126 for 14 Nov 2026.\n"
+                   "Send /cancel to stop.")
+
+
 @bot.message_handler(commands=["cancel"])
 def cmd_cancel(message: types.Message) -> None:
     if refund_pending.pop((message.chat.id, message.from_user.id), None):
@@ -421,24 +454,31 @@ def cmd_cancel(message: types.Message) -> None:
     content_types=["text"])
 def refund_date_reply(message: types.Message) -> None:
     state = refund_pending.get((message.chat.id, message.from_user.id))
-    if not state or state.get("step") != "date":
+    if not state or state.get("step") not in ("date", "undo_date"):
         return
+    undo = state["step"] == "undo_date"
     day = parse_ddmmyy(message.text)
     if not day:
         reply(message, "I couldn't read that date. Send six digits, DDMMYY — "
                        "e.g. 141126 for 14 Nov 2026. Or /cancel.")
         return
     rows = bookings_on(day)
+    if undo:
+        rows = [(k, b) for k, b in rows if b.get("refunded")]
     if not rows:
         refund_pending.pop((message.chat.id, message.from_user.id), None)
-        reply(message, f"No court bookings found for {fmt_date(day)}.")
+        reply(message, (f"No refunds recorded for {fmt_date(day)}." if undo
+                        else f"No court bookings found for {fmt_date(day)}."))
         return
+    prefix = "ur" if undo else "rf"
     kb = types.InlineKeyboardMarkup()
     for key, b in rows:
-        kb.add(types.InlineKeyboardButton(booking_label(b), callback_data=f"rf:{key}"))
-    kb.add(types.InlineKeyboardButton("✖️ Cancel", callback_data="rf:x"))
+        kb.add(types.InlineKeyboardButton(booking_label(b), callback_data=f"{prefix}:{key}"))
+    kb.add(types.InlineKeyboardButton("✖️ Cancel", callback_data=f"{prefix}:x"))
     refund_pending.pop((message.chat.id, message.from_user.id), None)
-    bot.send_message(message.chat.id, f"Courts booked on {fmt_date(day)} — which was refunded?",
+    bot.send_message(message.chat.id,
+                     (f"Refunds recorded on {fmt_date(day)} — which should I undo?" if undo
+                      else f"Courts booked on {fmt_date(day)} — which was refunded?"),
                      reply_markup=kb,
                      message_thread_id=getattr(message, "message_thread_id", None))
 
@@ -462,25 +502,67 @@ def refund_chosen(call) -> None:
                               call.message.chat.id, call.message.message_id)
         return
     who = call.from_user.full_name if call.from_user else "unknown"
+    # Cancel first so the booking can record exactly what was cancelled
+    cancelled = cancel_blocks_for(b)
     ok = fb_patch(f"bookings/{key}", {
         "refunded": True,
         "refunded_at": datetime.now().strftime("%Y-%m-%d %H:%M"),
         "refunded_by": who,
+        "refund_blocks": cancelled or None,
     })
     if not ok:
         bot.answer_callback_query(call.id, "Couldn't save")
         bot.edit_message_text("Couldn't record that refund — please try again.",
                               call.message.chat.id, call.message.message_id)
         return
-    cancelled = cancel_blocks_for(b)
-    log.info("Refund recorded for %s by %s (%d block(s) cancelled)", key, who, cancelled)
-    note = (f"\nLesson block cancelled on the schedule." if cancelled
+    log.info("Refund recorded for %s by %s (%d block(s) cancelled)", key, who, len(cancelled))
+    note = ("\nLesson block cancelled on the schedule." if cancelled
             else "\nNo matching lesson block found on the schedule.")
     bot.answer_callback_query(call.id, "Refund recorded")
     bot.edit_message_text(
         f"↩️ Refund recorded\n{booking_label(b)}\n"
         f"Booker: {b.get('booker') or '—'}\n"
-        f"It no longer counts toward what they're owed.{note}",
+        f"It no longer counts toward what they're owed.{note}\n"
+        f"Undo with /undorefund.",
+        call.message.chat.id, call.message.message_id)
+
+
+@bot.callback_query_handler(func=lambda c: (c.data or "").startswith("ur:"))
+def undo_refund_chosen(call) -> None:
+    key = (call.data or "")[3:]
+    if key == "x":
+        bot.answer_callback_query(call.id, "Cancelled")
+        bot.edit_message_text("No change made.", call.message.chat.id, call.message.message_id)
+        return
+    b = fb_get(f"bookings/{key}")
+    if not b:
+        bot.answer_callback_query(call.id, "That booking is gone")
+        bot.edit_message_text("That booking no longer exists.",
+                              call.message.chat.id, call.message.message_id)
+        return
+    if not b.get("refunded"):
+        bot.answer_callback_query(call.id, "Not refunded")
+        bot.edit_message_text(f"{booking_label(b)} isn't marked as refunded.",
+                              call.message.chat.id, call.message.message_id)
+        return
+    restored = restore_blocks_for(b)
+    # null clears the field in Firebase
+    ok = fb_patch(f"bookings/{key}", {"refunded": None, "refunded_at": None,
+                                      "refunded_by": None, "refund_blocks": None})
+    if not ok:
+        bot.answer_callback_query(call.id, "Couldn't save")
+        bot.edit_message_text("Couldn't undo that refund — please try again.",
+                              call.message.chat.id, call.message.message_id)
+        return
+    who = call.from_user.full_name if call.from_user else "unknown"
+    log.info("Refund undone for %s by %s (%d block(s) restored)", key, who, restored)
+    note = ("\nLesson block put back on the schedule." if restored
+            else "\nNo lesson block needed restoring.")
+    bot.answer_callback_query(call.id, "Refund undone")
+    bot.edit_message_text(
+        f"↩️ Refund undone\n{booking_label(b).lstrip('↩️ ')}\n"
+        f"Booker: {b.get('booker') or '—'}\n"
+        f"It counts toward what they're owed again.{note}",
         call.message.chat.id, call.message.message_id)
 
 
