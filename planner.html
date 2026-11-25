@@ -2417,6 +2417,9 @@ async function importBotSessions(){
     // flagged imported but with no matching session was lost — re-import it.
     const entries=Object.entries(data).filter(([key,s])=>{
       if(!s||!s.date||!s.start_time||!s.end_time)return false;
+      // Refunded from Telegram before it was ever imported — the bot already
+      // wrote its payment row, and no lesson should be created for it
+      if(s.refunded)return false;
       if(!s.imported)return true;
       // Programme-roster entries may merge into an existing session, so they
       // can't be self-healed by session lookup — never re-import them
