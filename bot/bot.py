@@ -368,6 +368,44 @@ def bookings_on(day: str) -> list:
     return out
 
 
+def pending_on(day: str, known: list) -> list:
+    """Receipts for a date the website hasn't imported into /bookings yet.
+
+    The bot writes receipts to /bot_sessions; the planner turns them into
+    payment rows only while someone has the site open. A refund shouldn't
+    have to wait for that.
+    """
+    seen = {bk.get("bot_sessions_key") for _, bk in known}
+    out = []
+    for key, s in (fb_get("bot_sessions", {}) or {}).items():
+        if not s or key in seen:
+            continue
+        if s.get("date") != day or not s.get("booker"):
+            continue
+        if s.get("students") or s.get("student_name"):
+            continue  # programme roster, not a court booking
+        if s.get("refunded"):
+            continue
+        out.append((key, s))
+    out.sort(key=lambda ks: (str(ks[1].get("venue_text") or ""), str(ks[1].get("court_no") or "")))
+    return out
+
+
+def session_as_booking(key: str, s: dict) -> dict:
+    """The payment row the website would have created for this receipt."""
+    return {
+        "date": s.get("date"), "court_date": s.get("date"),
+        "time": f"{s.get('start_time') or ''}-{s.get('end_time') or ''}",
+        "venue": s.get("venue_text") or "", "court": s.get("court_no") or "",
+        "class_type": s.get("class_type") or "ActiveSG", "source": "activesg",
+        "color": s.get("color") or "#f59e0b", "status": s.get("status") or "scheduled",
+        "coach_ids": s.get("coach_ids") or [], "notes": s.get("notes") or "",
+        "booker": s.get("booker"), "payment_date": s.get("payment_date") or s.get("date"),
+        "venue_type": s.get("venue_type") or "sports_hall", "slots": s.get("slots") or 1,
+        "bot_sessions_key": key,
+    }
+
+
 def booking_label(b: dict) -> str:
     start, _, end = str(b.get("time") or "").partition("-")
     when = f"{fmt_time(start)}–{fmt_time(end)}" if start and end else (b.get("time") or "")
@@ -465,7 +503,7 @@ def refund_date_reply(message: types.Message) -> None:
     rows = bookings_on(day)
     if undo:
         rows = [(k, b) for k, b in rows if b.get("refunded")]
-    if not rows:
+    if not rows and (undo or not pending_on(day, rows)):
         refund_pending.pop((message.chat.id, message.from_user.id), None)
         reply(message, (f"No refunds recorded for {fmt_date(day)}." if undo
                         else f"No court bookings found for {fmt_date(day)}."))
@@ -474,6 +512,11 @@ def refund_date_reply(message: types.Message) -> None:
     kb = types.InlineKeyboardMarkup()
     for key, b in rows:
         kb.add(types.InlineKeyboardButton(booking_label(b), callback_data=f"{prefix}:{key}"))
+    if not undo:
+        for key, sess in pending_on(day, rows):
+            kb.add(types.InlineKeyboardButton(
+                booking_label(session_as_booking(key, sess)) + " · new",
+                callback_data=f"rf:s:{key}"))
     kb.add(types.InlineKeyboardButton("✖️ Cancel", callback_data=f"{prefix}:x"))
     refund_pending.pop((message.chat.id, message.from_user.id), None)
     bot.send_message(message.chat.id,
@@ -490,6 +533,40 @@ def refund_chosen(call) -> None:
         bot.answer_callback_query(call.id, "Cancelled")
         bot.edit_message_text("Refund cancelled.", call.message.chat.id, call.message.message_id)
         return
+    # "s:<key>" is a receipt the website hasn't imported yet: create its payment
+    # row now (marked refunded) and stop the importer making a lesson for it
+    if key.startswith("s:"):
+        skey = key[2:]
+        sess = fb_get(f"bot_sessions/{skey}")
+        if not sess:
+            bot.answer_callback_query(call.id, "That receipt is gone")
+            bot.edit_message_text("That receipt no longer exists.",
+                                  call.message.chat.id, call.message.message_id)
+            return
+        who = call.from_user.full_name if call.from_user else "unknown"
+        row = session_as_booking(skey, sess)
+        row.update(refunded=True, refunded_at=datetime.now().strftime("%Y-%m-%d %H:%M"),
+                   refunded_by=who, refund_preimport=True)
+        try:
+            r = requests.post(fb_url("bookings.json"), json=row, timeout=15)
+            r.raise_for_status()
+        except Exception as e:
+            log.error("Refund of pending receipt %s failed: %s", skey, e)
+            bot.answer_callback_query(call.id, "Couldn't save")
+            bot.edit_message_text("Couldn't record that refund — please try again.",
+                                  call.message.chat.id, call.message.message_id)
+            return
+        fb_patch(f"bot_sessions/{skey}", {"refunded": True, "imported": True})
+        log.info("Refund recorded for pending receipt %s by %s", skey, who)
+        bot.answer_callback_query(call.id, "Refund recorded")
+        bot.edit_message_text(
+            f"↩️ Refund recorded\n{booking_label(row)}\n"
+            f"Booker: {row.get('booker') or '—'}\n"
+            f"It won't be charged to them, and no lesson will be added to the "
+            f"schedule.\nUndo with /undorefund.",
+            call.message.chat.id, call.message.message_id)
+        return
+
     b = fb_get(f"bookings/{key}")
     if not b:
         bot.answer_callback_query(call.id, "That booking is gone")
@@ -546,9 +623,17 @@ def undo_refund_chosen(call) -> None:
                               call.message.chat.id, call.message.message_id)
         return
     restored = restore_blocks_for(b)
+    # Refunded before the website ever imported it: let the importer run now so
+    # the lesson appears, instead of restoring a block that was never created
+    preimport = bool(b.get("refund_preimport"))
+    bkey = b.get("bot_sessions_key")
+    if bkey:
+        fb_patch(f"bot_sessions/{bkey}",
+                 {"refunded": None, **({"imported": None} if preimport else {})})
     # null clears the field in Firebase
     ok = fb_patch(f"bookings/{key}", {"refunded": None, "refunded_at": None,
-                                      "refunded_by": None, "refund_blocks": None})
+                                      "refunded_by": None, "refund_blocks": None,
+                                      "refund_preimport": None})
     if not ok:
         bot.answer_callback_query(call.id, "Couldn't save")
         bot.edit_message_text("Couldn't undo that refund — please try again.",
@@ -557,7 +642,8 @@ def undo_refund_chosen(call) -> None:
     who = call.from_user.full_name if call.from_user else "unknown"
     log.info("Refund undone for %s by %s (%d block(s) restored)", key, who, restored)
     note = ("\nLesson block put back on the schedule." if restored
-            else "\nNo lesson block needed restoring.")
+            else ("\nThe lesson will appear once the planner website is opened."
+                  if preimport else "\nNo lesson block needed restoring."))
     bot.answer_callback_query(call.id, "Refund undone")
     bot.edit_message_text(
         f"↩️ Refund undone\n{booking_label(b).lstrip('↩️ ')}\n"
